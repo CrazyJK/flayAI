@@ -1,0 +1,104 @@
+data:
+  # K: 드라이브 JSON 메타데이터 디렉토리
+  info_dir: "K:/Crazy/Info"
+
+  # 포스터 스캔 루트 목록 (재귀 탐색)
+  poster_roots:
+    - "K:/Crazy/Storage"
+    - "K:/Crazy/Stage"
+    - "K:/Crazy/Cover"
+    - "J:/Crazy/Stage"
+    # 추가 폴더가 있으면 여기에 계속 추가
+
+  # Archive 루트: 이 경로 하위 포스터는 kind=archive
+  archive_root: "K:/Crazy/Archive"
+
+  # 포스터 파일 확장자
+  poster_extensions:
+    - jpg
+    - jpeg
+    - png
+    - gif
+    - webp
+
+  # 영상 파일 확장자 (instance 판정에 사용)
+  video_extensions:
+    - mp4
+    - mkv
+    - avi
+    - wmv
+    - mov
+    - m4v
+    - ts
+    - webm
+
+  # 히스토리 CSV
+  history_csv: "K:/Crazy/Info/history.csv"
+
+  # 개인 문서 RAG 루트 (Phase 5)
+  personal_docs_roots: ["C:\\Users\\namjk\\OneDrive"]
+
+  # 로컬 데이터 경로
+  db_path:         "data/sqlite/flay.db"
+  faiss_poster:    "data/faiss/posters.index"
+  faiss_faces:     "data/faiss/actor_faces.index"
+  state_path:      "data/state.json"
+
+models:
+  llm:            "huihui_ai/qwen2.5-abliterate:14b"
+  llm_fallback:   "dolphin-2.9.4-llama3.1-8b"
+  embedding:      "BAAI/bge-m3"
+  clip_model:     "ViT-L-14"
+  clip_pretrained: "laion2b_s32b_b82k"
+  ocr_lang:       ["ch", "en", "japan"]   # PaddleOCR 언어 (한글 포함 ch 모델 사용)
+  translator:     "Helsinki-NLP/opus-mt-ja-ko"
+  face_model:     "buffalo_l"
+
+indexing:
+  # 번역 품질 필터: 결과 길이가 원문의 이 비율 밖이면 LLM 폴백
+  translate_min_ratio: 0.30
+  translate_max_ratio: 3.00
+  # 배치 크기
+  embed_batch_size: 64
+  ocr_batch_size: 8
+  clip_batch_size: 32
+  # HDBSCAN 파라미터
+  hdbscan_min_cluster_size: 3
+  hdbscan_min_samples: 1
+  # 얼굴 자동 매핑 신뢰도 임계값
+  face_mapping_confidence_threshold: 0.80
+  # GPU idle 후 CLIP/InsightFace 해제 시간 (초)
+  model_idle_timeout_sec: 60
+
+ranking:
+  semantic_weight:       0.70
+  fts_weight:            0.15
+  usage_weight:          0.10
+  recency_weight:        0.05
+  recency_half_life_days: 180
+
+server:
+  host:     "127.0.0.1"
+  api_port: 8000
+  web_port: 3000
+  qdrant:   "http://127.0.0.1:6333"
+  ollama:   "http://127.0.0.1:11434"
+  # CORS 허용 origin 목록 (기존 웹앱 origin 추가)
+  cors_origins:
+    - "http://127.0.0.1:3000"
+    - "http://localhost:3000"
+  # 업로드 제한
+  upload_max_bytes: 10485760   # 10MB
+  upload_allowed_extensions:
+    - jpg
+    - jpeg
+    - png
+    - webp
+    - gif
+
+logging:
+  log_dir:        "logs"
+  log_file:       "logs/flayai.log"
+  max_bytes:      104857600    # 100MB
+  backup_count:   10
+  level:          "INFO"

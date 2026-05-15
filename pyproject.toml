@@ -1,0 +1,88 @@
+[project]
+name = "flayai"
+version = "0.1.0"
+description = "Personal LLM + RAG for video collection management"
+requires-python = ">=3.11"
+dependencies = [
+    # API
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.2",
+    "pyyaml>=6.0",
+    "structlog>=24.1",
+    "python-multipart>=0.0.9",
+
+    # LlamaIndex / RAG
+    "llama-index-core>=0.10",
+    "llama-index-llms-ollama>=0.2",
+    "llama-index-embeddings-huggingface>=0.2",
+    "llama-index-vector-stores-qdrant>=0.2",
+
+    # Vector DB
+    "qdrant-client>=1.9",
+
+    # Embedding / ML
+    "sentence-transformers>=3.0",
+    "transformers>=4.41",
+    "torch>=2.3",
+    "open-clip-torch>=2.24",
+    "insightface>=0.7",
+    "onnxruntime-gpu>=1.18",
+
+    # Image / OCR
+    "paddlepaddle-gpu>=2.6; sys_platform == 'win32'",
+    "paddleocr>=2.7",
+    "Pillow>=10.3",
+
+    # Clustering
+    "hdbscan>=0.8",
+    "scikit-learn>=1.5",
+    "faiss-cpu>=1.8",  # 20K vectors fit in RAM; GPU wheel unavailable on Windows + py311
+
+    # Translation
+    "sentencepiece>=0.2",
+    "sacremoses>=0.1",
+
+    # Document parsing
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+    "pypdf>=4.2",
+
+    # Utilities
+    "sqlite-utils>=3.36",
+    "watchdog>=4.0",
+    "httpx>=0.27",
+    "tenacity>=8.3",
+    "numpy>=1.26",
+    "tqdm>=4.66",
+    "typer>=0.12",
+]
+
+[project.scripts]
+flay-api    = "apps.api.main:start"
+flay-index  = "packages.indexer.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apps", "packages"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
