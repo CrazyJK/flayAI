@@ -83,8 +83,9 @@ def _translate_batch(texts: list[str], target: str = "ko") -> list[str]:
     batch = _TOKENIZER(texts, return_tensors="pt", padding=True, truncation=True,
                        max_length=512).to(_DEVICE)
     with torch.no_grad():
+        # greedy(num_beams=1) 로 충분한 품질 + 4배 속도. ratio 실패 시 LLM 폴백 존재.
         out = _MODEL.generate(**batch, forced_bos_token_id=forced_bos,
-                              max_new_tokens=512, num_beams=4)
+                              max_new_tokens=256, num_beams=1)
     return [_TOKENIZER.decode(t, skip_special_tokens=True) for t in out]
 
 

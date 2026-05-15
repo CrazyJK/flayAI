@@ -51,9 +51,14 @@ def stream_chat(query: str) -> tuple[float, dict]:
                 if t == "tool_call":
                     tool_calls.append({"name": ev.get("name"), "args": ev.get("args")})
                 elif t == "tool_result":
-                    tool_results.append({"name": ev.get("name"),
-                                         "n_items": len((ev.get("result") or {}).get("items", []))
-                                         if isinstance(ev.get("result"), dict) else 0})
+                    res = ev.get("result")
+                    if isinstance(res, list):
+                        n = len(res)
+                    elif isinstance(res, dict):
+                        n = len(res.get("items", []))
+                    else:
+                        n = 0
+                    tool_results.append({"name": ev.get("name"), "n_items": n})
                 elif t == "token":
                     if first_token_t is None:
                         first_token_t = time.time() - t0
