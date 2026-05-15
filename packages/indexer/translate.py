@@ -1,11 +1,11 @@
 """JP -> KO 번역.
 
 AI_PLAN.md §6.1 [4], §7.4.
-- Helsinki-NLP/opus-mt-ja-ko (transformers MarianMT) CPU
-- 결과 캐시: translations 테이블 (hash = sha1(src_lang|tgt_lang|src_text|model))
-- 품질 필터: 결과 길이 / 원문 길이 비율이 [translate_min_ratio, translate_max_ratio]
+- facebook/nllb-200-distilled-600M (jpn_Jpan -> kor_Hang)
+- 결과 캐시: translations 테이블 (hash = sha1(model|src|tgt|text))
+- 품질 필터: 결과/원문 길이 비율이 [translate_min_ratio, translate_max_ratio]
   벗어나면 Ollama LLM 폴백
-- title 통째로, desc 는 문장 단위 분할(., 。, ！, ？, 改행) -> 번역 -> 결합
+- title 통째로, desc 는 문장 단위 분할 -> 번역 -> 결합
 - run() : videos.title_ko / desc_ko 채움 + state.translate.completed 갱신
 """
 from __future__ import annotations
@@ -60,28 +60,31 @@ def _load_model() -> None:
     if _MODEL is not None:
         return
     import torch
-    from transformers import MarianMTModel, MarianTokenizer
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
     cfg = load_config()
     name = cfg["models"]["translator"]
     _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     log.info("loading translator %s on %s", name, _DEVICE)
-    _TOKENIZER = MarianTokenizer.from_pretrained(name)
-    _MODEL = MarianMTModel.from_pretrained(name).to(_DEVICE)
+    _TOKENIZER = AutoTokenizer.from_pretrained(name, src_lang="jpn_Jpan")
+    _MODEL = AutoModelForSeq2SeqLM.from_pretrained(name).to(_DEVICE)
     _MODEL.eval()
 
 
-def _translate_batch(texts: list[str]) -> list[str]:
-    """opus-mt 배치 번역."""
+def _translate_batch(texts: list[str], target: str = "ko") -> list[str]:
+    """NLLB-200 배치 번역 (jpn_Jpan -> {target})."""
     if not texts:
         return []
     _load_model()
     import torch
 
+    tgt_token = {"ko": "kor_Hang", "en": "eng_Latn"}.get(target, "kor_Hang")
+    forced_bos = _TOKENIZER.convert_tokens_to_ids(tgt_token)
     batch = _TOKENIZER(texts, return_tensors="pt", padding=True, truncation=True,
                        max_length=512).to(_DEVICE)
     with torch.no_grad():
-        out = _MODEL.generate(**batch, max_new_tokens=512, num_beams=4)
+        out = _MODEL.generate(**batch, forced_bos_token_id=forced_bos,
+                              max_new_tokens=512, num_beams=4)
     return [_TOKENIZER.decode(t, skip_special_tokens=True) for t in out]
 
 
@@ -159,7 +162,7 @@ def translate_text(
             todo.append((i, c))
 
     if todo:
-        translations = _translate_batch([c for _, c in todo])
+        translations = _translate_batch([c for _, c in todo], target=target)
         for (i, src), tgt in zip(todo, translations):
             tgt = (tgt or "").strip()
             if tgt and not _ratio_ok(src, tgt, lo, hi):

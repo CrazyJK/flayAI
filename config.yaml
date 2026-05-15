@@ -51,7 +51,7 @@ models:
   clip_model:     "ViT-L-14"
   clip_pretrained: "laion2b_s32b_b82k"
   ocr_lang:       ["ch", "en", "japan"]   # PaddleOCR 언어 (한글 포함 ch 모델 사용)
-  translator:     "Helsinki-NLP/opus-mt-ja-ko"
+  translator:     "facebook/nllb-200-distilled-600M"   # JP(jpn_Jpan) -> KO(kor_Hang)
   face_model:     "buffalo_l"
 
 indexing:

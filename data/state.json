@@ -29,14 +29,17 @@
       "skipped": 1
     },
     "translate": {
-      "done": false,
-      "completed": 0,
-      "cursor_opus": null
+      "done": true,
+      "completed": 5,
+      "cursor_opus": "ABF-046",
+      "titles": 5,
+      "descs": 4,
+      "total": 5
     },
     "embed_text": {
       "done": true,
-      "completed": 10,
-      "total": 10,
+      "completed": 20818,
+      "total": 20818,
       "skipped": 0
     },
     "ocr_posters": {
