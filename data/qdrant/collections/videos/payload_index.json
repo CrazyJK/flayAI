@@ -1,0 +1,1 @@
+{"schema":{"opus":"keyword","year":"integer","month":"integer","kind":"keyword","canonical_actresses":"keyword","tag_ids":"integer","rank":"integer","studio":"keyword","playable":"bool"}}

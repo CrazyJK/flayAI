@@ -34,8 +34,10 @@
       "cursor_opus": null
     },
     "embed_text": {
-      "done": false,
-      "completed": 0
+      "done": true,
+      "completed": 10,
+      "total": 10,
+      "skipped": 0
     },
     "ocr_posters": {
       "done": false,

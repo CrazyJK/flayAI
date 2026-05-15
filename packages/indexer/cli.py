@@ -20,6 +20,8 @@ import typer
 from packages.indexer import history as history_mod
 from packages.indexer import load_jsons as load_mod
 from packages.indexer import poster_scanner as scan_mod
+from packages.indexer import translate as translate_mod
+from packages.indexer import embed_text as embed_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
 from packages.indexer.state import load_state
 
@@ -94,6 +96,34 @@ def all(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
     scan(verbose)
     history(verbose)
     fts(verbose)
+
+
+@app.command()
+def translate(
+    limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
+    force: bool = typer.Option(False, "--force", help="이미 번역된 것도 다시"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """JP→KO 번역 (videos.title_ko / desc_ko)."""
+    _setup_log(verbose)
+    t = time.time()
+    out = translate_mod.run(limit=limit or None, force=force)
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("translate", out)
+
+
+@app.command()
+def embed(
+    limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
+    batch_size: int = typer.Option(0, "--batch-size", "-b"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """bge-m3 → Qdrant videos 컬렉션 upsert."""
+    _setup_log(verbose)
+    t = time.time()
+    out = embed_mod.run(limit=limit or None, batch_size=batch_size or None)
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("embed_text", out)
 
 
 @app.command()
