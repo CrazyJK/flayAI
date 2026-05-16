@@ -45,7 +45,7 @@ data:
   state_path:      "data/state.json"
 
 models:
-  llm:            "huihui_ai/qwen2.5-abliterate:14b"
+  llm:            "huihui_ai/qwen2.5-abliterate:7b"
   llm_fallback:   "dolphin-2.9.4-llama3.1-8b"
   embedding:      "BAAI/bge-m3"
   clip_model:     "ViT-L-14"

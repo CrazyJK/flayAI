@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -26,11 +27,22 @@ log = logging.getLogger(__name__)
 SYSTEM_PROMPT = (
     "당신은 사용자의 비디오 컬렉션 검색을 돕는 한국어 비서입니다. "
     "사용자의 질문에 답하기 위해 제공된 도구(search_videos, similar_to, get_video, "
-    "get_actress, stats)를 적극 사용하세요. 배우 별칭(예: '葵' / 'Aoi' / 'Sora Aoi')은 "
-    "search_videos(actress=...) 가 자동 정규화합니다. 연도/월/제작사가 명시되면 메타 "
-    "필터로 넘기세요. '지금 볼 수 있는'은 kind='instance', playable=true 로, "
-    "'옛날에 갖고 있던'은 kind='archive' 로 매핑하세요. 도구 호출 결과를 토대로 "
-    "간결한 한국어로 답하고, 결과 카드의 opus/제목/제작사/연도/배우만 짧게 요약하세요."
+    "get_actress, stats)를 적극 사용하세요.\n"
+    "\n"
+    "[도구 선택 규칙 — 반드시 준수]\n"
+    "- 질문에 품번(예: SSIS-123, ABP-456 같은 영문+숫자 코드)이 **명시되어 있을 때만** "
+    "get_video / similar_to 를 호출하세요. 품번이 없으면 절대 호출하지 마세요.\n"
+    "- 그 외 모든 자연어 검색('회사 배경', '2023년 7월', 'S1 평점 4 이상', "
+    "'지금 볼 수 있는 ...', '배우 이름 출연작' 등)은 **반드시 search_videos** 를 "
+    "사용하세요.\n"
+    "- 배우 이름이 들어가면 search_videos(actress=...) 로 호출 (별칭 자동 정규화).\n"
+    "- 연도/월/제작사가 명시되면 search_videos(year=, month=, studio=) 메타 필터.\n"
+    "- '지금 볼 수 있는' / '재생 가능한' → search_videos(kind='instance', playable=true).\n"
+    "- '옛날 / 예전에 갖고 있던' → search_videos(kind='archive').\n"
+    "- 통계/집계 질문은 stats 호출.\n"
+    "\n"
+    "도구 호출 결과를 토대로 간결한 한국어로 답하고, 결과 카드의 "
+    "opus/제목/제작사/연도/배우만 짧게 요약하세요."
 )
 
 
@@ -117,6 +129,31 @@ async def route_chat(user_query: str,
                     "arguments": {"query": user_query, "limit": 10},
                 }
             }]
+
+        # 방어: 사용자 질문에 품번 패턴이 없는데 get_video/similar_to 호출 시
+        # search_videos 로 강제 교체 (시스템 프롬프트를 무시한 LLM 오라우팅 방지)
+        has_opus_in_query = bool(re.search(r"[A-Za-z]{2,7}-?\d{2,5}", user_query))
+        if not has_opus_in_query:
+            fixed: list[dict] = []
+            for c in tool_calls:
+                nm = ((c.get("function") or {}).get("name") or "")
+                if nm in ("get_video", "similar_to"):
+                    log.info("router override: %s -> search_videos (no opus in query)", nm)
+                    fixed.append({"function": {"name": "search_videos",
+                                               "arguments": {"query": user_query, "limit": 10}}})
+                else:
+                    fixed.append(c)
+            # 중복 search_videos 제거 (같은 query)
+            seen = set()
+            dedup: list[dict] = []
+            for c in fixed:
+                fn = c.get("function") or {}
+                key = (fn.get("name"), json.dumps(fn.get("arguments"), sort_keys=True, default=str))
+                if key in seen:
+                    continue
+                seen.add(key)
+                dedup.append(c)
+            tool_calls = dedup
 
         results_for_history: list[dict] = []
         for call in tool_calls:

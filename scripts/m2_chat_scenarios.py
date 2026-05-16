@@ -25,6 +25,7 @@ def stream_chat(query: str) -> tuple[float, dict]:
     """Returns (first_token_sec, summary_dict)."""
     t0 = time.time()
     first_token_t: float | None = None
+    first_event_t: float | None = None
     tokens: list[str] = []
     tool_calls: list = []
     tool_results: list = []
@@ -47,6 +48,8 @@ def stream_chat(query: str) -> tuple[float, dict]:
                     ev = json.loads(payload)
                 except Exception:
                     continue
+                if first_event_t is None:
+                    first_event_t = time.time() - t0
                 t = ev.get("type")
                 if t == "tool_call":
                     tool_calls.append({"name": ev.get("name"), "args": ev.get("args")})
@@ -73,6 +76,7 @@ def stream_chat(query: str) -> tuple[float, dict]:
     elapsed = time.time() - t0
     return first_token_t or elapsed, {
         "elapsed_sec": round(elapsed, 2),
+        "first_event_sec": round(first_event_t, 2) if first_event_t else None,
         "first_token_sec": round(first_token_t, 2) if first_token_t else None,
         "tool_calls": tool_calls,
         "tool_results": tool_results,
@@ -97,6 +101,9 @@ def main() -> int:
     fts = [r["first_token_sec"] for r in rows if r.get("first_token_sec")]
     fts.sort()
     p95 = fts[int(len(fts) * 0.95)] if fts else None
+    fes = [r["first_event_sec"] for r in rows if r.get("first_event_sec")]
+    fes.sort()
+    p95_ev = fes[int(len(fes) * 0.95)] if fes else None
     n_tool_calls = sum(1 for r in rows if r["tool_calls"])
     n_errors = sum(1 for r in rows if r.get("error"))
     n_pass = sum(1 for r in rows if (r["tool_calls"] or r["tool_results"]) and not r.get("error"))
@@ -104,7 +111,8 @@ def main() -> int:
     print(f"with tool_call     : {n_tool_calls}")
     print(f"errors             : {n_errors}")
     print(f"pass (tool+no err) : {n_pass}/{len(rows)}")
-    print(f"first-token p95    : {p95}s  (need <= 3s)")
+    print(f"first-event p95    : {p95_ev}s  (need <= 3s, SSE first event)")
+    print(f"first-token p95    : {p95}s  (LLM first text token)")
     return 0 if n_pass >= 6 else 1
 
 

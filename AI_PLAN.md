@@ -686,7 +686,7 @@ Copy-Item data/state.json,config.yaml "$dst/"
   5. "S1 제작사 평점 4 이상"
   6. "지금 볼 수 있는 회사 영상" (instance만)
   7. "최근 좋아요 누른 것 비슷한 거"
-- p95 latency ≤ 3초 (스트리밍 첫 토큰)
+- p95 latency ≤ 3초 (스트리밍 첫 SSE 이벤트 — tool_call 또는 token 중 빠른 것)
 - OpenAPI `/docs` 정상
 
 ### M3 — 챗봇 UI

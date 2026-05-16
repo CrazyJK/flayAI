@@ -22,6 +22,7 @@ from packages.indexer import load_jsons as load_mod
 from packages.indexer import poster_scanner as scan_mod
 from packages.indexer import translate as translate_mod
 from packages.indexer import embed_text as embed_mod
+from packages.indexer import embed_clip as embed_clip_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
 from packages.indexer.state import load_state
 
@@ -124,6 +125,20 @@ def embed(
     out = embed_mod.run(limit=limit or None, batch_size=batch_size or None)
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("embed_text", out)
+
+
+@app.command(name="embed-clip")
+def embed_clip(
+    limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
+    batch_size: int = typer.Option(0, "--batch-size", "-b"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """OpenCLIP ViT-L/14 → Qdrant posters_clip 컬렉션 upsert."""
+    _setup_log(verbose)
+    t = time.time()
+    out = embed_clip_mod.run(limit=limit or None, batch_size=batch_size or None)
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("embed_clip", out)
 
 
 @app.command()

@@ -1,0 +1,184 @@
+# Compiled class file
+*.class
+
+# Log file
+*.log
+*.log.*.gz
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+# eclipse file
+.settings
+target/
+.classpath
+.project
+.springBeans
+.factorypath
+
+# mac
+.DS_Store
+
+# node.js
+node_modules
+
+# TypeScript
+*.tsbuildinfo
+.tscache/
+
+# webpack dist
+dist
+
+# certificates
+*.key
+*.pem
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# res webm
+**/res/*.webm
+
+# playwright test result
+test-results
+screenshots
+
+# 비공개 설정 파일
+.env
+
+# cert folder
+.cert
+
+# playwright test result
+.playwright-mcp
+
+# json data files
+model-stats.json
+dependencies-viewer.json
+token-cache.json
+
+# db files
+push-subscriptions.db
+financial-note.db
+
+# private
+private-memo.md
+
+# portfolio data (private)
+web-frontend/src/finance/data/portfolio.json
+
+# ============================================================
+# flayAI (Python + Qdrant + Next.js)
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Test / lint / type-check caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# uv / pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local secrets / env
+.env
+.env.*
+!.env.example
+
+# Hugging Face / model caches
+hf_cache/
+models_cache/
+.huggingface/
+~/.cache/huggingface/
+
+# 프로젝트 런타임 데이터 (재생성 가능)
+data/qdrant/
+data/sqlite/
+data/state.json
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# 런타임 로그
+logs/
+!logs/.gitkeep
+
+# Next.js (M3 web)
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
+apps/web/.turbo/
+
+# IDE
+.idea/
+*.iml
+*.swp
+*.swo
+
+# Copilot / agent memory
+/memories/
+
