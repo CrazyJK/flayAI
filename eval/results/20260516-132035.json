@@ -1,0 +1,68 @@
+{
+  "ts": "2026-05-16T13:20:35",
+  "total": 7,
+  "pass": 6,
+  "fail": 1,
+  "skip": 0,
+  "pass_rate": 85.71,
+  "rows": [
+    {
+      "id": "actress-exact-001",
+      "query": "Kawakita Saika 출연작 5개 추천해줘",
+      "status": "PASS",
+      "elapsed_sec": 22.48,
+      "n_hits": 5,
+      "fails": []
+    },
+    {
+      "id": "actress-exact-002",
+      "query": "Miku Ohashi 영상 보여줘",
+      "status": "PASS",
+      "elapsed_sec": 10.78,
+      "n_hits": 10,
+      "fails": []
+    },
+    {
+      "id": "actress-exact-003",
+      "query": "Kaori Maeda 출연작",
+      "status": "PASS",
+      "elapsed_sec": 18.13,
+      "n_hits": 5,
+      "fails": []
+    },
+    {
+      "id": "actress-exact-004",
+      "query": "Ai Asakura 출연작 3개 이상",
+      "status": "PASS",
+      "elapsed_sec": 12.99,
+      "n_hits": 3,
+      "fails": []
+    },
+    {
+      "id": "actress-alias-001",
+      "query": "Aoi 출연작",
+      "status": "PASS",
+      "elapsed_sec": 16.47,
+      "n_hits": 5,
+      "fails": []
+    },
+    {
+      "id": "actress-alias-002",
+      "query": "Sora Aoi 출연작",
+      "status": "FAIL",
+      "elapsed_sec": 17.11,
+      "n_hits": 5,
+      "fails": [
+        "same_result_as: top-3 disjoint with actress-alias-001 (a={'ONED-927', 'RKI-015', 'KR-9211'} b={'SNIS-420', 'FSDSS-272', 'SNIS-910'})"
+      ]
+    },
+    {
+      "id": "actress-alias-003",
+      "query": "葵 출연작",
+      "status": "PASS",
+      "elapsed_sec": 52.59,
+      "n_hits": 10,
+      "fails": []
+    }
+  ]
+}

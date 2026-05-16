@@ -25,6 +25,7 @@ from packages.indexer import embed_text as embed_mod
 from packages.indexer import embed_clip as embed_clip_mod
 from packages.indexer import faces as faces_mod
 from packages.indexer import cluster_faces as cluster_mod
+from packages.indexer import ocr as ocr_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
 from packages.indexer.state import load_state
 
@@ -180,6 +181,21 @@ def cluster_faces(
     )
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("cluster_faces", out)
+
+
+@app.command(name="ocr-posters")
+def ocr_posters(
+    limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
+    force: bool = typer.Option(False, "--force", help="이미 OCR된 포스터도 재처리"),
+    embed_batch: int = typer.Option(16, "--embed-batch"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """RapidOCR(ONNX) → posters.ocr_text + Qdrant poster_ocr 컬렉션."""
+    _setup_log(verbose)
+    t = time.time()
+    out = ocr_mod.run(limit=limit or None, force=force, embed_batch=embed_batch)
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("ocr_posters", out)
 
 
 @app.command()

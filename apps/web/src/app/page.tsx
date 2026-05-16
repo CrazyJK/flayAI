@@ -297,6 +297,12 @@ export default function ChatPage() {
       <header className="py-4 border-b border-neutral-800 flex items-baseline gap-2">
         <h1 className="text-lg font-semibold">flayAI</h1>
         <span className="text-xs text-neutral-500 font-mono">{API_BASE}</span>
+        <nav className="ml-auto flex items-center gap-3 text-xs">
+          <a href="/" className="text-neutral-200">채팅</a>
+          <a href="/image" className="text-neutral-400 hover:text-neutral-200">이미지</a>
+          <a href="/face" className="text-neutral-400 hover:text-neutral-200">얼굴</a>
+          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">라벨링</a>
+        </nav>
       </header>
 
       <div className="flex-1 overflow-y-auto py-4 space-y-6">

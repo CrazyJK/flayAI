@@ -1,0 +1,207 @@
+# flayAI 평가셋 (AI_PLAN.md §11.1)
+#
+# 평가 형식
+# ---------
+# 각 케이스는 chat API(POST /api/chat) 의 SSE 결과를 평가한다.
+# eval/run_eval.py 가 모든 tool_result.items 를 수집해 `hits` 리스트로 만들고,
+# 아래 expect 조건들을 검증한다.
+#
+# expect 키 (전부 선택)
+#   min_results: int        : hits 길이 >= n
+#   max_results: int        : hits 길이 <= n
+#   contains_actress: str   : 어떤 hit 라도 actresses 에 포함
+#   contains_opus: [str]    : hits 중 opus 가 모두 등장
+#   all_must_have:          : 모든 hit 가 조건 만족
+#     kind: instance|archive
+#     studio: str
+#     year: int
+#     month: int
+#     playable: true|false
+#   same_result_as: id      : 다른 케이스 결과와 top-3 opus 교집합 >= 1
+#   ocr_search: bool        : chat 대신 /api/search/poster-ocr 호출
+#   face_search: str        : 이미지 path → /api/search/face (얼굴 케이스, 수동)
+#
+# 통과 기준 (M6): 정답률 ≥ 85%
+
+# ============== 1. 배우 정확매칭 (4) ==============
+- id: actress-exact-001
+  query: "Kawakita Saika 출연작 5개 추천해줘"
+  expect:
+    min_results: 1
+    contains_actress: "kawakita saika"
+
+- id: actress-exact-002
+  query: "Miku Ohashi 영상 보여줘"
+  expect:
+    min_results: 1
+    contains_actress: "miku ohashi"
+
+- id: actress-exact-003
+  query: "Kaori Maeda 출연작"
+  expect:
+    min_results: 1
+    contains_actress: "kaori maeda"
+
+- id: actress-exact-004
+  query: "Ai Asakura 출연작 3개 이상"
+  expect:
+    min_results: 3
+    contains_actress: "ai asakura"
+
+# ============== 2. 배우 별칭/개명 (3) ==============
+- id: actress-alias-001
+  query: "Aoi 출연작"
+  expect:
+    min_results: 1
+
+- id: actress-alias-002
+  query: "Sora Aoi 출연작"
+  expect:
+    min_results: 1
+    same_result_as: actress-alias-001
+
+- id: actress-alias-003
+  query: "葵 출연작"
+  expect:
+    min_results: 1
+    same_result_as: actress-alias-001
+
+# ============== 3. 키워드 한국어 (4) ==============
+- id: keyword-ko-001
+  query: "회사 사무실 배경의 영상"
+  expect:
+    min_results: 1
+
+- id: keyword-ko-002
+  query: "OL 영상 찾아줘"
+  expect:
+    min_results: 1
+
+- id: keyword-ko-003
+  query: "마사지 테마 영상"
+  expect:
+    min_results: 1
+
+- id: keyword-ko-004
+  query: "교복 학원 배경"
+  expect:
+    min_results: 1
+
+# ============== 4. 키워드 일본어 (2) ==============
+- id: keyword-jp-001
+  query: "学園もの"
+  expect:
+    min_results: 1
+
+- id: keyword-jp-002
+  query: "オフィス OL"
+  expect:
+    min_results: 1
+
+# ============== 5. 자연어 의미 (4) ==============
+- id: semantic-001
+  query: "비 오는 날 분위기"
+  expect:
+    min_results: 1
+
+- id: semantic-002
+  query: "여름 바닷가에서 찍은 듯한 영상"
+  expect:
+    min_results: 1
+
+- id: semantic-003
+  query: "조용하고 차분한 분위기"
+  expect:
+    min_results: 1
+
+- id: semantic-004
+  query: "친구 사이에서 시작된 이야기"
+  expect:
+    min_results: 1
+
+# ============== 6. 날짜 필터 (3) ==============
+- id: date-001
+  query: "2023년 7월 발매작 보여줘"
+  expect:
+    min_results: 1
+    all_must_have:
+      year: 2023
+      month: 7
+
+- id: date-002
+  query: "2022년 10월 영상"
+  expect:
+    min_results: 1
+    all_must_have:
+      year: 2022
+      month: 10
+
+- id: date-003
+  query: "2024년 영상"
+  expect:
+    min_results: 1
+    all_must_have:
+      year: 2024
+
+# ============== 7. 사용 신호 (3) ==============
+- id: signal-001
+  query: "안 본 것 중에 평점 높은 거 추천"
+  expect:
+    min_results: 1
+
+- id: signal-002
+  query: "최근에 좋아요 누른 것 비슷한 거"
+  expect:
+    min_results: 1
+
+- id: signal-003
+  query: "자주 본 영상"
+  expect:
+    min_results: 1
+
+# ============== 8. instance/archive (2) ==============
+- id: kind-instance-001
+  query: "지금 볼 수 있는 회사 배경 영상"
+  expect:
+    min_results: 1
+    all_must_have:
+      kind: instance
+
+- id: kind-archive-001
+  query: "옛날에 봤던 영상 (아카이브)"
+  expect:
+    min_results: 1
+
+# ============== 9. 포스터 OCR (2) ==============
+- id: ocr-001
+  query: "S Model"
+  expect:
+    ocr_search: true
+    min_results: 1
+
+- id: ocr-002
+  query: "Caribbeancom"
+  expect:
+    ocr_search: true
+    min_results: 1
+
+# ============== 10. 얼굴 검색 (3, 수동) ==============
+# face_search 케이스는 이미지 파일이 필요하므로 run_eval.py 가 skip 로 처리.
+# 수동 검증용 placeholder.
+- id: face-001
+  query: "Miku Ohashi 사진"
+  expect:
+    face_search: "data/eval/faces/miku_ohashi.jpg"
+    contains_actress: "miku ohashi"
+
+- id: face-002
+  query: "Kawakita Saika 사진"
+  expect:
+    face_search: "data/eval/faces/kawakita_saika.jpg"
+    contains_actress: "kawakita saika"
+
+- id: face-003
+  query: "임의 배우 사진"
+  expect:
+    face_search: "data/eval/faces/random.jpg"
+    min_results: 1

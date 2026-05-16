@@ -179,6 +179,10 @@ def create_app() -> FastAPI:
     from apps.api.routers.image import router as image_router
     app.include_router(image_router)
 
+    # ---- 포스터 OCR 검색 (M5) ----
+    from apps.api.routers.ocr import router as ocr_router
+    app.include_router(ocr_router)
+
     return app
 
 
