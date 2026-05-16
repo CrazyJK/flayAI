@@ -137,7 +137,7 @@ export default function FaceSearchPage() {
                         <span>c{n.cluster_id ?? "-"}</span>
                         <span className="text-emerald-400">{n.score.toFixed(3)}</span>
                       </div>
-                      <div className="text-neutral-400 truncate">
+                      <div className="text-neutral-400 line-clamp-2 leading-snug">
                         {n.actresses?.join(", ")}
                       </div>
                     </div>
