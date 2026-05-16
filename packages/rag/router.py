@@ -133,7 +133,14 @@ async def _call_chat(client: httpx.AsyncClient, messages: list[dict],
         "model": _llm_model(),
         "messages": messages,
         "stream": stream,
-        "options": {"temperature": 0.2},
+        "options": {
+            "temperature": 0.2,
+            # Qwen 7B 가 도구 결과 요약 중 쉼표/줄바꿈 반복 루프에 빠지는 것 방지
+            "repeat_penalty": 1.25,
+            "repeat_last_n": 128,
+            # 최대 출력 토큰 상한 (대략 항목 20개 요약 분량)
+            "num_predict": 1024,
+        },
     }
     if tools:
         payload["tools"] = tools
@@ -293,14 +300,23 @@ async def route_chat(user_query: str,
 
         full = ""
         gen = await _call_chat(client, messages, tools=None, stream=True)
-        async for chunk in gen:
-            piece = (chunk.get("message") or {}).get("content") or ""
-            if piece:
-                full += piece
-                yield {"type": "token", "text": piece}
-            if chunk.get("done"):
-                break
+        try:
+            async for chunk in gen:
+                piece = (chunk.get("message") or {}).get("content") or ""
+                if piece:
+                    full += piece
+                    yield {"type": "token", "text": piece}
+                if chunk.get("done"):
+                    break
+        finally:
+            # break 후 generator 가 client.stream() 컨텍스트 안에 suspend 된 채 남아
+            # httpx 연결이 닫히지 않으면 SSE 응답 전체가 hang → 프론트가 영원히 대기.
+            # 명시적으로 aclose() 해서 내부 async with 를 풀어 connection 을 반환.
+            try:
+                await gen.aclose()
+            except Exception:
+                pass
 
         yield {"type": "done", "message": full,
-               "tool_calls": [{"name": r["name"], "args": r["args"]} for r in results_for_history],
-               "results": results_for_history}
+               "tool_calls": [{"name": r["name"], "args": r["args"]}
+                              for r in results_for_history]}
