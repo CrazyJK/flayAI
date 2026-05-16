@@ -65,13 +65,31 @@ class TranslateRequest(BaseModel):
 
 # --- 앱 ----------------------------------------------------------
 
+async def _warmup_face_model() -> None:
+    """InsightFace buffalo_l 모델을 백그라운드로 미리 로드해 첫 요청 지연(10~30초)을 제거한다.
+
+    - 이벤트 루프 차단 방지 위해 to_thread 사용
+    - 실패해도 API 기동에는 영향 없음 (첫 호출 시 다시 시도)
+    """
+    import asyncio
+    try:
+        from packages.indexer.faces import _load_face_app
+        await asyncio.to_thread(_load_face_app)
+        log.info("InsightFace warmup done")
+    except Exception as e:
+        log.warning("InsightFace warmup failed (will retry on first request): %s", e)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    import asyncio
     cfg = load_config()
     host = cfg["server"]["host"]
     if host not in ("127.0.0.1", "localhost", "::1"):
         log.error("FastAPI must bind to localhost only. config.server.host=%s", host)
         sys.exit(1)
+    # 백그라운드 워밍업 — 기동을 막지 않음
+    asyncio.create_task(_warmup_face_model())
     yield
 
 
