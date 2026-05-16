@@ -220,7 +220,7 @@ export default function LabelsPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="h-screen flex flex-col">
       <header className="px-4 py-3 border-b border-neutral-800 flex items-center gap-3">
         <h1 className="text-base font-semibold">얼굴 클러스터 라벨링</h1>
         <nav className="flex gap-2 text-xs">
@@ -279,7 +279,7 @@ export default function LabelsPage() {
             ))}
           </ul>
         </aside>
-        <section className="flex-1 overflow-y-auto">
+        <section key={selected ?? 0} className="flex-1 overflow-y-auto">
           {selected ? (
             <ClusterDetail id={selected} onLabeled={load} />
           ) : (
