@@ -34,7 +34,6 @@ from packages.rag.tools import (
     get_actress, get_video, search_videos, similar_to, stats,
 )
 from packages.settings import load_config
-
 log = logging.getLogger(__name__)
 
 
@@ -175,6 +174,10 @@ def create_app() -> FastAPI:
         if not p.exists():
             raise HTTPException(404, "poster file missing on disk")
         return FileResponse(str(p))
+
+    # ---- 이미지/얼굴 검색 (M4) ----
+    from apps.api.routers.image import router as image_router
+    app.include_router(image_router)
 
     return app
 

@@ -23,6 +23,8 @@ from packages.indexer import poster_scanner as scan_mod
 from packages.indexer import translate as translate_mod
 from packages.indexer import embed_text as embed_mod
 from packages.indexer import embed_clip as embed_clip_mod
+from packages.indexer import faces as faces_mod
+from packages.indexer import cluster_faces as cluster_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
 from packages.indexer.state import load_state
 
@@ -139,6 +141,45 @@ def embed_clip(
     out = embed_clip_mod.run(limit=limit or None, batch_size=batch_size or None)
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("embed_clip", out)
+
+
+@app.command(name="extract-faces")
+def extract_faces(
+    limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
+    rebuild: bool = typer.Option(False, "--rebuild", help="이미 처리한 포스터도 재처리"),
+    det_threshold: float = typer.Option(0.5, "--det-threshold"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """InsightFace buffalo_l → poster_faces + Qdrant faces 컬렉션."""
+    _setup_log(verbose)
+    t = time.time()
+    out = faces_mod.run(
+        limit=limit or None,
+        only_missing=not rebuild,
+        det_score_threshold=det_threshold,
+    )
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("extract_faces", out)
+
+
+@app.command(name="cluster-faces")
+def cluster_faces(
+    min_cluster_size: int = typer.Option(0, "--min-cluster-size"),
+    min_samples: int = typer.Option(0, "--min-samples"),
+    confidence: float = typer.Option(0.0, "--confidence", "-c",
+                                     help="0이면 config 기본값"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """HDBSCAN → face_clusters + cluster_id 채우기 + 배우 자동 매핑."""
+    _setup_log(verbose)
+    t = time.time()
+    out = cluster_mod.run(
+        min_cluster_size=min_cluster_size or None,
+        min_samples=min_samples or None,
+        confidence_threshold=confidence or None,
+    )
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("cluster_faces", out)
 
 
 @app.command()
