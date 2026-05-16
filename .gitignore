@@ -182,3 +182,15 @@ apps/web/.turbo/
 # Copilot / agent memory
 /memories/
 
+# 평가 결과 (런타임 산출물)
+eval/results/
+
+# 임시 테스트 페이로드
+_q.json
+_*.json
+*.tmp
+
+# Next.js extra
+apps/web/.swc/
+apps/web/coverage/
+
