@@ -28,3 +28,62 @@
 ### 코스 수정 후에는 다음을 수행한다.
 
 프로세스 재시작이 필요한지 알려주고, 재시작 해야 하는 bin/*.bat 파일과 명령어를 제시한다.
+
+---
+
+## 프로젝트 컨텍스트
+
+로컬 비디오 컬렉션(`K:\Crazy\*`)을 자연어로 검색하는 **완전 로컬** 개인용 프로젝트.  
+상세 문서: [doc/overview.md](doc/overview.md) · [doc/architecture.md](doc/architecture.md) · [AI_PLAN.md](AI_PLAN.md)
+
+### 컴포넌트 및 포트
+
+| 컴포넌트 | 기술 | 포트 |
+|----------|------|------|
+| 백엔드 | FastAPI + uvicorn (`apps/api/`) | 8000 |
+| 프론트 | Next.js 16 + React 19 + Tailwind 4 (`apps/web/`) | 3000 |
+| 벡터 DB | Qdrant (Docker) | 6333 |
+| LLM | Ollama `huihui_ai/qwen2.5-abliterate:7b` | 11434 |
+| 관계 DB | SQLite `data/sqlite/flay.db` + FTS5 | — |
+
+### 빌드 & 테스트 명령어
+
+```powershell
+# Python 테스트 (항상 .venv 사용, uv 는 PATH에 없을 수 있음)
+.\.venv\Scripts\python.exe -m pytest -q
+
+# 린트
+.\.venv\Scripts\python.exe -m ruff check .
+
+# 프론트엔드
+cd apps\web ; npm run build ; npm run lint
+```
+
+### 프로세스 기동 (bin/*.bat)
+
+```cmd
+bin\all.bat start          # qdrant → ollama → api → web 순차 기동
+bin\api.bat restart        # API만 재시작
+bin\reindex.bat quick      # 메타만 빠른 재인덱싱 (AI 없음)
+bin\reindex.bat sync       # 텍스트 AI 포함 동기화
+bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
+```
+
+자세한 bat 사용법: [bin/README.md](bin/README.md)
+
+### 핵심 함정 (에이전트 주의)
+
+- **Python 실행**: `.\.venv\Scripts\python.exe` 사용 (`python` 이나 `uv run` 이 PATH에 없을 수 있음)
+- **Qdrant v1.18+**: `collection.search()` 삭제됨 → `client.query_points(collection_name, query=vec, limit=N, with_payload=True)` 사용, 반환값은 `result.points`
+- **FTS5 쿼리**: 토큰을 `"phrase"` 로 감싸고 `OR` 로 결합 (예: `"alice" OR "앨리스"`). 그냥 키워드 쓰면 CJK/짧은 토큰에서 `syntax error near "?"` 발생
+- **번역 모델**: `facebook/nllb-200-distilled-600M`, `src_lang=jpn_Jpan`, `forced_bos_token_id` 로 `kor_Hang` 지정
+- **Qdrant 포인트 ID**: opus 의 SHA1 앞 8 바이트(uint63) — 4개 컬렉션 공통. cross-reference 용
+- **스튜디오 alias**: DB 에서 `"S1"` 같은 공식명이 아닌 `"sone"`, `"s1no1style"` 등으로 저장될 수 있음 → alias 없는 검색 필터는 0건 반환
+- **CORS**: API 는 localhost 전용, 외부 네트워크 노출 금지
+
+### 인덱서 파이프라인
+
+CLI 진입점: `python -m packages.indexer.cli <cmd>`  
+전체 흐름: `load → scan → history → fts → translate → embed`  
+이미지: `embed-clip` / 얼굴: `extract-faces → cluster-faces` / OCR: `ocr-posters`  
+각 단계는 **증분(incremental)** — 이미 처리된 행은 자동 skip. 강제 재처리는 `--rebuild`.
