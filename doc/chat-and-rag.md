@@ -161,17 +161,20 @@ RRF (Reciprocal Rank Fusion) = `Σ 1 / (k + rank_i)`. 점수 스케일이 다른
 채팅(`/api/chat`) 이 아니라 **별도 엔드포인트**.
 
 ### 이미지 한 장 → 비슷한 포스터 (`/api/image/search`)
+
 1. 업로드된 이미지를 OpenCLIP ViT-L/14 로 768d 임베딩.
 2. Qdrant `posters_clip` top-K.
 3. opus 로 SQLite 메타 join → hit.
 
 ### 이미지 한 장 → 배우 매칭 (`/api/face/search`)
+
 1. InsightFace 로 얼굴들 검출.
 2. 각 얼굴 512d → Qdrant `faces` top-K.
 3. 결과들의 `cluster_id` 다수결 → 클러스터의 라벨(canonical_name) = 배우.
 4. `search_videos(actress=...)` 처럼 출연작 반환.
 
 ### 포스터 OCR 텍스트 검색 (`/api/search/poster-ocr`)
+
 1. 사용자 쿼리를 BGE-M3 임베딩.
 2. Qdrant `poster_ocr` top-K.
 3. opus 로 SQLite 메타 join + payload 의 ocr_text 포함하여 응답.

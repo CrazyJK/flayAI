@@ -5,9 +5,11 @@
 ## 채팅
 
 ### `POST /api/chat`
+
 SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 
 요청:
+
 ```json
 {
   "query": "Alice 출연작",
@@ -21,6 +23,7 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 응답: `text/event-stream`. `data:` 줄 마다 JSON 1건.
 
 이벤트 타입:
+
 - `tool_call`  — `{type, name, args}`
 - `tool_result` — `{type, name, result: {items: [hit, ...]}}`
 - `token`       — `{type, text}`
@@ -28,6 +31,7 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 - `error`       — `{type, message}`
 
 `hit` 구조 (자주 등장):
+
 ```ts
 {
   opus: string,
@@ -54,6 +58,7 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 ## 메타 검색
 
 ### `POST /api/search/videos`
+
 채팅을 거치지 않고 직접 도구 호출.
 
 ```json
@@ -73,32 +78,41 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 응답: `{ "items": [hit, ...] }`
 
 ### `GET /api/videos/{opus}`
+
 영상 단일 조회.
 
 ### `GET /api/actresses/{name}`
+
 배우 메타 + 대표작.
 
 ### `GET /api/similar/{opus}?exclude_watched=true&limit=10`
+
 의미적으로 비슷한 영상.
 
 ## 번역
 
 ### `POST /api/translate`
+
 ```json
 { "text": "...", "target": "ko", "sentencewise": true }
 ```
+
 응답: `{ "text": "..." }`
 
 ## 이미지 검색 (CLIP)
 
 ### `POST /api/image/search/text`
+
 텍스트 → 포스터 이미지 의미 검색 (CLIP cross-modal).
+
 ```json
 { "query": "office uniform", "limit": 10, "kind": "instance" }
 ```
 
 ### `POST /api/image/search`
+
 이미지 업로드 → 비슷한 포스터.
+
 ```
 multipart/form-data:
   image: <file>
@@ -109,13 +123,17 @@ multipart/form-data:
 ## 얼굴 검색
 
 ### `POST /api/face/search`
+
 이미지에서 얼굴 검출 → 클러스터 매칭 → 출연작.
+
 ```
 multipart/form-data:
   image: <file>
   limit: 5
 ```
+
 응답:
+
 ```json
 {
   "faces": [
@@ -128,29 +146,37 @@ multipart/form-data:
 ## 얼굴 라벨링 (관리)
 
 ### `GET /api/face/clusters?min_size=5&labeled=auto|manual|none&page=...`
+
 얼굴 클러스터 목록. 라벨링 UI 가 사용.
 
 ### `GET /api/face/clusters/{cluster_id}/samples?limit=12`
+
 클러스터 대표 얼굴 샘플 (썸네일).
 
 ### `POST /api/face/clusters/{cluster_id}/label`
+
 ```json
 { "label": "alice" }
 ```
+
 사람이 직접 라벨 부여. (`null` 로 보내면 제거)
 
 ## 포스터 OCR 검색
 
 ### `POST /api/search/poster-ocr`
+
 ```json
 { "query": "S Model", "limit": 10, "kind": "instance" }
 ```
+
 응답: `{ "items": [hit + ocr_text, ...] }`
 
 ## 관리
 
 ### `GET /api/admin/stats`
+
 요청자 IP 가 127.0.0.1/localhost/::1 이 아니면 403.
+
 ```json
 { "videos": 20818, "actresses": ..., "posters": ..., ... }
 ```
