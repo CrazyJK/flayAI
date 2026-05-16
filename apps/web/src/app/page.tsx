@@ -100,13 +100,25 @@ function VideoCard({ hit }: { hit: VideoHit }) {
 }
 
 function ToolCallChip({ ev }: { ev: ToolEvent }) {
+  const [expanded, setExpanded] = useState(false);
   const argsStr = ev.args ? JSON.stringify(ev.args) : "";
+  const truncatable = argsStr.length > 80;
+  const displayed = truncatable && !expanded ? argsStr.slice(0, 80) + "…" : argsStr;
   return (
-    <div className="text-xs font-mono text-neutral-400">
-      <span className="text-cyan-300">⚙ {ev.name}</span>
-      <span className="text-neutral-600">
-        {argsStr.length > 0 ? `(${argsStr.slice(0, 200)}${argsStr.length > 200 ? "…" : ""})` : "()"}
+    <div className="text-xs font-mono text-neutral-400 flex items-start gap-1 flex-wrap">
+      <span className="text-cyan-300 shrink-0">⚙ {ev.name}</span>
+      <span className="text-neutral-600 break-all">
+        {argsStr.length > 0 ? `(${displayed})` : "()"}
       </span>
+      {truncatable && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="shrink-0 text-neutral-500 hover:text-neutral-300 leading-none"
+          title={expanded ? "접기" : "펼치기"}
+        >
+          {expanded ? "▲" : "▼"}
+        </button>
+      )}
     </div>
   );
 }
