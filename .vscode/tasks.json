@@ -1,0 +1,73 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        // ── Qdrant: docker compose up -d (즉시 반환, 출력 숨김) ──
+        {
+            "label": "qdrant: start",
+            "type": "shell",
+            "command": "docker compose up -d qdrant",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "silent", "panel": "shared", "close": true }
+        },
+        // ── Ollama: 이미 Windows 서비스로 실행 중이면 에러 발생하지만 무시 가능 ──
+        {
+            "label": "ollama: serve",
+            "type": "shell",
+            "command": "ollama serve",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": [{ "regexp": "^.*$", "message": 1 }],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "Listening on"
+                }
+            },
+            "presentation": { "reveal": "always", "panel": "dedicated", "label": "Ollama :11434" }
+        },
+        // ── FastAPI: uvicorn --reload (소스 수정 시 자동 재기동) ──
+        {
+            "label": "api: dev",
+            "type": "shell",
+            "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 --reload",
+            "options": { "cwd": "${workspaceFolder}" },
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": [{ "regexp": "^.*$", "message": 1 }],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "Application startup complete"
+                }
+            },
+            "presentation": { "reveal": "always", "panel": "dedicated", "label": "API :8000" }
+        },
+        // ── Next.js 개발서버 ──
+        {
+            "label": "web: dev",
+            "type": "shell",
+            "command": "npm run dev",
+            "options": { "cwd": "${workspaceFolder}\\apps\\web" },
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": [{ "regexp": "^.*$", "message": 1 }],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "Ready in"
+                }
+            },
+            "presentation": { "reveal": "always", "panel": "dedicated", "label": "Web :3000" }
+        },
+        // ── 전체 동시 기동: Ctrl+Shift+P → Tasks: Run Task → all: dev start ──
+        // Ollama는 Windows 서비스로 상시 실행 중이므로 제외.
+        // 필요 시 dependsOn 에 "ollama: serve" 추가.
+        {
+            "label": "all: dev start",
+            "dependsOn": ["qdrant: start", "api: dev", "web: dev"],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
+        }
+    ]
+}

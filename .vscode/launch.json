@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // ── FastAPI ──────────────────────────────────────────
+        // subProcess:true → uvicorn --reload 가 자식 프로세스를
+        // 재생성해도 VS Code 가 계속 추적
+        {
+            "name": "FastAPI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "apps.api.main:app",
+                "--host", "127.0.0.1",
+                "--port", "8000",
+                "--reload"
+            ],
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": { "PYTHONPATH": "${workspaceFolder}" },
+            "justMyCode": true,
+            "subProcess": true
+        },
+        // ── Next.js ──────────────────────────────────────────
+        {
+            "name": "Next.js",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev"],
+            "cwd": "${workspaceFolder}/apps/web",
+            "console": "integratedTerminal",
+            "serverReadyAction": {
+                "pattern": "Local:\\s+(https?://\\S+)",
+                "uriFormat": "%s",
+                "action": "openExternally"
+            }
+        }
+    ],
+    // ── 복합 구성 ─────────────────────────────────────────────
+    // Ctrl+Shift+D 패널 상단 드롭다운에서 "전체 서비스" 선택 후 F5
+    //   1. qdrant: start (preLaunchTask, 자동)
+    //   2. FastAPI + Next.js 동시 실행 → 툴바에 드롭다운으로 전환 가능
+    //   정지 버튼 한 번으로 둘 다 종료 (stopAll: true)
+    "compounds": [
+        {
+            "name": "전체 서비스",
+            "configurations": ["FastAPI", "Next.js"],
+            "preLaunchTask": "qdrant: start",
+            "stopAll": true
+        }
+    ]
+}
+
