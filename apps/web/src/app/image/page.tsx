@@ -24,7 +24,7 @@ function PosterCard({ h }: { h: Hit }) {
         src={poster}
         alt={h.opus}
         loading="lazy"
-        className="w-full h-44 object-cover bg-neutral-800"
+        className="w-full aspect-[400/269] object-cover bg-neutral-800"
         onError={(e) => {
           (e.currentTarget as HTMLImageElement).style.display = "none";
         }}

@@ -124,33 +124,41 @@ function ToolCallChip({ ev }: { ev: ToolEvent }) {
 }
 
 function AssistantBlock({ msg }: { msg: Message }) {
+  // 모든 toolResults의 VideoHit를 opus 기준으로 중복 제거하여 합산
+  const allHits: VideoHit[] = [];
+  const seenOpus = new Set<string>();
+  for (const r of msg.toolResults) {
+    for (const h of extractHits(r.result)) {
+      if (!seenOpus.has(h.opus)) {
+        seenOpus.add(h.opus);
+        allHits.push(h);
+      }
+    }
+  }
+  const emptyResults = msg.toolResults.filter((r) => extractHits(r.result).length === 0);
+
   return (
     <div className="space-y-2">
       {msg.toolCalls.map((c, i) => (
         <ToolCallChip key={`c-${i}`} ev={c} />
       ))}
-      {msg.toolResults.map((r, i) => {
-        const hits = extractHits(r.result);
-        if (hits.length === 0) {
-          return (
-            <div key={`r-${i}`} className="text-xs text-neutral-500 font-mono">
-              ↳ {r.name} → 0 items
-            </div>
-          );
-        }
-        return (
-          <div key={`r-${i}`} className="space-y-1.5">
-            <div className="text-xs text-neutral-500 font-mono">
-              ↳ {r.name} → {hits.length} items
-            </div>
-            <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
-              {hits.map((h, j) => (
-                <VideoCard key={`${h.opus}-${j}`} hit={h} />
-              ))}
-            </div>
+      {emptyResults.map((r, i) => (
+        <div key={`r-empty-${i}`} className="text-xs text-neutral-500 font-mono">
+          ↳ {r.name} → 0 items
+        </div>
+      ))}
+      {allHits.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-xs text-neutral-500 font-mono">
+            ↳ {allHits.length} items
           </div>
-        );
-      })}
+          <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+            {allHits.map((h) => (
+              <VideoCard key={h.opus} hit={h} />
+            ))}
+          </div>
+        </div>
+      )}
       {msg.text && (
         <div className="whitespace-pre-wrap text-neutral-100 leading-relaxed">{msg.text}</div>
       )}

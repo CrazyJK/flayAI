@@ -285,16 +285,25 @@ def list_clusters(
 def cluster_samples(cluster_id: int, limit: int = Query(12, ge=1, le=50)) -> dict[str, Any]:
     conn = connect()
     try:
+        # 한 poster_opus 내 같은 클러스터로 분류된 얼굴이 여러 개일 수 있어
+        # 라벨링 표시용으로는 face_idx 최소값 한 건만 노출 (중복 카드 방지).
         rows = conn.execute(
             "SELECT pf.poster_opus, pf.face_idx, pf.bbox, "
-            "       v.title, v.studio, v.year, "
+            "       v.title_ko, v.title_jp, v.studio, "
+            "       v.release_year, v.release_month, "
             "       (SELECT GROUP_CONCAT(canonical_name) FROM video_actresses "
             "        WHERE opus = pf.poster_opus) AS actresses "
             "FROM poster_faces pf "
+            "JOIN ( "
+            "    SELECT poster_opus, MIN(face_idx) AS face_idx "
+            "    FROM poster_faces "
+            "    WHERE cluster_id = ? "
+            "    GROUP BY poster_opus "
+            ") s ON s.poster_opus = pf.poster_opus AND s.face_idx = pf.face_idx "
             "LEFT JOIN videos v ON v.opus = pf.poster_opus "
             "WHERE pf.cluster_id = ? "
             "ORDER BY pf.poster_opus LIMIT ?",
-            (cluster_id, limit),
+            (cluster_id, cluster_id, limit),
         ).fetchall()
         cluster = conn.execute(
             "SELECT cluster_id, canonical_name, sample_count, confidence "
@@ -321,14 +330,47 @@ def label_cluster(cluster_id: int, req: ClusterLabelRequest) -> dict[str, Any]:
     conf = req.confidence if req.confidence is not None else (1.0 if name else None)
     conn = connect()
     try:
-        with conn:
-            cur = conn.execute(
-                "UPDATE face_clusters SET canonical_name = ?, confidence = ? "
-                "WHERE cluster_id = ?",
-                (name, conf, cluster_id),
-            )
+        try:
+            with conn:
+                cur = conn.execute(
+                    "UPDATE face_clusters SET canonical_name = ?, confidence = ? "
+                    "WHERE cluster_id = ?",
+                    (name, conf, cluster_id),
+                )
+            # rowcount 체크는 with 블록 밖에서 (commit 완료 후)
             if cur.rowcount == 0:
                 raise HTTPException(404, "cluster not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error("label_cluster error cluster_id=%s: %s", cluster_id, e, exc_info=True)
+            raise HTTPException(500, f"저장 실패: {e}") from e
     finally:
         conn.close()
     return {"cluster_id": cluster_id, "canonical_name": name, "confidence": conf}
+
+
+@router.delete("/api/face/clusters/{cluster_id}/samples/{poster_opus}/{face_idx}")
+def exclude_sample(cluster_id: int, poster_opus: str, face_idx: int) -> dict[str, Any]:
+    """특정 포스터 얼굴을 클러스터에서 제외 (cluster_id = NULL 처리)."""
+    conn = connect()
+    try:
+        try:
+            with conn:
+                cur = conn.execute(
+                    "UPDATE poster_faces SET cluster_id = NULL "
+                    "WHERE cluster_id = ? AND poster_opus = ? AND face_idx = ?",
+                    (cluster_id, poster_opus, face_idx),
+                )
+                if cur.rowcount > 0:
+                    conn.execute(
+                        "UPDATE face_clusters SET sample_count = MAX(0, sample_count - 1) "
+                        "WHERE cluster_id = ?",
+                        (cluster_id,),
+                    )
+        except Exception as e:
+            log.error("exclude_sample error cluster_id=%s opus=%s: %s", cluster_id, poster_opus, e, exc_info=True)
+            raise HTTPException(500, f"제외 실패: {e}") from e
+    finally:
+        conn.close()
+    return {"ok": True, "cluster_id": cluster_id, "poster_opus": poster_opus, "face_idx": face_idx}

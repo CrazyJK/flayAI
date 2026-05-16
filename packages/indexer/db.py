@@ -172,14 +172,21 @@ def db_path() -> Path:
 
 
 def connect(path: str | Path | None = None) -> sqlite3.Connection:
-    """SQLite 연결 (Row factory + 외래키 + WAL)."""
+    """SQLite 연결 (Row factory + 외래키 + WAL).
+
+    동시 쓰기(예: extract-faces 배치)와 라벨링/API 쓰기가 겹치면
+    'database is locked' 가 발생할 수 있어 timeout 과 busy_timeout 을 늘림.
+    """
     target = Path(path) if path else db_path()
     target.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(target))
+    # timeout=30: connect 단계에서 lock 대기 시간 (초)
+    conn = sqlite3.connect(str(target), timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
+    # busy_timeout=30000ms: 실행 중 lock 발생 시 재시도 대기 (ms)
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 

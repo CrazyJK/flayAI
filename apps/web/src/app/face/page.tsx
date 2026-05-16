@@ -129,7 +129,7 @@ export default function FaceSearchPage() {
                       src={`${API_BASE}/static/posters/${encodeURIComponent(n.opus)}`}
                       alt={n.opus}
                       loading="lazy"
-                      className="w-full h-32 object-cover bg-neutral-800"
+                      className="w-full aspect-[400/269] object-cover bg-neutral-800"
                     />
                     <div className="p-1.5 text-xs">
                       <div className="font-mono">{n.opus}</div>
