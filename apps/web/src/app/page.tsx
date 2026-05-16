@@ -286,9 +286,9 @@ export default function ChatPage() {
   }, []);
 
   const examples = [
-    "Kawakita Saika 출연작 5개 추천해줘",
+    "Alice Smith 출연작 5개 추천해줘",
     "2023년 7월 발매작 보여줘",
-    "S1 제작사 평점 4 이상 영상",
+    "StudioA 제작사 평점 4 이상 영상",
     "지금 볼 수 있는 회사 배경 영상",
   ];
 

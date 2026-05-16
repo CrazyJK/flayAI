@@ -10,7 +10,7 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 요청:
 ```json
 {
-  "query": "Aoi 출연작",
+  "query": "Alice 출연작",
   "history": [
     { "role": "user", "content": "..." },
     { "role": "assistant", "content": "..." }
@@ -59,8 +59,8 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 ```json
 {
   "query": "회사 일상",
-  "actress": "miku ohashi",
-  "studio": "Caribbeancom",
+  "actress": "alice",
+  "studio": "StudioA",
   "year": 2023, "month": 7,
   "kind": "instance",
   "playable": true,
@@ -119,7 +119,7 @@ multipart/form-data:
 ```json
 {
   "faces": [
-    { "bbox": [...], "matches": [ { "cluster_id": 12, "label": "miku ohashi", "votes": 152, "confidence": 1.0 }, ... ] }
+    { "bbox": [...], "matches": [ { "cluster_id": 12, "label": "alice", "votes": 152, "confidence": 1.0 }, ... ] }
   ],
   "items": [hit, ...]
 }
@@ -135,7 +135,7 @@ multipart/form-data:
 
 ### `POST /api/face/clusters/{cluster_id}/label`
 ```json
-{ "label": "miku ohashi" }
+{ "label": "alice" }
 ```
 사람이 직접 라벨 부여. (`null` 로 보내면 제거)
 
@@ -195,6 +195,6 @@ async function* chat(query: string) {
 const { items } = await fetch("http://127.0.0.1:8000/api/search/videos", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ actress: "aoi", year: 2023, limit: 5 }),
+  body: JSON.stringify({ actress: "alice", year: 2023, limit: 5 }),
 }).then(r => r.json());
 ```

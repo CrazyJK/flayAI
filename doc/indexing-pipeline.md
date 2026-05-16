@@ -40,7 +40,7 @@
 - 입력: `K:\Crazy\Info\video.json`, `K:\Crazy\Info\history.csv`
 - 출력 테이블: `videos`, `actresses`, `actress_aliases`, `video_actresses`, `studios`, `tags`, `video_tags`, `likes`, `history`
 - 핵심 로직: **배우 별칭 병합**.
-  `Aoi`, `Sora Aoi`, `葵` 같은 표기를 하나의 `canonical_name` 으로 합치고 별칭 테이블에 풀어둠
+  `Alice`, `Alice S.`, `앨리스` 같은 표기를 하나의 `canonical_name` 으로 합치고 별칭 테이블에 풀어둘
   (`packages/indexer/actress_merge.py`).
 
 ### 2. `scan` — 포스터 스캔 (M1)

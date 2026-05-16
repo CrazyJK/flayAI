@@ -3,33 +3,33 @@ from packages.indexer.poster_parser import parse_filename
 
 
 def test_parse_basic_korean_title():
-    name = "[Attackers][ADN-036][당신, 용서 .... - 이웃의 음욕 무수정][Rin Sakuragi][2014.10.07].jpg"
+    name = "[StudioA][ABC-001][샘플 타이틀 .... - 무삭제 특별판][Alice Smith][2014.10.07].jpg"
     p = parse_filename(name)
     assert p is not None
-    assert p.studio == "Attackers"
-    assert p.opus == "ADN-036"
-    assert p.title.startswith("당신, 용서")
-    assert "이웃의 음욕" in p.title
-    assert p.actresses_raw == "Rin Sakuragi"
-    assert p.actresses == ["Rin", "Sakuragi"]
+    assert p.studio == "StudioA"
+    assert p.opus == "ABC-001"
+    assert p.title.startswith("샘플 타이틀")
+    assert "무삭제 특별판" in p.title
+    assert p.actresses_raw == "Alice Smith"
+    assert p.actresses == ["Alice", "Smith"]
     assert p.release_date == "2014-10-07"
     assert (p.release_year, p.release_month) == (2014, 10)
 
 
 def test_parse_multi_actress_space_separated():
-    name = "[S1][JUC-889][가장 위험한 두 사람의 유부녀 잠입 수사관][Akari Hoshino Ren Serizawa][2010.05.01].jpg"
+    name = "[StudioB][DEF-002][두 사람의 특별한 하루][Alice Bob Carol Dave][2010.05.01].jpg"
     p = parse_filename(name)
     assert p is not None
     # raw 보존
-    assert p.actresses_raw == "Akari Hoshino Ren Serizawa"
-    assert p.actresses == ["Akari", "Hoshino", "Ren", "Serizawa"]
+    assert p.actresses_raw == "Alice Bob Carol Dave"
+    assert p.actresses == ["Alice", "Bob", "Carol", "Dave"]
 
 
 def test_parse_with_path_prefix():
-    full = r"K:\Crazy\Storage\Attackers\[Attackers][ADN-036][T][N][2014.10.07].png"
+    full = r"K:\Crazy\Storage\StudioA\[StudioA][ABC-001][T][N][2014.10.07].png"
     p = parse_filename(full.split("\\")[-1])
     assert p is not None
-    assert p.studio == "Attackers"
+    assert p.studio == "StudioA"
 
 
 def test_parse_empty_actresses():
@@ -41,11 +41,11 @@ def test_parse_empty_actresses():
 
 
 def test_parse_japanese_studio():
-    name = "[アリスJAPAN][KR-9211][풍속에서 아오이 소라와][Sora Aoi][2004.08.20].jpg"
+    name = "[スタジオA][GHI-003][평범한 일상 이야기][Alice Smith][2004.08.20].jpg"
     p = parse_filename(name)
     assert p is not None
-    assert p.studio == "アリスJAPAN"
-    assert p.opus == "KR-9211"
+    assert p.studio == "スタジオA"
+    assert p.opus == "GHI-003"
 
 
 def test_parse_invalid_returns_none():

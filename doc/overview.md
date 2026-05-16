@@ -9,7 +9,7 @@
 
 ## 목표
 
-> "회사 배경의 일상 영상", "지금 볼 수 있는 ~", "Aoi 출연작",
+> "회사 배경의 일상 영상", "지금 볼 수 있는 ~", "Alice 출연작",
 > "이 사진의 배우 출연작" 같은 질의를 한국어로 던지고 답을 받는다.
 
 내 PC 안에서 **외부 노출 없이**.
@@ -23,7 +23,7 @@
   하지만 LLM 은 내 데이터를 모릅니다.
 - **RAG (Retrieval-Augmented Generation)** = "검색해서 그 결과를 LLM 에게 보여주고 답하게 한다".
   즉, "LLM 단독" 이 아니라 "DB 검색 + LLM 종합".
-- **Tool calling** = LLM 이 답하기 전에 `search_videos(actress="aoi")` 같은
+- **Tool calling** = LLM 이 답하기 전에 `search_videos(actress="alice")` 같은
   **함수를 호출하라**고 우리가 시킬 수 있는 기능. 정확한 데이터를 가져오는 핵심 메커니즘.
 
 JS 비유:
@@ -49,7 +49,7 @@ for (const call of llmResp.tool_calls) {
 
 | 질의 예 | 처리 |
 |---------|------|
-| `Kawakita Saika 출연작 5개` | `search_videos(actress=...)` → SQLite 메타 only |
+| `Alice Smith 출연작 5개` | `search_videos(actress=...)` → SQLite 메타 only |
 | `회사 사무실 배경 영상` | `search_videos(query=...)` → BGE-M3 임베딩 + Qdrant top-k → FTS5 BM25 와 RRF 결합 |
 | `2023년 7월 발매작` | 메타 필터 only |
 | `S1 평점 4 이상` | studio + rank 필터 |

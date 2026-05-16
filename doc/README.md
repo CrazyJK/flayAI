@@ -25,7 +25,7 @@
 - **프론트**: Next.js 16 + React 19 + Tailwind 4 (포트 3000)
 - **벡터 DB**: Qdrant (Docker, 포트 6333) — 4 컬렉션
 - **관계 DB**: SQLite (`data/sqlite/flay.db`) — 메타데이터 + FTS5
-- **LLM**: Ollama 로 띄운 Qwen2.5 14B (abliterated) — 한국어 + 도구 호출
+- **LLM**: Ollama 로 띄운 Qwen2.5 14B — 한국어 + 도구 호출
 - **임베딩**: BGE-M3 (1024d, 텍스트), OpenCLIP ViT-L/14 (768d, 이미지)
 - **얼굴**: InsightFace buffalo_l (512d)
 - **OCR**: RapidOCR (ONNX Runtime)
@@ -41,7 +41,7 @@ FastAPI /api/chat
    ↓
 RAG 라우터 → Ollama LLM 에 "tool 써서 답해" 라고 요청
    ↓
-LLM 이 search_videos(actress="aoi", year=2023) 같은 도구 호출
+LLM 이 search_videos(actress="alice", year=2023) 같은 도구 호출
    ↓
 SQLite + Qdrant 하이브리드 검색 (FTS5 + 벡터)
    ↓

@@ -12,7 +12,7 @@ POST /api/chat
   "model": "qwen2.5",
   "messages": [
     { "role": "system",  "content": "당신은 비서다 ..." },
-    { "role": "user",    "content": "Aoi 출연작 알려줘" }
+    { "role": "user",    "content": "Alice 출연작 알려줘" }
   ],
   "tools": [ /* JSON Schema */ ]
 }

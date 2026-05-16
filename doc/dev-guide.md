@@ -88,7 +88,7 @@ Invoke-RestMethod http://127.0.0.1:8000/healthz
 
 # 채팅 (간단 폼)
 Invoke-RestMethod -Uri http://127.0.0.1:8000/api/chat -Method Post `
-  -ContentType application/json -Body '{"query":"Aoi 출연작"}'
+  -ContentType application/json -Body '{"query":"Alice 출연작"}'
 
 # 포스터 OCR 검색
 Invoke-RestMethod -Uri http://127.0.0.1:8000/api/search/poster-ocr -Method Post `

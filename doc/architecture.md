@@ -51,7 +51,7 @@
 |--------|------|
 | `videos` | opus(PK), title_jp, title_ko, desc_ko, studio, release_date, kind(instance/archive), play, rank, like_count, last_play |
 | `actresses` | canonical_name(PK) — 정규화된 배우 이름 |
-| `actress_aliases` | alias_norm → canonical_name 매핑. "葵" / "Aoi" / "Sora Aoi" 가 같은 사람을 가리키게 |
+| `actress_aliases` | alias_norm → canonical_name 매핑. "앨리스" / "Alice" / "Alice S." 가 같은 사람을 가리키게 |
 | `video_actresses` | M:N 조인 |
 | `studios`, `tags`, `video_tags`, `likes`, `history` | 기타 메타 |
 | `posters` | opus 별 포스터 경로. ocr_text 컬럼은 M5 에서 채워짐 |
@@ -77,7 +77,7 @@
 
 `http://127.0.0.1:11434`. OpenAI 와 비슷한 `/api/chat` 호환 엔드포인트.
 
-- **메인 모델**: `huihui_ai/qwen2.5-abliterate:14b` — 한국어 좋음 + tool calling 지원
+- **메인 모델**: `huihui_ai/qwen2.5-abliterate:14b` — 한국어/도구 호출 지원 양호
 - 14B 모델이 GPU 7~9GB 사용. 추론 중에만 로드.
 
 ### 4. 모델 캐시 — `~/.cache/huggingface`

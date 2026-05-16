@@ -11,12 +11,12 @@ import httpx
 BASE = "http://127.0.0.1:8000"
 
 SCENARIOS = [
-    "Kawakita Saika 출연작 5개 추천해줘",
-    "Aoi 출연작 알려줘",
-    "Sora Aoi 출연작 알려줘",
+    "Alice Smith 출연작 5개 추천해줘",
+    "Alice 출연작 알려줘",
+    "Alice S. 출연작 알려줘",
     "회사 배경의 일상 영상 찾아줘",
     "2023년 7월 발매작 보여줘",
-    "S1 제작사 평점 4 이상 영상",
+    "StudioA 제작사 평점 4 이상 영상",
     "지금 볼 수 있는 회사 배경 영상",
 ]
 
