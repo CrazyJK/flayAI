@@ -26,6 +26,8 @@ from packages.indexer import embed_clip as embed_clip_mod
 from packages.indexer import faces as faces_mod
 from packages.indexer import cluster_faces as cluster_mod
 from packages.indexer import ocr as ocr_mod
+from packages.indexer import sync_payload as sync_mod
+from packages.indexer import cleanup as cleanup_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
 from packages.indexer.state import load_state
 
@@ -196,6 +198,34 @@ def ocr_posters(
     out = ocr_mod.run(limit=limit or None, force=force, embed_batch=embed_batch)
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("ocr_posters", out)
+
+
+@app.command(name="sync-payload")
+def sync_payload(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
+    """SQLite videos.kind / playable 변경분을 Qdrant 4 컬렉션 payload 에 반영.
+
+    벡터 재계산 없이 set_payload 만 호출 (수십~수백배 빠름).
+    """
+    _setup_log(verbose)
+    out = sync_mod.run()
+    _print("sync_payload", out)
+
+
+@app.command()
+def cleanup(
+    apply: bool = typer.Option(False, "--apply", help="실제 삭제 적용 (기본은 dry-run)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """고아 row/point 정리 (SQLite + Qdrant 4 컬렉션).
+
+    탐지 대상:
+      1) posters.path 의 파일이 실제 없음
+      2) videos 의 JSON({info_dir}/{opus}.json) 이 실제 없음
+      3) Qdrant 에는 있는데 SQLite videos 에 없는 opus
+    """
+    _setup_log(verbose)
+    out = cleanup_mod.run(apply=apply)
+    _print("cleanup", out)
 
 
 @app.command()
