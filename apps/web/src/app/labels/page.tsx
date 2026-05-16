@@ -198,6 +198,7 @@ export default function LabelsPage() {
   const [offset, setOffset] = useState(0);
   const limit = 50;
   const [onlyUnlabeled, setOnlyUnlabeled] = useState(false);
+  const [hasInstance, setHasInstance] = useState(false);
   const [minSize, setMinSize] = useState(3);
   const [selected, setSelected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -209,13 +210,14 @@ export default function LabelsPage() {
       url.searchParams.set("limit", String(limit));
       url.searchParams.set("offset", String(offset));
       url.searchParams.set("only_unlabeled", onlyUnlabeled ? "true" : "false");
+      url.searchParams.set("has_instance", hasInstance ? "true" : "false");
       url.searchParams.set("min_size", String(minSize));
       const r = await fetch(url.toString());
       const j = await r.json();
       setItems(j.items ?? []);
       setTotal(j.total ?? 0);
     } finally { setBusy(false); }
-  }, [offset, onlyUnlabeled, minSize]);
+  }, [offset, onlyUnlabeled, hasInstance, minSize]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -237,6 +239,11 @@ export default function LabelsPage() {
           <input type="checkbox" checked={onlyUnlabeled}
                  onChange={(e) => { setOffset(0); setOnlyUnlabeled(e.target.checked); }} />
           unlabeled만
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={hasInstance}
+                 onChange={(e) => { setOffset(0); setHasInstance(e.target.checked); }} />
+          instance만
         </label>
         <label className="flex items-center gap-1">
           min size:

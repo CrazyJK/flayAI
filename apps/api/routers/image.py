@@ -253,22 +253,29 @@ def list_clusters(
     offset: int = Query(0, ge=0),
     only_unlabeled: bool = Query(False),
     min_size: int = Query(2, ge=1),
+    has_instance: bool = Query(False),
 ) -> dict[str, Any]:
     conn = connect()
     try:
-        where = ["sample_count >= ?"]
+        where = ["fc.sample_count >= ?"]
         params: list[Any] = [min_size]
         if only_unlabeled:
-            where.append("canonical_name IS NULL")
+            where.append("fc.canonical_name IS NULL")
+        if has_instance:
+            where.append(
+                "EXISTS (SELECT 1 FROM poster_faces pf "
+                "        JOIN videos v ON v.opus = pf.poster_opus "
+                "        WHERE pf.cluster_id = fc.cluster_id AND v.kind = 'instance')"
+            )
         where_sql = " AND ".join(where)
         rows = conn.execute(
-            f"SELECT cluster_id, canonical_name, sample_count, confidence "
-            f"FROM face_clusters WHERE {where_sql} "
-            f"ORDER BY sample_count DESC LIMIT ? OFFSET ?",
+            f"SELECT fc.cluster_id, fc.canonical_name, fc.sample_count, fc.confidence "
+            f"FROM face_clusters fc WHERE {where_sql} "
+            f"ORDER BY fc.sample_count DESC LIMIT ? OFFSET ?",
             [*params, limit, offset],
         ).fetchall()
         total = conn.execute(
-            f"SELECT COUNT(*) FROM face_clusters WHERE {where_sql}",
+            f"SELECT COUNT(*) FROM face_clusters fc WHERE {where_sql}",
             params,
         ).fetchone()[0]
     finally:
