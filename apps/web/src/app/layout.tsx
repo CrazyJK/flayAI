@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "flayAI Chat",
   description: "로컬 비디오 컬렉션 검색 챗봇",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({
