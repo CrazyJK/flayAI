@@ -75,47 +75,63 @@ function openFlayPopup(opus: string) {
 
 function VideoCard({ hit }: { hit: VideoHit }) {
   const title = hit.title || hit.title_ko || hit.title_jp || hit.opus;
+  const posterUrl = `${API_BASE}/static/posters/${encodeURIComponent(hit.opus)}`;
   return (
-    <div className="rounded-md border border-neutral-800 bg-neutral-900/60 p-3 text-sm">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span
-          className="font-mono text-xs text-amber-300 cursor-pointer hover:text-amber-200 hover:underline"
-          onClick={() => openFlayPopup(hit.opus)}
-          title={`팝업으로 열기: ${hit.opus}`}
-        >
-          {hit.opus}
-        </span>
-        <KindBadge kind={hit.kind} />
-        {hit.playable && (
-          <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
-            ▶ PLAYABLE
-          </span>
-        )}
-        {typeof hit.rank === "number" && hit.rank > 0 && (
-          <span className="px-1.5 py-0.5 text-[10px] rounded bg-yellow-500/20 text-yellow-200">
-            ★ {hit.rank}
-          </span>
-        )}
-        {typeof hit.score === "number" && (
-          <span className="ml-auto font-mono text-[10px] text-neutral-500">
-            score {hit.score.toFixed(3)}
-          </span>
-        )}
+    <div
+      className="relative aspect-[400/269] rounded-md overflow-hidden border border-neutral-800 cursor-pointer"
+      onClick={() => openFlayPopup(hit.opus)}
+      title={`팝업으로 열기: ${hit.opus}`}
+    >
+      {/* 배경 포스터 이미지 */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={posterUrl}
+        alt={hit.opus}
+        className="absolute inset-0 w-full h-full object-cover bg-neutral-900"
+      />
+
+      {/* 상단 오버레이: opus, 배지, 스코어 */}
+      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/75 to-transparent px-2 py-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-mono text-xs text-amber-300">{hit.opus}</span>
+          <KindBadge kind={hit.kind} />
+          {hit.playable && (
+            <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+              ▶ PLAYABLE
+            </span>
+          )}
+          {typeof hit.rank === "number" && hit.rank > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] rounded bg-yellow-500/20 text-yellow-200">
+              {"⭐".repeat(hit.rank)}
+            </span>
+          )}
+          {typeof hit.score === "number" && (
+            <span className="ml-auto font-mono text-[10px] text-neutral-300">
+              {hit.score.toFixed(3)}
+            </span>
+          )}
+        </div>
       </div>
-      <div className="mt-1 font-medium text-neutral-100">{title}</div>
-      <div className="mt-1 text-xs text-neutral-400 flex flex-wrap gap-x-3 gap-y-0.5">
-        {hit.studio && <span>🏷 {hit.studio}</span>}
-        {hit.year && (
-          <span>
-            📅 {hit.year}
-            {hit.month ? `-${String(hit.month).padStart(2, "0")}` : ""}
-          </span>
-        )}
-        {hit.actresses && hit.actresses.length > 0 && <span>👤 {hit.actresses.join(", ")}</span>}
-        {typeof hit.play === "number" && hit.play > 0 && <span>▶︎ {hit.play}</span>}
-        {typeof hit.like_count === "number" && hit.like_count > 0 && (
-          <span>♥ {hit.like_count}</span>
-        )}
+
+      {/* 하단 오버레이: 제목, 메타 정보 */}
+      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 to-transparent px-2 pt-6 pb-1.5">
+        <div className="font-medium text-sm text-neutral-100 truncate">{title}</div>
+        <div className="mt-0.5 text-xs text-neutral-300 flex flex-wrap gap-x-2 gap-y-0">
+          {hit.studio && <span>{hit.studio}</span>}
+          {hit.year && (
+            <span>
+              {hit.year}
+              {hit.month ? `-${String(hit.month).padStart(2, "0")}` : ""}
+            </span>
+          )}
+          {hit.actresses && hit.actresses.length > 0 && <span>👤 {hit.actresses.join(", ")}</span>}
+          {typeof hit.play === "number" && hit.play > 0 && (
+            <span title="재생 수">▶︎ {hit.play}</span>
+          )}
+          {typeof hit.like_count === "number" && hit.like_count > 0 && (
+            <span title="좋아요 수">💛 {hit.like_count}</span>
+          )}
+        </div>
       </div>
     </div>
   );
