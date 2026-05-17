@@ -98,6 +98,20 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 - 내부 페이지 링크(`href="/..."`)에 `<a>` 태그 금지 → `import Link from "next/link"` 후 `<Link>` 사용 (`@next/next/no-html-link-for-pages`)
 - `useEffect` 내 동기 `setState` 호출은 `// eslint-disable-next-line react-hooks/set-state-in-effect` 로 억제 (데이터 로딩 reset 패턴 등 정상적인 경우에 한함)
 
+### 코딩 스타일 (.editorconfig)
+
+루트의 `.editorconfig` 가 편집기 동작을 통일한다. 새 파일 작성 시 아래 규칙을 코드에도 반영한다:
+
+| 파일 유형 | indent | EOL | 비고 |
+|-----------|--------|-----|------|
+| `*.py` | 4 space | LF | ruff/black 기준 |
+| `*.ts, *.tsx, *.js, *.jsx` | 2 space | LF | Prettier 기준 |
+| `*.json, *.yaml, *.toml, *.css` | 2 space | LF | — |
+| `*.bat, *.cmd` | — | **CRLF** | Windows 배치 파일 호환 |
+
+- 모든 파일: UTF-8, 파일 끝 개행 필수, 줄 끝 공백 제거
+- `*.md` 는 줄 끝 공백 보존 (마크다운 줄바꿈 `  ` 유지)
+
 ### 인덱서 파이프라인
 
 CLI 진입점: `python -m packages.indexer.cli <cmd>`  
