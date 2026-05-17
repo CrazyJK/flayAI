@@ -74,6 +74,9 @@ export default function FaceSearchPage() {
           <a href="/labels" className="text-neutral-400 hover:text-neutral-200">
             라벨링
           </a>
+          <a href="/admin" className="text-neutral-400 hover:text-neutral-200">
+            관리자
+          </a>
         </nav>
         <span className="ml-auto text-xs text-neutral-500 font-mono">{API_BASE}</span>
       </header>

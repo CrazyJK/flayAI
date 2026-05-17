@@ -225,6 +225,11 @@ def create_app() -> FastAPI:
 
     app.include_router(ocr_router)
 
+    # ---- 관리자 대시보드 ----
+    from apps.api.routers.admin import router as admin_router
+
+    app.include_router(admin_router)
+
     return app
 
 

@@ -362,6 +362,9 @@ export default function ChatPage() {
           <a href="/labels" className="text-neutral-400 hover:text-neutral-200">
             라벨링
           </a>
+          <a href="/admin" className="text-neutral-400 hover:text-neutral-200">
+            관리자
+          </a>
         </nav>
       </header>
 
