@@ -53,18 +53,18 @@ if "%SKIP_BUILD%"=="0" (
 
 REM ---- 4. API (FastAPI, no --reload) ------------------------
 echo [4/5] API ^(FastAPI^)... ^(logs\api.log^)
-start /b cmd /c "cd /d %ROOT% && .venv\Scripts\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 > logs\api.log 2>&1"
+start /b cmd /c "cd /d %ROOT% && .venv\Scripts\python.exe -m uvicorn apps.api.main:app --host ai.kamoru.jk --port 8000 --ssl-keyfile .cert/kamoru.jk.key --ssl-certfile .cert/kamoru.jk.pem > logs\api.log 2>&1"
 timeout /t 3 /nobreak >nul
 
 REM ---- 5. Web (Next.js production server) ------------------
 echo [5/5] Web ^(next start^)... ^(logs\web.log^)
-start /b cmd /c "cd /d %ROOT%\apps\web && npm run start > %ROOT%\logs\web.log 2>&1"
+start /b cmd /c "cd /d %ROOT%\apps\web && node server.js > %ROOT%\logs\web.log 2>&1"
 
 echo.
 echo ====================================================
 echo  flayAI production ready.
-echo    API  : http://127.0.0.1:8000
-echo    Web  : http://127.0.0.1:3000
+echo    API  : https://ai.kamoru.jk:8000
+echo    Web  : https://ai.kamoru.jk:3000
 echo    Logs : %ROOT%\logs\
 echo ====================================================
 echo  Processes are running in background.

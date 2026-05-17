@@ -18,7 +18,7 @@ exit /b 1
 
 :start
 pushd "%~dp0..\apps\web"
-echo [web start] Next.js dev on http://127.0.0.1:3000
+echo [web start] Next.js dev on https://ai.kamoru.jk:3000
 start "flayAI-Web" cmd /k "npm run dev"
 popd
 goto :eof

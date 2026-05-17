@@ -197,3 +197,6 @@ eval/results/
 _q.json
 _*.json
 *.tmp
+
+# certificates
+.cert/

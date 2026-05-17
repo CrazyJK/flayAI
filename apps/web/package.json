@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "dev": "next dev -H ai.kamoru.jk -p 3000 --experimental-https --experimental-https-key ../../.cert/kamoru.jk.key --experimental-https-cert ../../.cert/kamoru.jk.pem",
     "build": "next build",
-    "start": "next start -H 127.0.0.1 -p 3000",
+    "start": "node server.js",
     "lint": "eslint"
   },
   "dependencies": {

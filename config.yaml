@@ -78,15 +78,20 @@ ranking:
   recency_half_life_days: 180
 
 server:
-  host:     "127.0.0.1"
+  host:     "ai.kamoru.jk"
   api_port: 8000
   web_port: 3000
   qdrant:   "http://127.0.0.1:6333"
   ollama:   "http://127.0.0.1:11434"
-  # CORS 허용 origin 목록 (기존 웹앱 origin 추가)
+  # TLS 인증서 (.cert/ 폴더, .gitignore 등록됨)
+  ssl_keyfile:  ".cert/kamoru.jk.key"
+  ssl_certfile: ".cert/kamoru.jk.pem"
+  # CORS 허용 origin 목록
   cors_origins:
-    - "http://127.0.0.1:3000"
+    - "https://ai.kamoru.jk:3000"
+    - "http://ai.kamoru.jk:3000"
     - "http://localhost:3000"
+    - "https://localhost:3000"
   # 업로드 제한
   upload_max_bytes: 10485760   # 10MB
   upload_allowed_extensions:

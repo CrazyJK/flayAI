@@ -97,7 +97,8 @@ async def _lifespan(app: FastAPI):
 
     cfg = load_config()
     host = cfg["server"]["host"]
-    if host not in ("127.0.0.1", "localhost", "::1"):
+    # hosts 파일로 127.0.0.1에 매핑된 로컬 도메인도 허용
+    if host not in ("127.0.0.1", "localhost", "::1", "ai.kamoru.jk"):
         log.error("FastAPI must bind to localhost only. config.server.host=%s", host)
         sys.exit(1)
     # 백그라운드 워밍업 — 기동을 막지 않음
@@ -195,7 +196,7 @@ def create_app() -> FastAPI:
     def admin_stats(request: Request):
         # localhost-only
         client_host = request.client.host if request.client else ""
-        if client_host not in ("127.0.0.1", "localhost", "::1"):
+        if client_host not in ("127.0.0.1", "localhost", "::1", "ai.kamoru.jk"):
             raise HTTPException(403, "admin endpoints are localhost-only")
         return stats()
 
@@ -236,12 +237,16 @@ def main() -> None:
         level=cfg["logging"]["level"],
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    ssl_keyfile = cfg["server"].get("ssl_keyfile")
+    ssl_certfile = cfg["server"].get("ssl_certfile")
     uvicorn.run(
         "apps.api.main:app",
         host=cfg["server"]["host"],
         port=int(cfg["server"]["api_port"]),
         reload=False,
         log_level=cfg["logging"]["level"].lower(),
+        ssl_keyfile=ssl_keyfile,
+        ssl_certfile=ssl_certfile,
     )
 
 
