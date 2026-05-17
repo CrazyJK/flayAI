@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import examples from "./examples.json";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -326,13 +327,6 @@ export default function ChatPage() {
   const abort = useCallback(() => {
     abortRef.current?.abort();
   }, []);
-
-  const examples = [
-    "Alice Smith 출연작 5개 추천해줘",
-    "2023년 7월 발매작 보여줘",
-    "StudioA 제작사 평점 4 이상 영상",
-    "지금 볼 수 있는 회사 배경 영상",
-  ];
 
   return (
     <main className="flex-1 flex flex-col mx-auto w-full max-w-4xl px-4">
