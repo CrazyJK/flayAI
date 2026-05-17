@@ -59,12 +59,24 @@ function KindBadge({ kind }: { kind?: string | null }) {
   );
 }
 
+function openFlayPopup(opus: string) {
+  window.open(
+    `https://flay.kamoru.jk/dist/popup.flay.html?opus=${encodeURIComponent(opus)}`,
+    `flay_${opus}`,
+    "width=900,height=1400,resizable=yes,scrollbars=yes"
+  );
+}
+
 function VideoCard({ hit }: { hit: VideoHit }) {
   const title = hit.title || hit.title_ko || hit.title_jp || hit.opus;
   return (
     <div className="rounded-md border border-neutral-800 bg-neutral-900/60 p-3 text-sm">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-mono text-xs text-amber-300">{hit.opus}</span>
+        <span
+          className="font-mono text-xs text-amber-300 cursor-pointer hover:text-amber-200 hover:underline"
+          onClick={() => openFlayPopup(hit.opus)}
+          title={`팝업으로 열기: ${hit.opus}`}
+        >{hit.opus}</span>
         <KindBadge kind={hit.kind} />
         {hit.playable && (
           <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
