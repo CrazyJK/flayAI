@@ -50,5 +50,6 @@
   ],
   "eslint.workingDirectories": [
     { "directory": "apps/web", "changeProcessCWD": true }
-  ]
+  ],
+  "editor.fontFamily": "D2Coding, Consolas, 'Courier New', monospace"
 }
