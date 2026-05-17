@@ -81,6 +81,23 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 - **스튜디오 alias**: DB 에서 `"S1"` 같은 공식명이 아닌 `"sone"`, `"s1no1style"` 등으로 저장될 수 있음 → alias 없는 검색 필터는 0건 반환
 - **CORS**: API 는 localhost 전용, 외부 네트워크 노출 금지
 
+### Python 린트 규칙 (ruff)
+
+새 Python 파일 작성 시 준수:
+- `from typing import Iterable` 금지 → `from collections.abc import Iterable` 사용 (UP035)
+- `from typing import AsyncGenerator` 금지 → `from collections.abc import AsyncGenerator` 사용 (UP035)
+- 사용하지 않는 import 추가 금지 (F401)
+- `.encode("utf-8")` 인자는 불필요 — `.encode()` 로만 작성 (UP012)
+- 타입 어노테이션에 문자열 리터럴(`"SomeType"`) 사용 금지 — `from __future__ import annotations` 가 있으면 따옴표 불필요 (UP037)
+- `useEffect` 내 제어 흐름에서 로컬 변수 할당 후 미사용 금지 (F841)
+- 잘못된 타입 어노테이션 예: async generator 함수의 반환 타입은 `"anyio.abc.ByteStream"` 이 아닌 `AsyncGenerator[bytes, None]`
+
+### TypeScript/Next.js 린트 규칙 (ESLint)
+
+새 TSX 파일 작성 시 준수:
+- 내부 페이지 링크(`href="/..."`)에 `<a>` 태그 금지 → `import Link from "next/link"` 후 `<Link>` 사용 (`@next/next/no-html-link-for-pages`)
+- `useEffect` 내 동기 `setState` 호출은 `// eslint-disable-next-line react-hooks/set-state-in-effect` 로 억제 (데이터 로딩 reset 패턴 등 정상적인 경우에 한함)
+
 ### 인덱서 파이프라인
 
 CLI 진입점: `python -m packages.indexer.cli <cmd>`  
