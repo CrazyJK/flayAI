@@ -119,7 +119,7 @@ flayAI/
 ├── scripts/                     ← bootstrap·backup·nightly·진단
 ├── eval/                        ← golden.yaml + run_eval.py
 ├── tests/                       ← pytest
-└── doc/                         ← 이 폴더
+└── docs/                        ← 이 폴더
 ```
 
 ## 데이터가 사는 곳

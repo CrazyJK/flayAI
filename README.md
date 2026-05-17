@@ -25,7 +25,7 @@ packages/    indexer / rag / settings 등 파이썬 패키지
 bin/         프로세스 제어 & 재인덱싱 배치 파일
 config.yaml  데이터 경로/모델/포트 설정
 data/        SQLite + Qdrant 영속 데이터
-doc/         상세 가이드 (overview / architecture / ...)
+docs/         상세 가이드 (overview / architecture / ...)
 logs/        실행 로그
 AI_PLAN.md   전체 설계 명세 (마일스톤 M1~M9)
 ```
@@ -72,10 +72,10 @@ bin\reindex.bat clean   :: 고아 dry-run  (apply 인자로 실제 삭제)
 
 ## 더 읽기
 
-- 동작 설명서 (구현 기준): [`doc/README.md`](doc/README.md)
-  - [overview](doc/overview.md) · [architecture](doc/architecture.md)
-  - [indexing-pipeline](doc/indexing-pipeline.md) · [chat-and-rag](doc/chat-and-rag.md)
-  - [api-reference](doc/api-reference.md) · [dev-guide](doc/dev-guide.md)
+- 동작 설명서 (구현 기준): [`docs/README.md`](docs/README.md)
+  - [overview](docs/overview.md) · [architecture](docs/architecture.md)
+  - [indexing-pipeline](docs/indexing-pipeline.md) · [chat-and-rag](docs/chat-and-rag.md)
+  - [api-reference](docs/api-reference.md) · [dev-guide](docs/dev-guide.md)
 - 전체 설계/마일스톤: [`AI_PLAN.md`](AI_PLAN.md)
 
 ## 라이선스

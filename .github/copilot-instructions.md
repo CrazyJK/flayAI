@@ -14,7 +14,7 @@
 - 코드 변경이 관련 문서에 영향을 미치는 경우에만 문서를 갱신한다.
 - 문서 위치 규칙:
   - 변경된 코드 파일과 동일한 디렉토리에 `README.md` 가 있으면 그 파일에 작성한다.
-  - 없으면 저장소 루트의 `doc/` 디렉토리에서 관련 파일을 찾아 있으면 그 파일에 작성한다. 관련 파일이 없으면 문서 작성을 생략한다(새 파일을 만들지 않는다).
+  - 없으면 저장소 루트의 `docs/` 디렉토리에서 관련 파일을 찾아 있으면 그 파일에 작성한다. 관련 파일이 없으면 문서 작성을 생략한다(새 파일을 만들지 않는다).
 - 문서 형식은 마크다운(Markdown) 으로 작성한다.
 
 ### 3순위: 설명 수준
@@ -37,7 +37,7 @@
 ## 프로젝트 컨텍스트
 
 로컬 비디오 컬렉션(`K:\Crazy\*`)을 자연어로 검색하는 **완전 로컬** 개인용 프로젝트.  
-상세 문서: [doc/overview.md](../doc/overview.md) · [doc/architecture.md](../doc/architecture.md) · [AI_PLAN.md](../AI_PLAN.md)
+상세 문서: [docs/overview.md](../docs/overview.md) · [docs/architecture.md](../docs/architecture.md) · [docs/AI_PLAN.md](../docs/AI_PLAN.md)
 
 ### 컴포넌트 및 포트
 
