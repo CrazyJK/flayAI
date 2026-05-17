@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
@@ -36,7 +37,11 @@ type Message = {
 
 function extractHits(result: unknown): VideoHit[] {
   if (Array.isArray(result)) return result as VideoHit[];
-  if (result && typeof result === "object" && Array.isArray((result as { items?: unknown }).items)) {
+  if (
+    result &&
+    typeof result === "object" &&
+    Array.isArray((result as { items?: unknown }).items)
+  ) {
     return (result as { items: VideoHit[] }).items;
   }
   return [];
@@ -76,7 +81,9 @@ function VideoCard({ hit }: { hit: VideoHit }) {
           className="font-mono text-xs text-amber-300 cursor-pointer hover:text-amber-200 hover:underline"
           onClick={() => openFlayPopup(hit.opus)}
           title={`팝업으로 열기: ${hit.opus}`}
-        >{hit.opus}</span>
+        >
+          {hit.opus}
+        </span>
         <KindBadge kind={hit.kind} />
         {hit.playable && (
           <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
@@ -105,7 +112,9 @@ function VideoCard({ hit }: { hit: VideoHit }) {
         )}
         {hit.actresses && hit.actresses.length > 0 && <span>👤 {hit.actresses.join(", ")}</span>}
         {typeof hit.play === "number" && hit.play > 0 && <span>▶︎ {hit.play}</span>}
-        {typeof hit.like_count === "number" && hit.like_count > 0 && <span>♥ {hit.like_count}</span>}
+        {typeof hit.like_count === "number" && hit.like_count > 0 && (
+          <span>♥ {hit.like_count}</span>
+        )}
       </div>
     </div>
   );
@@ -161,9 +170,7 @@ function AssistantBlock({ msg }: { msg: Message }) {
       ))}
       {allHits.length > 0 && (
         <div className="space-y-1.5">
-          <div className="text-xs text-neutral-500 font-mono">
-            ↳ {allHits.length} items
-          </div>
+          <div className="text-xs text-neutral-500 font-mono">↳ {allHits.length} items</div>
           <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
             {allHits.map((h) => (
               <VideoCard key={h.opus} hit={h} />
@@ -274,7 +281,10 @@ export default function ChatPage() {
               case "tool_result":
                 updateAssistant(asstId, (m) => ({
                   ...m,
-                  toolResults: [...m.toolResults, { name: String(ev.name ?? ""), result: ev.result }],
+                  toolResults: [
+                    ...m.toolResults,
+                    { name: String(ev.name ?? ""), result: ev.result },
+                  ],
                 }));
                 break;
               case "token":
@@ -330,10 +340,18 @@ export default function ChatPage() {
         <h1 className="text-lg font-semibold">flayAI</h1>
         <span className="text-xs text-neutral-500 font-mono">{API_BASE}</span>
         <nav className="ml-auto flex items-center gap-3 text-xs">
-          <a href="/" className="text-neutral-200">채팅</a>
-          <a href="/image" className="text-neutral-400 hover:text-neutral-200">이미지</a>
-          <a href="/face" className="text-neutral-400 hover:text-neutral-200">얼굴</a>
-          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">라벨링</a>
+          <Link href="/" className="text-neutral-200">
+            채팅
+          </Link>
+          <a href="/image" className="text-neutral-400 hover:text-neutral-200">
+            이미지
+          </a>
+          <a href="/face" className="text-neutral-400 hover:text-neutral-200">
+            얼굴
+          </a>
+          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">
+            라벨링
+          </a>
         </nav>
       </header>
 

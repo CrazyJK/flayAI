@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
@@ -47,9 +48,7 @@ function PosterCard({ h }: { h: Hit }) {
           )}
         </div>
         {h.canonical_actresses && h.canonical_actresses.length > 0 && (
-          <div className="mt-1 text-neutral-400">
-            {h.canonical_actresses.join(", ")}
-          </div>
+          <div className="mt-1 text-neutral-400">{h.canonical_actresses.join(", ")}</div>
         )}
       </div>
     </div>
@@ -69,7 +68,10 @@ export default function ImageSearchPage() {
 
   async function searchText() {
     if (!query.trim()) return;
-    setBusy(true); setErr(null); setItems([]); setElapsed(null);
+    setBusy(true);
+    setErr(null);
+    setItems([]);
+    setElapsed(null);
     const t0 = performance.now();
     try {
       const r = await fetch(`${API_BASE}/api/image/search/text`, {
@@ -90,7 +92,10 @@ export default function ImageSearchPage() {
 
   async function searchImage() {
     if (!file) return;
-    setBusy(true); setErr(null); setItems([]); setElapsed(null);
+    setBusy(true);
+    setErr(null);
+    setItems([]);
+    setElapsed(null);
     const t0 = performance.now();
     try {
       const fd = new FormData();
@@ -119,10 +124,18 @@ export default function ImageSearchPage() {
       <header className="px-4 py-3 border-b border-neutral-800 flex items-center gap-3">
         <h1 className="text-base font-semibold">이미지 검색</h1>
         <nav className="flex gap-2 text-xs">
-          <a href="/" className="text-neutral-400 hover:text-neutral-200">채팅</a>
-          <a href="/image" className="text-neutral-200">이미지</a>
-          <a href="/face" className="text-neutral-400 hover:text-neutral-200">얼굴</a>
-          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">라벨링</a>
+          <Link href="/" className="text-neutral-400 hover:text-neutral-200">
+            채팅
+          </Link>
+          <a href="/image" className="text-neutral-200">
+            이미지
+          </a>
+          <a href="/face" className="text-neutral-400 hover:text-neutral-200">
+            얼굴
+          </a>
+          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">
+            라벨링
+          </a>
         </nav>
         <span className="ml-auto text-xs text-neutral-500 font-mono">{API_BASE}</span>
       </header>
@@ -132,11 +145,15 @@ export default function ImageSearchPage() {
           <button
             className={`px-3 py-1 rounded ${tab === "text" ? "bg-emerald-600" : "bg-neutral-800"}`}
             onClick={() => setTab("text")}
-          >텍스트 → 포스터</button>
+          >
+            텍스트 → 포스터
+          </button>
           <button
             className={`px-3 py-1 rounded ${tab === "image" ? "bg-emerald-600" : "bg-neutral-800"}`}
             onClick={() => setTab("image")}
-          >이미지 → 포스터</button>
+          >
+            이미지 → 포스터
+          </button>
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as "" | "instance" | "archive")}
@@ -149,7 +166,13 @@ export default function ImageSearchPage() {
         </div>
 
         {tab === "text" ? (
-          <form onSubmit={(e) => { e.preventDefault(); searchText(); }} className="flex gap-2">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              searchText();
+            }}
+            className="flex gap-2"
+          >
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -160,7 +183,9 @@ export default function ImageSearchPage() {
               type="submit"
               disabled={busy || !query.trim()}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded text-sm"
-            >검색</button>
+            >
+              검색
+            </button>
           </form>
         ) : (
           <div className="flex gap-3 items-start">
@@ -178,20 +203,28 @@ export default function ImageSearchPage() {
               onClick={searchImage}
               disabled={busy || !file}
               className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded text-sm"
-            >유사 포스터 검색</button>
+            >
+              유사 포스터 검색
+            </button>
           </div>
         )}
 
         <div className="text-xs text-neutral-500">
           {busy && <span>검색 중…</span>}
-          {!busy && elapsed !== null && <span>{items.length}건 · {elapsed} ms</span>}
+          {!busy && elapsed !== null && (
+            <span>
+              {items.length}건 · {elapsed} ms
+            </span>
+          )}
           {err && <span className="text-red-400 ml-3">{err}</span>}
         </div>
       </div>
 
       <main className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {items.map((h) => <PosterCard key={h.opus} h={h} />)}
+          {items.map((h) => (
+            <PosterCard key={h.opus} h={h} />
+          ))}
         </div>
       </main>
     </div>

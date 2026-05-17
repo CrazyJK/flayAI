@@ -8,13 +8,14 @@ AI_PLAN.md §6.1 [4], §7.4.
 - title 통째로, desc 는 문장 단위 분할 -> 번역 -> 결합
 - run() : videos.title_ko / desc_ko 채움 + state.translate.completed 갱신
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import re
 import sqlite3
-from typing import Iterable
+from collections.abc import Iterable
 
 import httpx
 
@@ -34,9 +35,10 @@ _SENT_SPLIT = re.compile(r"(?<=[。．\.！\!？\?])\s+|\n+")
 
 # --- 유틸 ---------------------------------------------------------
 
+
 def _hash(model: str, src: str, tgt: str, text: str) -> str:
     h = hashlib.sha1()
-    h.update(f"{model}|{src}|{tgt}|".encode("utf-8"))
+    h.update(f"{model}|{src}|{tgt}|".encode())
     h.update(text.encode("utf-8"))
     return h.hexdigest()
 
@@ -88,6 +90,7 @@ def _looks_corrupted(text: str) -> bool:
 
 # --- 모델 로딩 ----------------------------------------------------
 
+
 def _load_model() -> None:
     global _MODEL, _TOKENIZER, _DEVICE
     if _MODEL is not None:
@@ -113,8 +116,9 @@ def _translate_batch(texts: list[str], target: str = "ko") -> list[str]:
 
     tgt_token = {"ko": "kor_Hang", "en": "eng_Latn"}.get(target, "kor_Hang")
     forced_bos = _TOKENIZER.convert_tokens_to_ids(tgt_token)
-    batch = _TOKENIZER(texts, return_tensors="pt", padding=True, truncation=True,
-                       max_length=512).to(_DEVICE)
+    batch = _TOKENIZER(
+        texts, return_tensors="pt", padding=True, truncation=True, max_length=512
+    ).to(_DEVICE)
     with torch.no_grad():
         # greedy + 반복 억제. no_repeat_ngram_size=3 으로 "어 어 어" 같은 토큰
         # collapse 차단, repetition_penalty 로 logit-level 추가 억제.
@@ -130,6 +134,7 @@ def _translate_batch(texts: list[str], target: str = "ko") -> list[str]:
 
 
 # --- LLM 폴백 -----------------------------------------------------
+
 
 def _llm_translate(text: str, target: str = "ko") -> str | None:
     """Ollama generate 로 번역 폴백. 실패 시 None.
@@ -155,16 +160,20 @@ def _llm_translate(text: str, target: str = "ko") -> str | None:
                 "Return only the translation, no explanations.\n\n"
                 f"---\n{text}\n---"
             )
-        r = httpx.post(url, json={
-            "model": cfg["models"]["llm"],
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.1,
-                "repeat_penalty": 1.2,
-                "num_predict": 512,
+        r = httpx.post(
+            url,
+            json={
+                "model": cfg["models"]["llm"],
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.1,
+                    "repeat_penalty": 1.2,
+                    "num_predict": 512,
+                },
             },
-        }, timeout=120.0)
+            timeout=120.0,
+        )
         r.raise_for_status()
         out = (r.json().get("response") or "").strip()
         if not out:
@@ -180,13 +189,15 @@ def _llm_translate(text: str, target: str = "ko") -> str | None:
 
 # --- 캐시 입출력 --------------------------------------------------
 
+
 def _cache_get(conn: sqlite3.Connection, h: str) -> str | None:
     row = conn.execute("SELECT tgt_text FROM translations WHERE hash = ?", (h,)).fetchone()
     return row["tgt_text"] if row else None
 
 
-def _cache_put(conn: sqlite3.Connection, h: str, src: str, tgt: str,
-               src_lang: str, tgt_lang: str) -> None:
+def _cache_put(
+    conn: sqlite3.Connection, h: str, src: str, tgt: str, src_lang: str, tgt_lang: str
+) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO translations(hash, src_lang, tgt_lang, src_text, tgt_text) "
         "VALUES (?, ?, ?, ?, ?)",
@@ -195,6 +206,7 @@ def _cache_put(conn: sqlite3.Connection, h: str, src: str, tgt: str,
 
 
 # --- 공개 API -----------------------------------------------------
+
 
 def translate_text(
     conn: sqlite3.Connection,
@@ -230,9 +242,7 @@ def translate_text(
         for (i, src), tgt in zip(todo, translations):
             tgt = (tgt or "").strip()
             # 폴백 트리거: (a) 길이 비율 이상 (b) 반복/언어 오염
-            needs_fb = bool(tgt) and (
-                not _ratio_ok(src, tgt, lo, hi) or _looks_corrupted(tgt)
-            )
+            needs_fb = bool(tgt) and (not _ratio_ok(src, tgt, lo, hi) or _looks_corrupted(tgt))
             if needs_fb:
                 fb = _llm_translate(src, target)
                 # LLM 결과도 검증; 통과 못 하면 NLLB 결과 유지 (또는 원문)
@@ -248,12 +258,15 @@ def translate_text(
     return " ".join(c for c in out_chunks if c)
 
 
-def _iter_pending_videos(conn: sqlite3.Connection, limit: int | None,
-                         force: bool) -> Iterable[sqlite3.Row]:
+def _iter_pending_videos(
+    conn: sqlite3.Connection, limit: int | None, force: bool
+) -> Iterable[sqlite3.Row]:
     sql = "SELECT opus, title_jp, desc_jp FROM videos"
     if not force:
-        sql += " WHERE (title_jp IS NOT NULL AND (title_ko IS NULL OR title_ko = ''))" \
-               "    OR (desc_jp  IS NOT NULL AND (desc_ko  IS NULL OR desc_ko  = ''))"
+        sql += (
+            " WHERE (title_jp IS NOT NULL AND (title_ko IS NULL OR title_ko = ''))"
+            "    OR (desc_jp  IS NOT NULL AND (desc_ko  IS NULL OR desc_ko  = ''))"
+        )
     sql += " ORDER BY opus"
     if limit:
         sql += f" LIMIT {int(limit)}"
@@ -268,22 +281,30 @@ def run(limit: int | None = None, force: bool = False) -> dict:
     total = len(rows)
     completed = 0
     titles_done = 0
-    descs_done  = 0
+    descs_done = 0
 
     for row in rows:
         opus = row["opus"]
         try:
-            with conn:                       # row-level transaction (캐시 + 갱신 atomic)
-                title_ko = translate_text(conn, row["title_jp"] or "", sentencewise=False) \
-                    if row["title_jp"] else ""
-                desc_ko  = translate_text(conn, row["desc_jp"] or "", sentencewise=True) \
-                    if row["desc_jp"]  else ""
+            with conn:  # row-level transaction (캐시 + 갱신 atomic)
+                title_ko = (
+                    translate_text(conn, row["title_jp"] or "", sentencewise=False)
+                    if row["title_jp"]
+                    else ""
+                )
+                desc_ko = (
+                    translate_text(conn, row["desc_jp"] or "", sentencewise=True)
+                    if row["desc_jp"]
+                    else ""
+                )
                 conn.execute(
                     "UPDATE videos SET title_ko = ?, desc_ko = ? WHERE opus = ?",
                     (title_ko or None, desc_ko or None, opus),
                 )
-                if title_ko: titles_done += 1
-                if desc_ko:  descs_done  += 1
+                if title_ko:
+                    titles_done += 1
+                if desc_ko:
+                    descs_done += 1
                 completed += 1
         except Exception as e:
             log.exception("translate failed opus=%s: %s", opus, e)
@@ -293,9 +314,14 @@ def run(limit: int | None = None, force: bool = False) -> dict:
             update_stage("translate", completed=completed, cursor_opus=opus)
             log.info("translate %d / %d (last=%s)", completed, total, opus)
 
-    update_stage("translate", done=True, completed=completed,
-                 cursor_opus=rows[-1]["opus"] if rows else None,
-                 titles=titles_done, descs=descs_done, total=total)
+    update_stage(
+        "translate",
+        done=True,
+        completed=completed,
+        cursor_opus=rows[-1]["opus"] if rows else None,
+        titles=titles_done,
+        descs=descs_done,
+        total=total,
+    )
     conn.close()
-    return {"total": total, "completed": completed,
-            "titles": titles_done, "descs": descs_done}
+    return {"total": total, "completed": completed, "titles": titles_done, "descs": descs_done}

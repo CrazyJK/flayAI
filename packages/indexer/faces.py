@@ -8,6 +8,7 @@ AI_PLAN.md §10 M4 / §6.1 [8].
     {opus, face_idx, kind, year, studio, canonical_actresses, bbox, det_score}
 - 멱등: 같은 opus 재처리 시 poster_faces / qdrant 의 해당 opus point 모두 제거 후 재삽입
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +16,6 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 from PIL import Image
@@ -37,11 +37,13 @@ _FA = None
 
 # --- 모델 로더 ----------------------------------------------------
 
+
 def _load_face_app():
     global _FA
     if _FA is not None:
         return _FA
     import insightface
+
     cfg = load_config()
     name = cfg["models"]["face_model"]
     log.info("loading InsightFace %s", name)
@@ -54,6 +56,7 @@ def _load_face_app():
 
 # --- Qdrant -------------------------------------------------------
 
+
 def ensure_collection(client: QdrantClient) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if COLLECTION in existing:
@@ -64,12 +67,12 @@ def ensure_collection(client: QdrantClient) -> None:
         vectors_config=qm.VectorParams(size=VECTOR_DIM, distance=qm.Distance.COSINE),
     )
     for field, ftype in [
-        ("opus",                qm.PayloadSchemaType.KEYWORD),
-        ("face_idx",            qm.PayloadSchemaType.INTEGER),
-        ("cluster_id",          qm.PayloadSchemaType.INTEGER),
-        ("kind",                qm.PayloadSchemaType.KEYWORD),
-        ("year",                qm.PayloadSchemaType.INTEGER),
-        ("studio",              qm.PayloadSchemaType.KEYWORD),
+        ("opus", qm.PayloadSchemaType.KEYWORD),
+        ("face_idx", qm.PayloadSchemaType.INTEGER),
+        ("cluster_id", qm.PayloadSchemaType.INTEGER),
+        ("kind", qm.PayloadSchemaType.KEYWORD),
+        ("year", qm.PayloadSchemaType.INTEGER),
+        ("studio", qm.PayloadSchemaType.KEYWORD),
         ("canonical_actresses", qm.PayloadSchemaType.KEYWORD),
     ]:
         try:
@@ -79,31 +82,38 @@ def ensure_collection(client: QdrantClient) -> None:
 
 
 def _face_id(opus: str, idx: int) -> int:
-    h = hashlib.sha1(f"{opus}#{idx}".encode("utf-8")).digest()
+    h = hashlib.sha1(f"{opus}#{idx}".encode()).digest()
     return int.from_bytes(h[:8], "big") & 0x7FFF_FFFF_FFFF_FFFF
 
 
 # --- 데이터 -------------------------------------------------------
 
+
 def _fetch_meta(conn: sqlite3.Connection, opus: str) -> dict:
-    v = conn.execute("""
+    v = conn.execute(
+        """
         SELECT release_year, release_month, studio, kind FROM videos WHERE opus = ?
-    """, (opus,)).fetchone()
-    actrs = [r["canonical_name"] for r in conn.execute(
-        "SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))]
+    """,
+        (opus,),
+    ).fetchone()
+    actrs = [
+        r["canonical_name"]
+        for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
+    ]
     p = conn.execute("SELECT kind, video_path FROM posters WHERE opus = ?", (opus,)).fetchone()
     return {
-        "year":  v["release_year"]  if v else None,
+        "year": v["release_year"] if v else None,
         "month": v["release_month"] if v else None,
-        "studio": v["studio"]        if v else None,
-        "kind":   (v["kind"] if v and v["kind"] else (p["kind"] if p else None)),
+        "studio": v["studio"] if v else None,
+        "kind": (v["kind"] if v and v["kind"] else (p["kind"] if p else None)),
         "actresses": actrs,
         "playable": bool(p and p["video_path"]),
     }
 
 
-def _opus_iter(conn: sqlite3.Connection, limit: int | None,
-               only_missing: bool) -> list[tuple[str, str]]:
+def _opus_iter(
+    conn: sqlite3.Connection, limit: int | None, only_missing: bool
+) -> list[tuple[str, str]]:
     if only_missing:
         sql = """
             SELECT p.opus, p.path FROM posters p
@@ -123,9 +133,13 @@ def _delete_existing(conn: sqlite3.Connection, qc: QdrantClient, opus: str) -> N
     try:
         qc.delete(
             collection_name=COLLECTION,
-            points_selector=qm.FilterSelector(filter=qm.Filter(must=[
-                qm.FieldCondition(key="opus", match=qm.MatchValue(value=opus)),
-            ])),
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[
+                        qm.FieldCondition(key="opus", match=qm.MatchValue(value=opus)),
+                    ]
+                )
+            ),
         )
     except Exception as e:
         log.debug("qdrant delete skipped for %s: %s", opus, e)
@@ -133,9 +147,10 @@ def _delete_existing(conn: sqlite3.Connection, qc: QdrantClient, opus: str) -> N
 
 # --- 실행 ---------------------------------------------------------
 
-def run(limit: int | None = None,
-        only_missing: bool = True,
-        det_score_threshold: float = 0.5) -> dict:
+
+def run(
+    limit: int | None = None, only_missing: bool = True, det_score_threshold: float = 0.5
+) -> dict:
     conn = connect()
     init_schema(conn)
     qc = _qdrant()
@@ -194,16 +209,19 @@ def run(limit: int | None = None,
                 "det_score": score,
                 "playable": meta["playable"],
             }
-            points.append(qm.PointStruct(
-                id=_face_id(opus, idx),
-                vector=emb.tolist(),
-                payload=payload,
-            ))
+            points.append(
+                qm.PointStruct(
+                    id=_face_id(opus, idx),
+                    vector=emb.tolist(),
+                    payload=payload,
+                )
+            )
 
         if rows:
             conn.executemany(
                 "INSERT OR REPLACE INTO poster_faces (poster_opus, face_idx, cluster_id, bbox) "
-                "VALUES (?, ?, ?, ?)", rows,
+                "VALUES (?, ?, ?, ?)",
+                rows,
             )
         if points:
             qc.upsert(collection_name=COLLECTION, points=points, wait=False)
@@ -213,12 +231,18 @@ def run(limit: int | None = None,
         if processed % 100 == 0:
             conn.commit()
             update_stage("extract_faces", completed=processed, faces=faces_added)
-            log.info("extract_faces %d / %d (faces=%d failed=%d)",
-                     processed, total, faces_added, failed)
+            log.info(
+                "extract_faces %d / %d (faces=%d failed=%d)", processed, total, faces_added, failed
+            )
 
     conn.commit()
-    update_stage("extract_faces", done=True, completed=processed,
-                 total=total, faces=faces_added, failed=failed)
+    update_stage(
+        "extract_faces",
+        done=True,
+        completed=processed,
+        total=total,
+        faces=faces_added,
+        failed=failed,
+    )
     conn.close()
-    return {"total": total, "processed": processed,
-            "faces_added": faces_added, "failed": failed}
+    return {"total": total, "processed": processed, "faces_added": faces_added, "failed": failed}

@@ -2,9 +2,13 @@ from packages.indexer.db import connect
 from packages.indexer.embed_text import _qdrant
 
 conn = connect()
-total     = conn.execute("SELECT COUNT(*) FROM posters").fetchone()[0]
-with_text = conn.execute("SELECT COUNT(*) FROM posters WHERE ocr_text IS NOT NULL AND ocr_text != ''").fetchone()[0]
-empty     = conn.execute("SELECT COUNT(*) FROM posters WHERE ocr_text IS NULL OR ocr_text = ''").fetchone()[0]
+total = conn.execute("SELECT COUNT(*) FROM posters").fetchone()[0]
+with_text = conn.execute(
+    "SELECT COUNT(*) FROM posters WHERE ocr_text IS NOT NULL AND ocr_text != ''"
+).fetchone()[0]
+empty = conn.execute(
+    "SELECT COUNT(*) FROM posters WHERE ocr_text IS NULL OR ocr_text = ''"
+).fetchone()[0]
 
 print(f"포스터 전체   : {total:,}")
 print(f"OCR 텍스트 있음: {with_text:,}  ({with_text/total*100:.1f}%)")

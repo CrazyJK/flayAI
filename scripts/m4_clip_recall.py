@@ -3,6 +3,7 @@
 이미 임베딩된 포스터에 대해, 각 포스터 이미지를 다시 인코딩 -> Qdrant search
 -> top-1 hit 의 opus 가 자기 자신인지 비교.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -69,8 +70,10 @@ def run(sample: int) -> None:
 
     total = hits + misses
     elapsed = time.time() - t0
-    print(f"\nRECALL@1 = {hits}/{total} = {hits/total:.4f}  "
-          f"(misses={misses}, elapsed={elapsed:.1f}s)")
+    print(
+        f"\nRECALL@1 = {hits}/{total} = {hits/total:.4f}  "
+        f"(misses={misses}, elapsed={elapsed:.1f}s)"
+    )
     conn.close()
 
 

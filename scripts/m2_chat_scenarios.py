@@ -1,10 +1,10 @@
 """M2 acceptance: 7 chat scenarios via /api/chat (SSE)."""
+
 from __future__ import annotations
 
 import json
 import sys
 import time
-from typing import Iterator
 
 import httpx
 
@@ -33,11 +33,8 @@ def stream_chat(query: str) -> tuple[float, dict]:
     err: str | None = None
 
     try:
-        with httpx.stream("POST", f"{BASE}/api/chat",
-                          json={"query": query},
-                          timeout=120.0) as r:
+        with httpx.stream("POST", f"{BASE}/api/chat", json={"query": query}, timeout=120.0) as r:
             r.raise_for_status()
-            buf = ""
             for line in r.iter_lines():
                 if not line:
                     continue

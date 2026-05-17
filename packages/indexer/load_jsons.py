@@ -12,6 +12,7 @@ AI_PLAN.md §6.1 [1] 단계.
   여기서 tags 테이블에 upsert 한다 (tag.json 만으로 누락된 태그 보강).
 - studio/release_date/actresses 는 video.json 에 없음 → 포스터 스캔 단계에서 채움.
 """
+
 from __future__ import annotations
 
 import json
@@ -38,6 +39,7 @@ def _info_path(name: str) -> Path:
 
 
 # --- 개별 로더 ---------------------------------------------------------
+
 
 def load_studios(conn) -> int:
     rows = _read_json(_info_path("studio.json"))
@@ -87,8 +89,18 @@ def load_actresses(conn) -> tuple[int, int]:
             birth, body, height, debut, comment, last_modified
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
-            (a.canonical_name, a.display_name, a.local_name, int(a.favorite),
-             a.birth, a.body, a.height, a.debut, a.comment, a.last_modified)
+            (
+                a.canonical_name,
+                a.display_name,
+                a.local_name,
+                int(a.favorite),
+                a.birth,
+                a.body,
+                a.height,
+                a.debut,
+                a.comment,
+                a.last_modified,
+            )
             for a in actresses
         ],
     )
@@ -118,24 +130,29 @@ def load_videos(conn) -> tuple[int, int, int]:
     for r in rows:
         opus = r["opus"]
         likes = r.get("likes") or []
-        video_rows.append((
-            opus,
-            r.get("title") or None,           # title_jp
-            r.get("desc")  or None,           # desc_jp
-            r.get("comment") or None,
-            int(r.get("play")  or 0),
-            int(r.get("rank")  or 0),
-            int(r.get("lastPlay")     or 0) or None,
-            int(r.get("lastAccess")   or 0) or None,
-            int(r.get("lastModified") or 0) or None,
-            len(likes),
-        ))
+        video_rows.append(
+            (
+                opus,
+                r.get("title") or None,  # title_jp
+                r.get("desc") or None,  # desc_jp
+                r.get("comment") or None,
+                int(r.get("play") or 0),
+                int(r.get("rank") or 0),
+                int(r.get("lastPlay") or 0) or None,
+                int(r.get("lastAccess") or 0) or None,
+                int(r.get("lastModified") or 0) or None,
+                len(likes),
+            )
+        )
         for tg in r.get("tags") or []:
             tid = tg.get("id")
             if tid is None:
                 continue
             tag_upsert[tid] = (
-                tid, tg.get("name"), tg.get("group") or None, tg.get("description") or None,
+                tid,
+                tg.get("name"),
+                tg.get("group") or None,
+                tg.get("description") or None,
             )
             vt_rows.append((opus, tid))
         for ts in likes:
@@ -168,6 +185,7 @@ def load_videos(conn) -> tuple[int, int, int]:
 
 # --- 오케스트레이션 ---------------------------------------------------
 
+
 def run() -> dict[str, int]:
     """전체 ETL. 반환 = 통계 dict."""
     conn = connect()
@@ -176,8 +194,8 @@ def run() -> dict[str, int]:
 
         with conn:
             n_studios = load_studios(conn)
-            n_groups  = load_tag_groups(conn)
-            n_tags    = load_tags(conn)
+            n_groups = load_tag_groups(conn)
+            n_tags = load_tags(conn)
             n_actr, n_alias = load_actresses(conn)
             n_vid, n_vt, n_likes = load_videos(conn)
 

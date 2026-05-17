@@ -9,6 +9,7 @@ AI_PLAN.md §5.5.
 
 본 모듈은 IO 없이 순수 함수만.
 """
+
 from __future__ import annotations
 
 import re
@@ -32,8 +33,8 @@ class ParsedPoster:
     studio: str
     opus: str
     title: str
-    actresses_raw: str           # 공백 separated 원문
-    release_date: str            # 'YYYY-MM-DD'
+    actresses_raw: str  # 공백 separated 원문
+    release_date: str  # 'YYYY-MM-DD'
     release_year: int
     release_month: int
 

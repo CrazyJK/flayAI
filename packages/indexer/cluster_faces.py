@@ -15,6 +15,7 @@ threshold 이상이면 Union-Find 로 연결하는 방식으로 대체.
     - SQLite poster_faces.cluster_id 채움
     - Qdrant `faces` payload.cluster_id 갱신
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,6 +34,7 @@ log = logging.getLogger(__name__)
 
 # ----- 데이터 로드 -----------------------------------------------
 
+
 def _scroll_all(qc) -> tuple[np.ndarray, list[dict]]:
     vectors: list[list[float]] = []
     metas: list[dict] = []
@@ -49,12 +51,14 @@ def _scroll_all(qc) -> tuple[np.ndarray, list[dict]]:
             break
         for p in points:
             vectors.append(p.vector if isinstance(p.vector, list) else list(p.vector))
-            metas.append({
-                "id": p.id,
-                "opus": p.payload.get("opus") if p.payload else None,
-                "face_idx": p.payload.get("face_idx") if p.payload else None,
-                "actresses": p.payload.get("canonical_actresses", []) if p.payload else [],
-            })
+            metas.append(
+                {
+                    "id": p.id,
+                    "opus": p.payload.get("opus") if p.payload else None,
+                    "face_idx": p.payload.get("face_idx") if p.payload else None,
+                    "actresses": p.payload.get("canonical_actresses", []) if p.payload else [],
+                }
+            )
         if next_page is None:
             break
     arr = np.asarray(vectors, dtype=np.float32)
@@ -63,6 +67,7 @@ def _scroll_all(qc) -> tuple[np.ndarray, list[dict]]:
 
 
 # ----- Union-Find -----------------------------------------------
+
 
 class _UF:
     __slots__ = ("p", "r")
@@ -91,8 +96,12 @@ class _UF:
 
 # ----- top-K NN (GPU block matmul) ------------------------------
 
+
 def _topk_neighbors_gpu(
-    X: np.ndarray, k: int, threshold: float, block: int = 4096,
+    X: np.ndarray,
+    k: int,
+    threshold: float,
+    block: int = 4096,
     mutual: bool = True,
 ) -> list[tuple[int, int, float]]:
     """X(L2-normalized) 의 각 행에 대해 top-k 이웃 중 sim>=threshold 인 (i,j,sim) 반환.
@@ -102,8 +111,14 @@ def _topk_neighbors_gpu(
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log.info("topk-NN: n=%d k=%d threshold=%.3f mutual=%s device=%s",
-             len(X), k, threshold, mutual, device)
+    log.info(
+        "topk-NN: n=%d k=%d threshold=%.3f mutual=%s device=%s",
+        len(X),
+        k,
+        threshold,
+        mutual,
+        device,
+    )
 
     dtype = torch.float16 if device == "cuda" else torch.float32
     Xt = torch.from_numpy(X).to(device=device, dtype=dtype)
@@ -139,7 +154,7 @@ def _topk_neighbors_gpu(
         nbr_sets = [set(j for j, _ in row) for row in nbrs]
         for i, row in enumerate(nbrs):
             for j, s in row:
-                if i in nbr_sets[j]:           # mutual
+                if i in nbr_sets[j]:  # mutual
                     a, b = (i, j) if i < j else (j, i)
                     if a == b:
                         continue
@@ -161,17 +176,17 @@ def _topk_neighbors_gpu(
 
 # ----- main -----------------------------------------------------
 
+
 def run(
     min_cluster_size: int | None = None,
-    min_samples: int | None = None,           # 호환용 (미사용)
+    min_samples: int | None = None,  # 호환용 (미사용)
     confidence_threshold: float | None = None,
     sim_threshold: float = 0.6,
     knn: int = 16,
 ) -> dict:
     cfg = load_config()
     mcs = int(min_cluster_size or cfg["indexing"]["hdbscan_min_cluster_size"])
-    conf_thr = float(confidence_threshold
-                     or cfg["indexing"]["face_mapping_confidence_threshold"])
+    conf_thr = float(confidence_threshold or cfg["indexing"]["face_mapping_confidence_threshold"])
     _ = min_samples
 
     qc = _qdrant()
@@ -209,8 +224,9 @@ def run(
         cluster_id += 1
 
     noise = int((labels == -1).sum())
-    log.info("components=%d clusters>=%d=%d noise=%d",
-             len(comp_members), mcs, len(valid_clusters), noise)
+    log.info(
+        "components=%d clusters>=%d=%d noise=%d", len(comp_members), mcs, len(valid_clusters), noise
+    )
 
     cluster_rows: list[tuple[int, str | None, int, float]] = []
     for cid, members in valid_clusters.items():
@@ -234,7 +250,8 @@ def run(
         conn.execute("DELETE FROM face_clusters")
         conn.executemany(
             "INSERT INTO face_clusters (cluster_id, canonical_name, sample_count, confidence) "
-            "VALUES (?, ?, ?, ?)", cluster_rows,
+            "VALUES (?, ?, ?, ?)",
+            cluster_rows,
         )
         conn.execute("UPDATE poster_faces SET cluster_id = NULL")
         rows = [
@@ -242,8 +259,7 @@ def run(
             for lbl, m in zip(labels, metas)
         ]
         conn.executemany(
-            "UPDATE poster_faces SET cluster_id = ? "
-            "WHERE poster_opus = ? AND face_idx = ?",
+            "UPDATE poster_faces SET cluster_id = ? " "WHERE poster_opus = ? AND face_idx = ?",
             rows,
         )
 
@@ -255,7 +271,7 @@ def run(
     log.info("updating Qdrant payload for %d cluster groups", len(by_cid))
     for cid, ids in by_cid.items():
         for off in range(0, len(ids), 1000):
-            chunk = ids[off:off + 1000]
+            chunk = ids[off : off + 1000]
             qc.set_payload(
                 collection_name=FACES_COLLECTION,
                 payload={"cluster_id": cid},
@@ -264,11 +280,14 @@ def run(
             )
 
     labeled = sum(1 for r in cluster_rows if r[1])
-    update_stage("cluster_faces", done=True,
-                 faces=int(len(vectors)),
-                 clusters=int(len(valid_clusters)),
-                 labeled=int(labeled),
-                 noise=int(noise))
+    update_stage(
+        "cluster_faces",
+        done=True,
+        faces=int(len(vectors)),
+        clusters=int(len(valid_clusters)),
+        labeled=int(labeled),
+        noise=int(noise),
+    )
     conn.close()
     return {
         "faces": int(len(vectors)),

@@ -9,6 +9,7 @@
 
 기본은 dry-run. --apply 로 실제 삭제.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,7 @@ from pathlib import Path
 from qdrant_client.http import models as qm
 
 from packages.indexer.db import connect, init_schema
-from packages.indexer.embed_text import _qdrant, opus_to_id
+from packages.indexer.embed_text import _qdrant
 from packages.indexer.sync_payload import COLLECTIONS, _scroll_all
 from packages.settings import load_config
 
@@ -69,10 +70,13 @@ def _delete_qdrant_opus(qc, collection: str, opuses: list[str]) -> int:
     try:
         qc.delete(
             collection_name=collection,
-            points_selector=qm.FilterSelector(filter=qm.Filter(must=[
-                qm.FieldCondition(key="opus",
-                                  match=qm.MatchAny(any=list(opuses))),
-            ])),
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[
+                        qm.FieldCondition(key="opus", match=qm.MatchAny(any=list(opuses))),
+                    ]
+                )
+            ),
             wait=False,
         )
         return len(opuses)
@@ -108,9 +112,9 @@ def run(apply: bool = False) -> dict:
 
     summary = {
         "missing_poster_files": len(missing_posters),
-        "missing_video_jsons":  len(missing_videos),
-        "qdrant_orphans":       {k: len(v) for k, v in qdrant_orphans.items()},
-        "applied":              apply,
+        "missing_video_jsons": len(missing_videos),
+        "qdrant_orphans": {k: len(v) for k, v in qdrant_orphans.items()},
+        "applied": apply,
     }
 
     if not apply:
@@ -136,12 +140,12 @@ def run(apply: bool = False) -> dict:
         ph = ",".join("?" * len(missing_videos))
         for tbl, col in [
             ("video_actresses", "opus"),
-            ("video_tags",      "opus"),
-            ("posters",         "opus"),
-            ("poster_faces",    "poster_opus"),
-            ("history",         "opus"),
-            ("likes",           "opus"),
-            ("videos",          "opus"),
+            ("video_tags", "opus"),
+            ("posters", "opus"),
+            ("poster_faces", "poster_opus"),
+            ("history", "opus"),
+            ("likes", "opus"),
+            ("videos", "opus"),
         ]:
             conn.execute(f"DELETE FROM {tbl} WHERE {col} IN ({ph})", missing_videos)
         deleted_rows += len(missing_videos)

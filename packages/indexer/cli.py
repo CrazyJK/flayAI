@@ -8,6 +8,7 @@
   all      -- load → scan → history → fts 순차 실행
   status   -- state.json 요약
 """
+
 from __future__ import annotations
 
 import json
@@ -17,17 +18,17 @@ import time
 
 import typer
 
+from packages.indexer import cleanup as cleanup_mod
+from packages.indexer import cluster_faces as cluster_mod
+from packages.indexer import embed_clip as embed_clip_mod
+from packages.indexer import embed_text as embed_mod
+from packages.indexer import faces as faces_mod
 from packages.indexer import history as history_mod
 from packages.indexer import load_jsons as load_mod
-from packages.indexer import poster_scanner as scan_mod
-from packages.indexer import translate as translate_mod
-from packages.indexer import embed_text as embed_mod
-from packages.indexer import embed_clip as embed_clip_mod
-from packages.indexer import faces as faces_mod
-from packages.indexer import cluster_faces as cluster_mod
 from packages.indexer import ocr as ocr_mod
+from packages.indexer import poster_scanner as scan_mod
 from packages.indexer import sync_payload as sync_mod
-from packages.indexer import cleanup as cleanup_mod
+from packages.indexer import translate as translate_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
 from packages.indexer.state import load_state
 
@@ -169,8 +170,7 @@ def extract_faces(
 def cluster_faces(
     min_cluster_size: int = typer.Option(0, "--min-cluster-size"),
     min_samples: int = typer.Option(0, "--min-samples"),
-    confidence: float = typer.Option(0.0, "--confidence", "-c",
-                                     help="0이면 config 기본값"),
+    confidence: float = typer.Option(0.0, "--confidence", "-c", help="0이면 config 기본값"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """HDBSCAN → face_clusters + cluster_id 채우기 + 배우 자동 매핑."""

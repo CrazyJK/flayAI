@@ -12,6 +12,7 @@ face_search 케이스는 이미지 존재 여부 확인 후 /api/search/face 호
 
 결과는 stdout 에 표 형태로 출력하고, JSON 으로 eval/results/{ts}.json 저장.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,7 +22,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import httpx
 import yaml
@@ -43,8 +43,7 @@ def _chat_hits(query: str, timeout: float = 120.0) -> tuple[list[dict], float]:
     first_event: float | None = None
     hits: list[dict] = []
     try:
-        with httpx.stream("POST", f"{BASE}/api/chat",
-                          json={"query": query}, timeout=timeout) as r:
+        with httpx.stream("POST", f"{BASE}/api/chat", json={"query": query}, timeout=timeout) as r:
             r.raise_for_status()
             for line in r.iter_lines():
                 if not line or not line.startswith("data:"):
@@ -72,8 +71,9 @@ def _chat_hits(query: str, timeout: float = 120.0) -> tuple[list[dict], float]:
 
 def _ocr_hits(query: str, limit: int = 10) -> list[dict]:
     try:
-        r = httpx.post(f"{BASE}/api/search/poster-ocr",
-                       json={"query": query, "limit": limit}, timeout=60)
+        r = httpx.post(
+            f"{BASE}/api/search/poster-ocr", json={"query": query, "limit": limit}, timeout=60
+        )
         r.raise_for_status()
         return r.json().get("items", [])
     except Exception as e:
@@ -87,9 +87,12 @@ def _face_hits(image_path: str, limit: int = 5) -> list[dict] | None:
         return None
     try:
         with p.open("rb") as f:
-            r = httpx.post(f"{BASE}/api/search/face",
-                           files={"image": (p.name, f, "image/jpeg")},
-                           data={"limit": str(limit)}, timeout=60)
+            r = httpx.post(
+                f"{BASE}/api/search/face",
+                files={"image": (p.name, f, "image/jpeg")},
+                data={"limit": str(limit)},
+                timeout=60,
+            )
         r.raise_for_status()
         return r.json().get("items", [])
     except Exception as e:
@@ -109,20 +112,19 @@ def _check(expect: dict, hits: list[dict], all_results: dict[str, list[dict]]) -
     if (n := expect.get("max_results")) is not None and len(hits) > n:
         fails.append(f"max_results: {len(hits)} > {n}")
 
-    if (a := expect.get("contains_actress")):
+    if a := expect.get("contains_actress"):
         norm = a.strip().lower()
-        found = any(norm in (str(x).lower() for x in (h.get("actresses") or []))
-                    for h in hits)
+        found = any(norm in (str(x).lower() for x in (h.get("actresses") or [])) for h in hits)
         if not found:
             fails.append(f"contains_actress: '{a}' not in any hit")
 
-    if (opuses := expect.get("contains_opus")):
+    if opuses := expect.get("contains_opus"):
         got = {h.get("opus") for h in hits}
         miss = [o for o in opuses if o not in got]
         if miss:
             fails.append(f"contains_opus: missing {miss}")
 
-    if (amh := expect.get("all_must_have")):
+    if amh := expect.get("all_must_have"):
         for h in hits:
             for k, v in amh.items():
                 got = h.get(k)
@@ -130,7 +132,7 @@ def _check(expect: dict, hits: list[dict], all_results: dict[str, list[dict]]) -
                     fails.append(f"all_must_have: opus={h.get('opus')} {k}={got} (expected {v})")
                     break
 
-    if (other_id := expect.get("same_result_as")):
+    if other_id := expect.get("same_result_as"):
         other = all_results.get(other_id, [])
         a = {h.get("opus") for h in hits[:3]}
         b = {h.get("opus") for h in other[:3]}
@@ -198,10 +200,16 @@ def main() -> int:
             fails = _check(expect, hits, all_results)
             status = "PASS" if not fails else "FAIL"
 
-        rows.append({
-            "id": cid, "query": query, "status": status,
-            "elapsed_sec": elapsed, "n_hits": len(hits), "fails": fails,
-        })
+        rows.append(
+            {
+                "id": cid,
+                "query": query,
+                "status": status,
+                "elapsed_sec": elapsed,
+                "n_hits": len(hits),
+                "fails": fails,
+            }
+        )
 
         marker = {"PASS": "OK ", "FAIL": "X  ", "SKIP": "-  "}[status]
         print(f"{marker} {cid:28s} {elapsed:5.2f}s  hits={len(hits):3d}  {query}")
@@ -225,7 +233,10 @@ def main() -> int:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     out = {
         "ts": datetime.now().isoformat(timespec="seconds"),
-        "total": total, "pass": n_pass, "fail": n_fail, "skip": n_skip,
+        "total": total,
+        "pass": n_pass,
+        "fail": n_fail,
+        "skip": n_skip,
         "pass_rate": round(rate, 2),
         "rows": rows,
     }

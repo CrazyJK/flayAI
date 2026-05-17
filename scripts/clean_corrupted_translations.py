@@ -11,6 +11,7 @@
 실행 후 reindex 의 translate 단계를 다시 돌리면, 정리된 행은 신규 알고리즘
 (no_repeat_ngram_size, _looks_corrupted 검증, 한국어 LLM 프롬프트) 으로 재생성됨.
 """
+
 from __future__ import annotations
 
 from packages.indexer.db import connect
@@ -34,8 +35,7 @@ def main() -> None:
 
         # 2) videos.title_ko
         t_rows = conn.execute(
-            "SELECT opus, title_ko FROM videos "
-            "WHERE title_ko IS NOT NULL AND title_ko <> ''"
+            "SELECT opus, title_ko FROM videos " "WHERE title_ko IS NOT NULL AND title_ko <> ''"
         ).fetchall()
         bad_titles = [r["opus"] for r in t_rows if _looks_corrupted(r["title_ko"])]
         print(f"videos.title_ko: total={len(t_rows)} corrupted={len(bad_titles)}")
@@ -47,8 +47,7 @@ def main() -> None:
 
         # 3) videos.desc_ko
         d_rows = conn.execute(
-            "SELECT opus, desc_ko FROM videos "
-            "WHERE desc_ko IS NOT NULL AND desc_ko <> ''"
+            "SELECT opus, desc_ko FROM videos " "WHERE desc_ko IS NOT NULL AND desc_ko <> ''"
         ).fetchall()
         bad_descs = [r["opus"] for r in d_rows if _looks_corrupted(r["desc_ko"])]
         print(f"videos.desc_ko: total={len(d_rows)} corrupted={len(bad_descs)}")

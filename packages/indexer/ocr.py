@@ -6,13 +6,13 @@ AI_PLAN.md §6.1 [6], §5.2.
 - bge-m3 임베딩 -> 컬렉션 `poster_ocr` (size=1024, cosine)
 - payload: opus, kind, year, month, studio, canonical_actresses[], playable, ocr_text
 """
+
 from __future__ import annotations
 
 import logging
 import sqlite3
 import time
-from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qm
@@ -20,7 +20,6 @@ from qdrant_client.http import models as qm
 from packages.indexer.db import connect, init_schema
 from packages.indexer.embed_text import _embedder, _qdrant, opus_to_id
 from packages.indexer.state import update_stage
-from packages.settings import load_config
 
 log = logging.getLogger(__name__)
 
@@ -34,12 +33,14 @@ def _load_ocr():
     global _OCR
     if _OCR is None:
         from rapidocr_onnxruntime import RapidOCR
+
         log.info("loading RapidOCR (onnxruntime)")
         _OCR = RapidOCR()
     return _OCR
 
 
 # --- Qdrant ------------------------------------------------------
+
 
 def ensure_collection(client: QdrantClient) -> None:
     existing = {c.name for c in client.get_collections().collections}
@@ -67,6 +68,7 @@ def ensure_collection(client: QdrantClient) -> None:
 
 # --- 데이터 ------------------------------------------------------
 
+
 def _fetch_targets(conn: sqlite3.Connection, force: bool, limit: int | None) -> list[dict]:
     where = "WHERE path IS NOT NULL"
     if not force:
@@ -78,12 +80,17 @@ def _fetch_targets(conn: sqlite3.Connection, force: bool, limit: int | None) -> 
 
 
 def _fetch_payload_extra(conn: sqlite3.Connection, opus: str) -> dict:
-    v = conn.execute("""
+    v = conn.execute(
+        """
         SELECT release_year, release_month, studio
         FROM videos WHERE opus = ?
-    """, (opus,)).fetchone()
-    actrs = [r["canonical_name"] for r in conn.execute(
-        "SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))]
+    """,
+        (opus,),
+    ).fetchone()
+    actrs = [
+        r["canonical_name"]
+        for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
+    ]
     return {
         "year": v["release_year"] if v else None,
         "month": v["release_month"] if v else None,
@@ -121,14 +128,13 @@ def _ocr_one(path: str) -> tuple[str, float]:
 
 # --- 실행 --------------------------------------------------------
 
+
 def _batched(seq: list, n: int) -> Iterable[list]:
     for i in range(0, len(seq), n):
-        yield seq[i:i + n]
+        yield seq[i : i + n]
 
 
-def run(limit: int | None = None, force: bool = False,
-        embed_batch: int = 16) -> dict:
-    cfg = load_config()
+def run(limit: int | None = None, force: bool = False, embed_batch: int = 16) -> dict:
     conn = connect()
     init_schema(conn)
     qc = _qdrant()
@@ -152,8 +158,9 @@ def run(limit: int | None = None, force: bool = False,
         if not batch:
             return
         docs = [t for _, t, _ in batch]
-        vecs = emb.encode(docs, batch_size=embed_batch,
-                          normalize_embeddings=True, show_progress_bar=False)
+        vecs = emb.encode(
+            docs, batch_size=embed_batch, normalize_embeddings=True, show_progress_bar=False
+        )
         points = []
         for (opus, text, extra), vec in zip(batch, vecs):
             payload = {
@@ -166,9 +173,13 @@ def run(limit: int | None = None, force: bool = False,
                 "playable": bool(extra.get("video_path")),
                 "ocr_text": text,
             }
-            points.append(qm.PointStruct(
-                id=opus_to_id(opus), vector=vec.tolist(), payload=payload,
-            ))
+            points.append(
+                qm.PointStruct(
+                    id=opus_to_id(opus),
+                    vector=vec.tolist(),
+                    payload=payload,
+                )
+            )
         qc.upsert(collection_name=COLLECTION, points=points, wait=False)
         embedded += len(points)
 
@@ -197,17 +208,34 @@ def run(limit: int | None = None, force: bool = False,
             elapsed = time.time() - t_start
             rate = done / elapsed if elapsed > 0 else 0
             eta = (total - done) / rate if rate > 0 else 0
-            log.info("ocr_posters %d/%d  failed=%d  embedded=%d  %.2f it/s  ETA %.0fs",
-                     done, total, failed, embedded, rate, eta)
-            update_stage("ocr_posters", completed=done, total=total,
-                         failed=failed, embedded=embedded)
+            log.info(
+                "ocr_posters %d/%d  failed=%d  embedded=%d  %.2f it/s  ETA %.0fs",
+                done,
+                total,
+                failed,
+                embedded,
+                rate,
+                eta,
+            )
+            update_stage(
+                "ocr_posters", completed=done, total=total, failed=failed, embedded=embedded
+            )
 
     _flush(pending)
     conn.commit()
-    update_stage("ocr_posters", done=(limit is None and not force),
-                 completed=done, total=total, failed=failed, embedded=embedded)
+    update_stage(
+        "ocr_posters",
+        done=(limit is None and not force),
+        completed=done,
+        total=total,
+        failed=failed,
+        embedded=embedded,
+    )
     conn.close()
     return {
-        "total": total, "processed": done, "embedded": embedded,
-        "failed": failed, "elapsed_sec": round(time.time() - t_start, 2),
+        "total": total,
+        "processed": done,
+        "embedded": embedded,
+        "failed": failed,
+        "elapsed_sec": round(time.time() - t_start, 2),
     }

@@ -4,6 +4,7 @@ AI_PLAN.md §6.2.
 - atomic write: tmp → os.replace
 - 단계별 cursor 보관
 """
+
 from __future__ import annotations
 
 import json
@@ -18,14 +19,20 @@ SCHEMA_VERSION = 1
 DEFAULT_STATE: dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
     "stages": {
-        "load_jsons":    {"done": False, "rows": 0},
-        "scan_posters":  {"done": False, "scanned": 0, "matched": 0, "unmatched": 0,
-                          "instance": 0, "archive": 0},
-        "history_csv":   {"last_ts": 0},
-        "translate":     {"done": False, "completed": 0, "cursor_opus": None},
-        "embed_text":    {"done": False, "completed": 0},
-        "ocr_posters":   {"done": False, "completed": 0},
-        "embed_clip":    {"done": False, "completed": 0},
+        "load_jsons": {"done": False, "rows": 0},
+        "scan_posters": {
+            "done": False,
+            "scanned": 0,
+            "matched": 0,
+            "unmatched": 0,
+            "instance": 0,
+            "archive": 0,
+        },
+        "history_csv": {"last_ts": 0},
+        "translate": {"done": False, "completed": 0, "cursor_opus": None},
+        "embed_text": {"done": False, "completed": 0},
+        "ocr_posters": {"done": False, "completed": 0},
+        "embed_clip": {"done": False, "completed": 0},
         "extract_faces": {"done": False, "completed": 0},
     },
 }

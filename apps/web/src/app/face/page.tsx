@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
@@ -37,7 +38,9 @@ export default function FaceSearchPage() {
 
   async function go() {
     if (!file) return;
-    setBusy(true); setErr(null); setRes(null);
+    setBusy(true);
+    setErr(null);
+    setRes(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -59,18 +62,29 @@ export default function FaceSearchPage() {
       <header className="px-4 py-3 border-b border-neutral-800 flex items-center gap-3">
         <h1 className="text-base font-semibold">얼굴 검색</h1>
         <nav className="flex gap-2 text-xs">
-          <a href="/" className="text-neutral-400 hover:text-neutral-200">채팅</a>
-          <a href="/image" className="text-neutral-400 hover:text-neutral-200">이미지</a>
-          <a href="/face" className="text-neutral-200">얼굴</a>
-          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">라벨링</a>
+          <Link href="/" className="text-neutral-400 hover:text-neutral-200">
+            채팅
+          </Link>
+          <a href="/image" className="text-neutral-400 hover:text-neutral-200">
+            이미지
+          </a>
+          <a href="/face" className="text-neutral-200">
+            얼굴
+          </a>
+          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">
+            라벨링
+          </a>
         </nav>
         <span className="ml-auto text-xs text-neutral-500 font-mono">{API_BASE}</span>
       </header>
 
       <div className="px-4 py-3 border-b border-neutral-800 flex gap-3 items-start">
-        <input type="file" accept="image/*"
-               onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-               className="text-sm" />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+          className="text-sm"
+        />
         {preview && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt="preview" className="h-32 rounded border border-neutral-800" />
@@ -79,7 +93,9 @@ export default function FaceSearchPage() {
           onClick={go}
           disabled={busy || !file}
           className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded text-sm"
-        >배우 추정</button>
+        >
+          배우 추정
+        </button>
       </div>
 
       <main className="flex-1 overflow-y-auto p-4 space-y-4">

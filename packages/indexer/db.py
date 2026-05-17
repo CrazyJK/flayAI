@@ -4,6 +4,7 @@ AI_PLAN.md §5.1 의 스키마를 그대로 구현.
 - 단일 connection 함수 `connect()` — pragma 자동 적용
 - `init_schema()` 호출 시 모든 테이블/인덱스/FTS 가상 테이블 생성 (멱등)
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -198,14 +199,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
 def fts_rebuild(conn: sqlite3.Connection) -> None:
     """videos_fts 를 videos 기반으로 재구축."""
     conn.execute("DELETE FROM videos_fts")
-    conn.execute(
-        """
+    conn.execute("""
         INSERT INTO videos_fts (opus, title_jp, title_ko, desc_jp, desc_ko, comment)
         SELECT opus,
                COALESCE(title_jp, ''), COALESCE(title_ko, ''),
                COALESCE(desc_jp,  ''), COALESCE(desc_ko,  ''),
                COALESCE(comment,  '')
         FROM videos
-        """
-    )
+        """)
     conn.commit()

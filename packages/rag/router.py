@@ -9,6 +9,7 @@ AI_PLAN.md §7.1.
     async for chunk in route_chat(messages):
         yield chunk
 """
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,7 @@ from typing import Any
 
 import httpx
 
-from packages.rag.tools import TOOL_DISPATCH, TOOL_SCHEMA, search_videos
+from packages.rag.tools import TOOL_DISPATCH, TOOL_SCHEMA
 from packages.settings import load_config
 
 log = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ def _compact_tool_result(name: str, result: Any) -> Any:
     원본 결과(score_breakdown, 경로 등 잡음 포함)를 그대로 넣으면 7B 모델이
     컨텍스트를 놓치고 환각을 일으킴. 검색/조회 계열은 핵심 필드만 남긴다.
     """
+
     def _slim(v: dict) -> dict:
         return {
             "opus": v.get("opus"),
@@ -107,6 +109,7 @@ def _compact_tool_result(name: str, result: Any) -> Any:
             "playable": v.get("playable"),
             "rank": v.get("rank"),
         }
+
     if name in ("search_videos", "similar_to") and isinstance(result, list):
         return [_slim(v) for v in result if isinstance(v, dict)]
     if name == "get_video" and isinstance(result, dict):
@@ -127,8 +130,9 @@ def _exec_tool(name: str, args: dict) -> Any:
         return {"error": str(e)}
 
 
-async def _call_chat(client: httpx.AsyncClient, messages: list[dict],
-                     tools: list[dict] | None, stream: bool) -> dict | AsyncIterator[dict]:
+async def _call_chat(
+    client: httpx.AsyncClient, messages: list[dict], tools: list[dict] | None, stream: bool
+) -> dict | AsyncIterator[dict]:
     payload = {
         "model": _llm_model(),
         "messages": messages,
@@ -151,8 +155,9 @@ async def _call_chat(client: httpx.AsyncClient, messages: list[dict],
         return r.json()
 
     async def gen():
-        async with client.stream("POST", _ollama_url("/api/chat"),
-                                 json=payload, timeout=None) as resp:
+        async with client.stream(
+            "POST", _ollama_url("/api/chat"), json=payload, timeout=None
+        ) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
@@ -161,11 +166,11 @@ async def _call_chat(client: httpx.AsyncClient, messages: list[dict],
                     yield json.loads(line)
                 except json.JSONDecodeError:
                     continue
+
     return gen()
 
 
-async def route_chat(user_query: str,
-                     history: list[dict] | None = None) -> AsyncIterator[dict]:
+async def route_chat(user_query: str, history: list[dict] | None = None) -> AsyncIterator[dict]:
     """async generator. event dict 시리즈를 yield.
 
     이벤트 타입:
@@ -190,14 +195,18 @@ async def route_chat(user_query: str,
         # Ollama 가 tool 호출 안 했으면 무조건 폴백 (LLM이 사용자에게 되묻기 시도해도 차단)
         # content 가 있더라도 도구 결과 없이 끝나면 빈손이므로 search_videos 강제
         if not tool_calls:
-            log.info("router fallback: no tool_calls, forcing search_videos (raw content=%r)",
-                     (msg.get("content") or "")[:80])
-            tool_calls = [{
-                "function": {
-                    "name": "search_videos",
-                    "arguments": {"query": user_query, "limit": 10},
+            log.info(
+                "router fallback: no tool_calls, forcing search_videos (raw content=%r)",
+                (msg.get("content") or "")[:80],
+            )
+            tool_calls = [
+                {
+                    "function": {
+                        "name": "search_videos",
+                        "arguments": {"query": user_query, "limit": 10},
+                    }
                 }
-            }]
+            ]
 
         # 방어: 사용자 질문에 품번 패턴이 없는데 get_video/similar_to 호출 시
         # search_videos 로 강제 교체 (시스템 프롬프트를 무시한 LLM 오라우팅 방지)
@@ -205,11 +214,17 @@ async def route_chat(user_query: str,
         if not has_opus_in_query:
             fixed: list[dict] = []
             for c in tool_calls:
-                nm = ((c.get("function") or {}).get("name") or "")
+                nm = (c.get("function") or {}).get("name") or ""
                 if nm in ("get_video", "similar_to"):
                     log.info("router override: %s -> search_videos (no opus in query)", nm)
-                    fixed.append({"function": {"name": "search_videos",
-                                               "arguments": {"query": user_query, "limit": 10}}})
+                    fixed.append(
+                        {
+                            "function": {
+                                "name": "search_videos",
+                                "arguments": {"query": user_query, "limit": 10},
+                            }
+                        }
+                    )
                 else:
                     fixed.append(c)
             # 중복 search_videos 제거 (같은 query)
@@ -267,30 +282,37 @@ async def route_chat(user_query: str,
         # NOTE: 1차 응답의 content 는 비우는 게 안전 — 거기 중국어/잡담이 섞이면
         # 2차 스트리밍이 그 언어를 그대로 이어쓴다 (Qwen 의 강한 언어 관성).
         if tool_calls:
-            messages.append({
-                "role": "assistant",
-                "content": "",
-                "tool_calls": tool_calls,
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": tool_calls,
+                }
+            )
             for r in results_for_history:
-                messages.append({
-                    "role": "tool",
-                    "name": r["name"],
-                    "content": json.dumps(
-                        _compact_tool_result(r["name"], r["result"]),
-                        ensure_ascii=False, default=str,
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "name": r["name"],
+                        "content": json.dumps(
+                            _compact_tool_result(r["name"], r["result"]),
+                            ensure_ascii=False,
+                            default=str,
+                        ),
+                    }
+                )
             # Qwen 의 중국어 관성 차단: 도구 결과 직후 한국어 강제 user 지시를 한 번 더 주입.
             # 시스템 프롬프트만으로는 약하므로 가장 최근 user turn 으로 재확인시킴.
-            messages.append({
-                "role": "user",
-                "content": (
-                    "위 도구 결과 목록을 한국어(한글)로만 요약해 주세요. "
-                    "중국어 한자, 일본어 가나, 영어 문장 사용 금지. "
-                    "각 항목을 'opus · 제목 · 제작사 · YYYY-MM · 배우' 한 줄로 나열."
-                ),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "위 도구 결과 목록을 한국어(한글)로만 요약해 주세요. "
+                        "중국어 한자, 일본어 가나, 영어 문장 사용 금지. "
+                        "각 항목을 'opus · 제목 · 제작사 · YYYY-MM · 배우' 한 줄로 나열."
+                    ),
+                }
+            )
         else:
             # tool 안 쓴 경우 첫 응답이 곧 답
             text = msg.get("content") or ""
@@ -317,6 +339,8 @@ async def route_chat(user_query: str,
             except Exception:
                 pass
 
-        yield {"type": "done", "message": full,
-               "tool_calls": [{"name": r["name"], "args": r["args"]}
-                              for r in results_for_history]}
+        yield {
+            "type": "done",
+            "message": full,
+            "tool_calls": [{"name": r["name"], "args": r["args"]} for r in results_for_history],
+        }

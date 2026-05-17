@@ -4,6 +4,7 @@
 - POST /api/search/poster-ocr  {query, limit, kind}
   bge-m3 텍스트 임베딩 -> Qdrant `poster_ocr` -> video hit + matched ocr_text 발췌
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,16 +32,13 @@ class PosterOcrSearchRequest(BaseModel):
 def _kind_filter(kind: str | None) -> qm.Filter | None:
     if kind not in ("instance", "archive"):
         return None
-    return qm.Filter(must=[
-        qm.FieldCondition(key="kind", match=qm.MatchValue(value=kind))
-    ])
+    return qm.Filter(must=[qm.FieldCondition(key="kind", match=qm.MatchValue(value=kind))])
 
 
 @router.post("/api/search/poster-ocr")
 def poster_ocr_search(req: PosterOcrSearchRequest) -> dict[str, Any]:
     emb = _embedder()
-    vec = emb.encode([req.query], normalize_embeddings=True,
-                     show_progress_bar=False)[0].tolist()
+    vec = emb.encode([req.query], normalize_embeddings=True, show_progress_bar=False)[0].tolist()
     qc = _qdrant()
     res = qc.query_points(
         collection_name=POSTER_OCR,

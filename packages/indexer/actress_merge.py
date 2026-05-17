@@ -10,11 +10,12 @@ AI_PLAN.md §5.4 구현.
 입력: actress.json record 리스트
 출력: (canonical Actress dataclass 리스트, alias_norm → canonical_name 매핑)
 """
+
 from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -29,8 +30,8 @@ def normalize_actress(name: str | None) -> str:
 
 @dataclass
 class Actress:
-    canonical_name: str          # normalize 된 키 (PRIMARY KEY)
-    display_name: str            # 표시용 (가장 최근 lastModified 의 name 원문)
+    canonical_name: str  # normalize 된 키 (PRIMARY KEY)
+    display_name: str  # 표시용 (가장 최근 lastModified 의 name 원문)
     local_name: str | None
     favorite: bool
     birth: str | None
@@ -116,7 +117,7 @@ def build_actress_master(
     uf = _UF()
     # record_id → keys (record index 로 식별)
     rec_keys: list[list[str]] = []
-    raw_lookup: dict[str, str] = {}     # alias_norm → 원문 (가장 마지막 본 것)
+    raw_lookup: dict[str, str] = {}  # alias_norm → 원문 (가장 마지막 본 것)
     for rec in records:
         keys = _alias_keys(rec)
         rec_keys.append(keys)
@@ -128,7 +129,7 @@ def build_actress_master(
         for k in keys[1:]:
             uf.union(keys[0], k)
 
-    groups = uf.groups()                 # root → [keys...]
+    groups = uf.groups()  # root → [keys...]
     # alias_norm → group_root
     key_to_root: dict[str, str] = {}
     for root, members in groups.items():

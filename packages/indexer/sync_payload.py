@@ -12,11 +12,12 @@ SQLite 가 진실 소스 (`videos.kind` + `posters.video_path`).
 
 이미지/얼굴/OCR 풀 재처리 대비 수십~수백배 빠름.
 """
+
 from __future__ import annotations
 
 import logging
 import time
-from typing import Iterable
+from collections.abc import Iterable
 
 from qdrant_client.http import models as qm
 
@@ -27,10 +28,10 @@ log = logging.getLogger(__name__)
 
 # (컬렉션 이름, opus 당 다중 point 여부)
 COLLECTIONS = [
-    ("videos",       False),
+    ("videos", False),
     ("posters_clip", False),
-    ("poster_ocr",   False),
-    ("faces",        True),
+    ("poster_ocr", False),
+    ("faces", True),
 ]
 
 
@@ -71,8 +72,9 @@ def _scroll_all(qc, collection: str) -> Iterable[tuple]:
             return
 
 
-def _sync_collection(qc, collection: str, multi_point: bool,
-                     truth: dict[str, tuple[str | None, bool]]) -> dict:
+def _sync_collection(
+    qc, collection: str, multi_point: bool, truth: dict[str, tuple[str | None, bool]]
+) -> dict:
     scanned = 0
     diff_opus: dict[str, tuple[str | None, bool]] = {}
     diff_points_by_opus: dict[str, list] = {}
@@ -99,8 +101,9 @@ def _sync_collection(qc, collection: str, multi_point: bool,
                 qc.set_payload(
                     collection_name=collection,
                     payload=payload,
-                    points=qm.Filter(must=[qm.FieldCondition(
-                        key="opus", match=qm.MatchValue(value=opus))]),
+                    points=qm.Filter(
+                        must=[qm.FieldCondition(key="opus", match=qm.MatchValue(value=opus))]
+                    ),
                     wait=False,
                 )
                 updated_points += len(diff_points_by_opus[opus])
@@ -116,10 +119,14 @@ def _sync_collection(qc, collection: str, multi_point: bool,
         except Exception as e:
             log.warning("set_payload %s opus=%s failed: %s", collection, opus, e)
 
-    log.info("[%s] scanned=%d  changed_opus=%d  updated_points=%d",
-             collection, scanned, len(diff_opus), updated_points)
-    return {"scanned": scanned, "changed_opus": len(diff_opus),
-            "updated_points": updated_points}
+    log.info(
+        "[%s] scanned=%d  changed_opus=%d  updated_points=%d",
+        collection,
+        scanned,
+        len(diff_opus),
+        updated_points,
+    )
+    return {"scanned": scanned, "changed_opus": len(diff_opus), "updated_points": updated_points}
 
 
 def run() -> dict:
@@ -138,16 +145,15 @@ def run() -> dict:
             r = _sync_collection(qc, name, multi, truth)
         except Exception as e:
             log.warning("collection %s skipped: %s", name, e)
-            r = {"scanned": 0, "changed_opus": 0, "updated_points": 0,
-                 "error": str(e)}
+            r = {"scanned": 0, "changed_opus": 0, "updated_points": 0, "error": str(e)}
         by_col[name] = r
         total_changed += r.get("changed_opus", 0)
         total_updated += r.get("updated_points", 0)
 
     return {
-        "sqlite_opus":    len(truth),
-        "changed_opus":   total_changed,
+        "sqlite_opus": len(truth),
+        "changed_opus": total_changed,
         "updated_points": total_updated,
-        "by_collection":  by_col,
-        "elapsed_sec":    round(time.time() - t, 2),
+        "by_collection": by_col,
+        "elapsed_sec": round(time.time() - t, 2),
     }

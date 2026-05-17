@@ -7,12 +7,13 @@ AI_PLAN.md §6.1 [5], §5.2.
 - 문서 템플릿: §6.1 [5] 그대로
 - 멱등: 같은 opus 는 같은 point id (SHA1(opus) -> uint64) 로 upsert
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import sqlite3
-from typing import Iterable
+from collections.abc import Iterable
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qm
@@ -30,6 +31,7 @@ _EMB = None
 
 
 # --- 헬퍼 ---------------------------------------------------------
+
 
 def _qdrant() -> QdrantClient:
     cfg = load_config()
@@ -74,6 +76,7 @@ def _embedder():
     global _EMB
     if _EMB is None:
         from sentence_transformers import SentenceTransformer
+
         cfg = load_config()
         log.info("loading embedding model %s", cfg["models"]["embedding"])
         _EMB = SentenceTransformer(cfg["models"]["embedding"])
@@ -82,38 +85,54 @@ def _embedder():
 
 # --- 문서 빌드 ----------------------------------------------------
 
+
 def _fetch_video_bundle(conn: sqlite3.Connection, opus: str) -> dict | None:
-    v = conn.execute("""
+    v = conn.execute(
+        """
         SELECT opus, title_jp, title_ko, desc_jp, desc_ko, comment,
                studio, release_year, release_month, kind,
                play, rank, last_play, like_count
         FROM videos WHERE opus = ?
-    """, (opus,)).fetchone()
+    """,
+        (opus,),
+    ).fetchone()
     if not v:
         return None
-    actrs = [r["canonical_name"] for r in conn.execute(
-        "SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))]
-    tags = list(conn.execute("""
+    actrs = [
+        r["canonical_name"]
+        for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
+    ]
+    tags = list(
+        conn.execute(
+            """
         SELECT t.id, t.name, t.description, t.group_id
         FROM video_tags vt JOIN tags t ON t.id = vt.tag_id
         WHERE vt.opus = ?
-    """, (opus,)))
-    poster = conn.execute(
-        "SELECT video_path FROM posters WHERE opus = ?", (opus,)).fetchone()
-    return {"video": dict(v), "actresses": actrs, "tags": tags,
-            "video_path": (poster["video_path"] if poster else None)}
+    """,
+            (opus,),
+        )
+    )
+    poster = conn.execute("SELECT video_path FROM posters WHERE opus = ?", (opus,)).fetchone()
+    return {
+        "video": dict(v),
+        "actresses": actrs,
+        "tags": tags,
+        "video_path": (poster["video_path"] if poster else None),
+    }
 
 
 def _build_document(b: dict) -> str:
     v = b["video"]
     tag_block = ", ".join(
-        f"{t['name']}{('('+t['description']+')') if t['description'] else ''}"
-        for t in b["tags"]
+        f"{t['name']}{('('+t['description']+')') if t['description'] else ''}" for t in b["tags"]
     )
     ym = ""
     if v["release_year"]:
-        ym = f"{v['release_year']:04d}-{v['release_month']:02d}" if v["release_month"] \
+        ym = (
+            f"{v['release_year']:04d}-{v['release_month']:02d}"
+            if v["release_month"]
             else f"{v['release_year']:04d}"
+        )
     return (
         f"[제목 JP] {v['title_jp'] or ''}\n"
         f"[제목 KO] {v['title_ko'] or ''}\n"
@@ -136,7 +155,7 @@ def _build_payload(b: dict) -> dict:
         "studio": v["studio"],
         "kind": v["kind"],
         "canonical_actresses": b["actresses"],
-        "tag_ids":   [t["id"] for t in b["tags"]],
+        "tag_ids": [t["id"] for t in b["tags"]],
         "tag_names": [t["name"] for t in b["tags"]],
         "rank": v["rank"] or 0,
         "play": v["play"] or 0,
@@ -149,6 +168,7 @@ def _build_payload(b: dict) -> dict:
 
 # --- 실행 ---------------------------------------------------------
 
+
 def _opus_iter(conn: sqlite3.Connection, limit: int | None) -> list[str]:
     sql = "SELECT opus FROM videos ORDER BY opus"
     if limit:
@@ -158,7 +178,7 @@ def _opus_iter(conn: sqlite3.Connection, limit: int | None) -> list[str]:
 
 def _batched(seq: list, n: int) -> Iterable[list]:
     for i in range(0, len(seq), n):
-        yield seq[i:i + n]
+        yield seq[i : i + n]
 
 
 def run(limit: int | None = None, batch_size: int | None = None) -> dict:
@@ -173,7 +193,7 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
     all_opus = _opus_iter(conn, limit)
     total = len(all_opus)
     upserted = 0
-    skipped  = 0
+    skipped = 0
 
     for chunk in _batched(all_opus, bs):
         bundles = []
@@ -186,8 +206,7 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
         if not bundles:
             continue
         docs = [_build_document(b) for b in bundles]
-        vecs = emb.encode(docs, batch_size=bs, normalize_embeddings=True,
-                          show_progress_bar=False)
+        vecs = emb.encode(docs, batch_size=bs, normalize_embeddings=True, show_progress_bar=False)
         points = [
             qm.PointStruct(
                 id=opus_to_id(b["video"]["opus"]),

@@ -7,12 +7,13 @@ AI_PLAN.md §10 M4 / §6.1 [7].
            rank, play, like_count, playable
 - 멱등: opus -> SHA1 id (embed_text 와 동일 함수 재사용)
 """
+
 from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import torch
 from PIL import Image
@@ -36,25 +37,26 @@ _DEVICE = None
 
 # --- 모델 로더 ----------------------------------------------------
 
+
 def _load_model():
     global _MODEL, _PREPROCESS, _DEVICE
     if _MODEL is not None:
         return _MODEL, _PREPROCESS, _DEVICE
     import open_clip
+
     cfg = load_config()
     name = cfg["models"]["clip_model"]
     pretrained = cfg["models"]["clip_pretrained"]
     _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     log.info("loading OpenCLIP %s (%s) on %s", name, pretrained, _DEVICE)
-    model, _, preprocess = open_clip.create_model_and_transforms(
-        name, pretrained=pretrained
-    )
+    model, _, preprocess = open_clip.create_model_and_transforms(name, pretrained=pretrained)
     model.eval().to(_DEVICE)
     _MODEL, _PREPROCESS = model, preprocess
     return model, preprocess, _DEVICE
 
 
 # --- Qdrant -------------------------------------------------------
+
 
 def ensure_collection(client: QdrantClient) -> None:
     existing = {c.name for c in client.get_collections().collections}
@@ -66,14 +68,14 @@ def ensure_collection(client: QdrantClient) -> None:
         vectors_config=qm.VectorParams(size=VECTOR_DIM, distance=qm.Distance.COSINE),
     )
     for field, ftype in [
-        ("opus",                qm.PayloadSchemaType.KEYWORD),
-        ("kind",                qm.PayloadSchemaType.KEYWORD),
-        ("year",                qm.PayloadSchemaType.INTEGER),
-        ("month",               qm.PayloadSchemaType.INTEGER),
-        ("studio",              qm.PayloadSchemaType.KEYWORD),
+        ("opus", qm.PayloadSchemaType.KEYWORD),
+        ("kind", qm.PayloadSchemaType.KEYWORD),
+        ("year", qm.PayloadSchemaType.INTEGER),
+        ("month", qm.PayloadSchemaType.INTEGER),
+        ("studio", qm.PayloadSchemaType.KEYWORD),
         ("canonical_actresses", qm.PayloadSchemaType.KEYWORD),
-        ("rank",                qm.PayloadSchemaType.INTEGER),
-        ("playable",            qm.PayloadSchemaType.BOOL),
+        ("rank", qm.PayloadSchemaType.INTEGER),
+        ("playable", qm.PayloadSchemaType.BOOL),
     ]:
         try:
             client.create_payload_index(COLLECTION, field, field_schema=ftype)
@@ -83,30 +85,36 @@ def ensure_collection(client: QdrantClient) -> None:
 
 # --- 데이터 -------------------------------------------------------
 
+
 def _fetch_poster_bundle(conn: sqlite3.Connection, opus: str) -> dict | None:
     p = conn.execute(
         "SELECT opus, path, kind, video_path FROM posters WHERE opus = ?", (opus,)
     ).fetchone()
     if not p or not p["path"]:
         return None
-    v = conn.execute("""
+    v = conn.execute(
+        """
         SELECT release_year, release_month, studio, rank, play, like_count, last_play
         FROM videos WHERE opus = ?
-    """, (opus,)).fetchone()
-    actrs = [r["canonical_name"] for r in conn.execute(
-        "SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))]
+    """,
+        (opus,),
+    ).fetchone()
+    actrs = [
+        r["canonical_name"]
+        for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
+    ]
     return {
         "opus": p["opus"],
         "path": p["path"],
         "kind": p["kind"],
         "video_path": p["video_path"],
-        "year":  v["release_year"]  if v else None,
+        "year": v["release_year"] if v else None,
         "month": v["release_month"] if v else None,
-        "studio":     v["studio"]     if v else None,
-        "rank":       (v["rank"] or 0) if v else 0,
-        "play":       (v["play"] or 0) if v else 0,
+        "studio": v["studio"] if v else None,
+        "rank": (v["rank"] or 0) if v else 0,
+        "play": (v["play"] or 0) if v else 0,
         "like_count": (v["like_count"] or 0) if v else 0,
-        "last_play":  v["last_play"]  if v else None,
+        "last_play": v["last_play"] if v else None,
         "actresses": actrs,
     }
 
@@ -130,6 +138,7 @@ def _build_payload(b: dict) -> dict:
 
 # --- 실행 ---------------------------------------------------------
 
+
 def _opus_iter(conn: sqlite3.Connection, limit: int | None) -> list[str]:
     sql = "SELECT opus FROM posters WHERE path IS NOT NULL ORDER BY opus"
     if limit:
@@ -139,10 +148,10 @@ def _opus_iter(conn: sqlite3.Connection, limit: int | None) -> list[str]:
 
 def _batched(seq: list, n: int) -> Iterable[list]:
     for i in range(0, len(seq), n):
-        yield seq[i:i + n]
+        yield seq[i : i + n]
 
 
-def _embed_images(paths: list[Path]) -> tuple["torch.Tensor | None", list[int]]:
+def _embed_images(paths: list[Path]) -> tuple[torch.Tensor | None, list[int]]:
     model, preprocess, device = _load_model()
     imgs = []
     keep_idx = []
@@ -173,8 +182,8 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
     all_opus = _opus_iter(conn, limit)
     total = len(all_opus)
     upserted = 0
-    skipped  = 0
-    failed   = 0
+    skipped = 0
+    failed = 0
 
     for chunk in _batched(all_opus, bs):
         bundles = []
@@ -194,11 +203,13 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
         points = []
         for j, idx in enumerate(keep_idx):
             b = bundles[idx]
-            points.append(qm.PointStruct(
-                id=opus_to_id(b["opus"]),
-                vector=feats[j].tolist(),
-                payload=_build_payload(b),
-            ))
+            points.append(
+                qm.PointStruct(
+                    id=opus_to_id(b["opus"]),
+                    vector=feats[j].tolist(),
+                    payload=_build_payload(b),
+                )
+            )
         failed += len(bundles) - len(keep_idx)
         if points:
             qc.upsert(collection_name=COLLECTION, points=points, wait=False)
@@ -207,8 +218,8 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
             update_stage("embed_clip", completed=upserted)
             log.info("embed_clip %d / %d", upserted, total)
 
-    update_stage("embed_clip", done=True, completed=upserted,
-                 total=total, skipped=skipped, failed=failed)
+    update_stage(
+        "embed_clip", done=True, completed=upserted, total=total, skipped=skipped, failed=failed
+    )
     conn.close()
-    return {"total": total, "upserted": upserted,
-            "skipped": skipped, "failed": failed}
+    return {"total": total, "upserted": upserted, "skipped": skipped, "failed": failed}

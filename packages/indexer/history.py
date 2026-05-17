@@ -8,6 +8,7 @@ AI_PLAN.md §6.1 [3].
 - INSERT OR IGNORE (PK = ts,opus,action 중복 안전)
 - 단일 패스, 누적 ts 최댓값 → state.history_csv.last_ts
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,7 +39,7 @@ def _parse_line(line: str) -> tuple[int, str, str, str] | None:
     if len(parts) < 3:
         return None
     ts_str = parts[0].strip()
-    opus   = parts[1].strip()
+    opus = parts[1].strip()
     action = parts[2].strip()
     payload = parts[3] if len(parts) > 3 else ""
     try:

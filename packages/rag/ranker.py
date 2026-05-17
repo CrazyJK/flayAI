@@ -8,6 +8,7 @@ final_score = 0.70 * semantic_sim
 
 가중치는 config.yaml.ranking 에서 조정.
 """
+
 from __future__ import annotations
 
 import math
@@ -61,7 +62,7 @@ def rank(candidates: list[Candidate]) -> list[Scored]:
     w_fts = float(cfg["fts_weight"])
     w_use = float(cfg["usage_weight"])
     w_rec = float(cfg["recency_weight"])
-    half  = float(cfg["recency_half_life_days"])
+    half = float(cfg["recency_half_life_days"])
 
     sem_raw = [max(0.0, c.semantic_score) for c in candidates]
     fts_raw = [c.fts_score for c in candidates]
@@ -76,8 +77,16 @@ def rank(candidates: list[Candidate]) -> list[Scored]:
     out: list[Scored] = []
     for c, s, f, u, r in zip(candidates, sem_n, fts_n, use_n, rec_raw):
         score = w_sem * s + w_fts * f + w_use * u + w_rec * r
-        out.append(Scored(opus=c.opus, final_score=score,
-                          semantic=s, fts=f, usage=u, recency=r,
-                          payload=c.payload))
+        out.append(
+            Scored(
+                opus=c.opus,
+                final_score=score,
+                semantic=s,
+                fts=f,
+                usage=u,
+                recency=r,
+                payload=c.payload,
+            )
+        )
     out.sort(key=lambda x: x.final_score, reverse=True)
     return out

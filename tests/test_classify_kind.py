@@ -1,4 +1,5 @@
 """classify_poster (instance/archive) 테스트."""
+
 from pathlib import Path
 
 import pytest

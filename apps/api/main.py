@@ -13,11 +13,13 @@ AI_PLAN.md §8.1, §9.1.
     GET  /api/admin/stats        (운영 요약)
     GET  /healthz
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -31,13 +33,19 @@ from packages.indexer.db import connect
 from packages.indexer.translate import translate_text
 from packages.rag.router import route_chat
 from packages.rag.tools import (
-    get_actress, get_video, search_videos, similar_to, stats,
+    get_actress,
+    get_video,
+    search_videos,
+    similar_to,
+    stats,
 )
 from packages.settings import load_config
+
 log = logging.getLogger(__name__)
 
 
 # --- 모델 --------------------------------------------------------
+
 
 class ChatRequest(BaseModel):
     query: str = Field(..., description="사용자 자연어 질의")
@@ -65,6 +73,7 @@ class TranslateRequest(BaseModel):
 
 # --- 앱 ----------------------------------------------------------
 
+
 async def _warmup_face_model() -> None:
     """InsightFace buffalo_l 모델을 백그라운드로 미리 로드해 첫 요청 지연(10~30초)을 제거한다.
 
@@ -72,8 +81,10 @@ async def _warmup_face_model() -> None:
     - 실패해도 API 기동에는 영향 없음 (첫 호출 시 다시 시도)
     """
     import asyncio
+
     try:
         from packages.indexer.faces import _load_face_app
+
         await asyncio.to_thread(_load_face_app)
         log.info("InsightFace warmup done")
     except Exception as e:
@@ -83,6 +94,7 @@ async def _warmup_face_model() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     import asyncio
+
     cfg = load_config()
     host = cfg["server"]["host"]
     if host not in ("127.0.0.1", "localhost", "::1"):
@@ -112,28 +124,37 @@ def create_app() -> FastAPI:
     # ---- chat (SSE) ----
     @app.post("/api/chat")
     async def chat(req: ChatRequest):
-        async def sse() -> "anyio.abc.ByteStream":
+        async def sse() -> AsyncGenerator[bytes, None]:
             try:
                 async for ev in route_chat(req.query, history=req.history):
                     line = "data: " + json.dumps(ev, ensure_ascii=False, default=str) + "\n\n"
                     yield line.encode("utf-8")
             except Exception as e:
                 log.exception("chat error: %s", e)
-                yield ("data: " + json.dumps(
-                    {"type": "error", "message": str(e)}, ensure_ascii=False
-                ) + "\n\n").encode("utf-8")
+                yield (
+                    "data: "
+                    + json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False)
+                    + "\n\n"
+                ).encode("utf-8")
 
-        return StreamingResponse(sse(), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache"})
+        return StreamingResponse(
+            sse(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"}
+        )
 
     # ---- search/videos ----
     @app.post("/api/search/videos")
     def search_videos_route(req: SearchVideosRequest):
         return {
             "items": search_videos(
-                query=req.query, year=req.year, month=req.month,
-                actress=req.actress, tag=req.tag, studio=req.studio,
-                kind=req.kind, playable=req.playable, min_rank=req.min_rank,
+                query=req.query,
+                year=req.year,
+                month=req.month,
+                actress=req.actress,
+                tag=req.tag,
+                studio=req.studio,
+                kind=req.kind,
+                playable=req.playable,
+                min_rank=req.min_rank,
                 limit=req.limit,
             )
         }
@@ -144,8 +165,9 @@ def create_app() -> FastAPI:
         conn = connect()
         try:
             with conn:
-                out = translate_text(conn, req.text, target=req.target,
-                                     sentencewise=req.sentencewise)
+                out = translate_text(
+                    conn, req.text, target=req.target, sentencewise=req.sentencewise
+                )
             return {"text": out}
         finally:
             conn.close()
@@ -172,7 +194,7 @@ def create_app() -> FastAPI:
     @app.get("/api/admin/stats")
     def admin_stats(request: Request):
         # localhost-only
-        client_host = (request.client.host if request.client else "")
+        client_host = request.client.host if request.client else ""
         if client_host not in ("127.0.0.1", "localhost", "::1"):
             raise HTTPException(403, "admin endpoints are localhost-only")
         return stats()
@@ -182,8 +204,7 @@ def create_app() -> FastAPI:
     def poster_file(opus: str):
         conn = connect()
         try:
-            row = conn.execute(
-                "SELECT path FROM posters WHERE opus = ?", (opus,)).fetchone()
+            row = conn.execute("SELECT path FROM posters WHERE opus = ?", (opus,)).fetchone()
         finally:
             conn.close()
         if not row:
@@ -195,10 +216,12 @@ def create_app() -> FastAPI:
 
     # ---- 이미지/얼굴 검색 (M4) ----
     from apps.api.routers.image import router as image_router
+
     app.include_router(image_router)
 
     # ---- 포스터 OCR 검색 (M5) ----
     from apps.api.routers.ocr import router as ocr_router
+
     app.include_router(ocr_router)
 
     return app

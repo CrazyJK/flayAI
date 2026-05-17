@@ -1,4 +1,5 @@
 """M0 smoke test: bge-m3 embedding shape check"""
+
 from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer("BAAI/bge-m3")

@@ -8,6 +8,7 @@ AI_PLAN.md §7.3.
 - LLM tool calling JSON Schema 와 일관된 시그니처
 - 외부 effect 없음 (DB read + Qdrant search 만)
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +17,7 @@ from typing import Any, Literal
 from packages.indexer.actress_merge import normalize_actress
 from packages.indexer.db import connect
 from packages.rag.ranker import rank
-from packages.rag.retriever import Filters, hybrid_search, semantic_search
+from packages.rag.retriever import Filters, hybrid_search
 
 log = logging.getLogger(__name__)
 
@@ -40,17 +41,23 @@ def _resolve_tag_id(conn, tag_name: str | None) -> int | None:
 
 
 def _video_to_hit(conn, opus: str, scored=None) -> dict | None:
-    v = conn.execute("""
+    v = conn.execute(
+        """
         SELECT opus, title_jp, title_ko, desc_ko, studio, release_date,
                release_year, release_month, kind, rank, play, like_count, last_play
         FROM videos WHERE opus = ?
-    """, (opus,)).fetchone()
+    """,
+        (opus,),
+    ).fetchone()
     if not v:
         return None
-    actrs = [r["canonical_name"] for r in conn.execute(
-        "SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))]
+    actrs = [
+        r["canonical_name"]
+        for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
+    ]
     poster = conn.execute(
-        "SELECT path, video_path, kind FROM posters WHERE opus = ?", (opus,)).fetchone()
+        "SELECT path, video_path, kind FROM posters WHERE opus = ?", (opus,)
+    ).fetchone()
     out: dict[str, Any] = {
         "opus": v["opus"],
         "title": v["title_ko"] or v["title_jp"],
@@ -73,9 +80,9 @@ def _video_to_hit(conn, opus: str, scored=None) -> dict | None:
         out["score"] = round(scored.final_score, 4)
         out["score_breakdown"] = {
             "semantic": round(scored.semantic, 4),
-            "fts":      round(scored.fts, 4),
-            "usage":    round(scored.usage, 4),
-            "recency":  round(scored.recency, 4),
+            "fts": round(scored.fts, 4),
+            "usage": round(scored.usage, 4),
+            "recency": round(scored.recency, 4),
         }
     return out
 
@@ -83,6 +90,7 @@ def _video_to_hit(conn, opus: str, scored=None) -> dict | None:
 # =================================================================
 # Tools
 # =================================================================
+
 
 def search_videos(
     query: str = "",
@@ -102,10 +110,14 @@ def search_videos(
         actress_canon = _resolve_actress_alias(conn, actress)
         tag_id = _resolve_tag_id(conn, tag)
         filt = Filters(
-            year=year, month=month, studio=studio,
-            actress_canonical=actress_canon, tag_id=tag_id,
+            year=year,
+            month=month,
+            studio=studio,
+            actress_canonical=actress_canon,
+            tag_id=tag_id,
             kind=None if kind in (None, "any") else kind,
-            playable=playable, min_rank=min_rank,
+            playable=playable,
+            min_rank=min_rank,
         )
         if query.strip():
             top_k = max(limit * 3, 30)
@@ -127,24 +139,35 @@ def _meta_only_search(conn, f: Filters, limit: int) -> list[dict]:
     where: list[str] = []
     params: list[Any] = []
     if f.year is not None:
-        where.append("v.release_year = ?"); params.append(int(f.year))
+        where.append("v.release_year = ?")
+        params.append(int(f.year))
     if f.month is not None:
-        where.append("v.release_month = ?"); params.append(int(f.month))
+        where.append("v.release_month = ?")
+        params.append(int(f.month))
     if f.studio:
-        where.append("v.studio = ?"); params.append(f.studio)
+        where.append("v.studio = ?")
+        params.append(f.studio)
     if f.kind:
-        where.append("v.kind = ?"); params.append(f.kind)
+        where.append("v.kind = ?")
+        params.append(f.kind)
     if f.min_rank is not None:
-        where.append("v.rank >= ?"); params.append(int(f.min_rank))
+        where.append("v.rank >= ?")
+        params.append(int(f.min_rank))
     if f.actress_canonical:
-        where.append("EXISTS (SELECT 1 FROM video_actresses va "
-                     "WHERE va.opus = v.opus AND va.canonical_name = ?)")
+        where.append(
+            "EXISTS (SELECT 1 FROM video_actresses va "
+            "WHERE va.opus = v.opus AND va.canonical_name = ?)"
+        )
         params.append(f.actress_canonical)
     if f.tag_id is not None:
-        where.append("EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)")
+        where.append(
+            "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
+        )
         params.append(int(f.tag_id))
     if f.playable is True:
-        where.append("EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)")
+        where.append(
+            "EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)"
+        )
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     sql = f"""
         SELECT v.opus FROM videos v {where_sql}
@@ -161,8 +184,12 @@ def similar_to(opus: str, exclude_watched: bool = True, limit: int = 10) -> list
 
     qc = _qdrant()
     try:
-        rec = qc.retrieve(collection_name=COLLECTION, ids=[opus_to_id(opus)],
-                          with_vectors=True, with_payload=False)
+        rec = qc.retrieve(
+            collection_name=COLLECTION,
+            ids=[opus_to_id(opus)],
+            with_vectors=True,
+            with_payload=False,
+        )
     except Exception as e:
         log.warning("retrieve seed vector failed: %s", e)
         return []
@@ -170,8 +197,9 @@ def similar_to(opus: str, exclude_watched: bool = True, limit: int = 10) -> list
         return []
     seed_vec = rec[0].vector
     try:
-        resp = qc.query_points(collection_name=COLLECTION, query=seed_vec,
-                               limit=limit + 5, with_payload=True)
+        resp = qc.query_points(
+            collection_name=COLLECTION, query=seed_vec, limit=limit + 5, with_payload=True
+        )
     except Exception as e:
         log.warning("similar search failed: %s", e)
         return []
@@ -210,28 +238,30 @@ def get_actress(name: str) -> dict | None:
         canon = _resolve_actress_alias(conn, name)
         if not canon:
             return None
-        a = conn.execute(
-            "SELECT * FROM actresses WHERE canonical_name = ?", (canon,)).fetchone()
+        a = conn.execute("SELECT * FROM actresses WHERE canonical_name = ?", (canon,)).fetchone()
         if not a:
             return None
-        aliases = [r["alias_raw"] for r in conn.execute(
-            "SELECT alias_raw FROM actress_aliases WHERE canonical_name = ?", (canon,))]
+        aliases = [
+            r["alias_raw"]
+            for r in conn.execute(
+                "SELECT alias_raw FROM actress_aliases WHERE canonical_name = ?", (canon,)
+            )
+        ]
         n_videos = conn.execute(
-            "SELECT COUNT(*) AS c FROM video_actresses WHERE canonical_name = ?",
-            (canon,)).fetchone()["c"]
+            "SELECT COUNT(*) AS c FROM video_actresses WHERE canonical_name = ?", (canon,)
+        ).fetchone()["c"]
         return {**dict(a), "aliases": aliases, "video_count": int(n_videos)}
     finally:
         conn.close()
 
 
-def stats(actress: str | None = None, tag: str | None = None,
-          year: int | None = None) -> dict:
+def stats(actress: str | None = None, tag: str | None = None, year: int | None = None) -> dict:
     """간단 집계."""
     conn = connect()
     try:
         where: list[str] = []
         params: list[Any] = []
-        joins  = ""
+        joins = ""
         if actress:
             canon = _resolve_actress_alias(conn, actress)
             if not canon:
@@ -245,7 +275,8 @@ def stats(actress: str | None = None, tag: str | None = None,
             joins += " JOIN video_tags vt ON vt.opus = v.opus AND vt.tag_id = ?"
             params.append(tid)
         if year is not None:
-            where.append("v.release_year = ?"); params.append(int(year))
+            where.append("v.release_year = ?")
+            params.append(int(year))
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
         sql = f"""
             SELECT COUNT(*) AS c, AVG(v.rank) AS avg_rank, SUM(v.play) AS total_play,
@@ -254,10 +285,13 @@ def stats(actress: str | None = None, tag: str | None = None,
             FROM videos v {joins} {where_sql}
         """
         r = conn.execute(sql, params).fetchone()
-        return {"count": r["c"], "avg_rank": r["avg_rank"],
-                "total_play": r["total_play"],
-                "instance_count": r["instance_count"],
-                "archive_count": r["archive_count"]}
+        return {
+            "count": r["c"],
+            "avg_rank": r["avg_rank"],
+            "total_play": r["total_play"],
+            "instance_count": r["instance_count"],
+            "archive_count": r["archive_count"],
+        }
     finally:
         conn.close()
 
@@ -272,20 +306,26 @@ TOOL_SCHEMA: list[dict] = [
         "function": {
             "name": "search_videos",
             "description": "비디오 검색. 자연어 query + 메타 필터(연도/월/배우/태그/제작사/kind/playable/평점). "
-                           "kind='instance' 는 지금 볼 수 있는 것, 'archive' 는 보관소.",
+            "kind='instance' 는 지금 볼 수 있는 것, 'archive' 는 보관소.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query":     {"type": "string", "description": "자연어 검색어. 빈 문자열이면 메타 필터만 사용."},
-                    "year":      {"type": "integer"},
-                    "month":     {"type": "integer"},
-                    "actress":   {"type": "string", "description": "배우 이름 (별칭 자동 정규화)"},
-                    "tag":       {"type": "string"},
-                    "studio":    {"type": "string"},
-                    "kind":      {"type": "string", "enum": ["instance", "archive", "any"]},
-                    "playable":  {"type": "boolean", "description": "true 면 video_path 보유한 것만"},
-                    "min_rank":  {"type": "integer"},
-                    "limit":     {"type": "integer", "default": 10},
+                    "query": {
+                        "type": "string",
+                        "description": "자연어 검색어. 빈 문자열이면 메타 필터만 사용.",
+                    },
+                    "year": {"type": "integer"},
+                    "month": {"type": "integer"},
+                    "actress": {"type": "string", "description": "배우 이름 (별칭 자동 정규화)"},
+                    "tag": {"type": "string"},
+                    "studio": {"type": "string"},
+                    "kind": {"type": "string", "enum": ["instance", "archive", "any"]},
+                    "playable": {
+                        "type": "boolean",
+                        "description": "true 면 video_path 보유한 것만",
+                    },
+                    "min_rank": {"type": "integer"},
+                    "limit": {"type": "integer", "default": 10},
                 },
             },
         },
@@ -298,9 +338,9 @@ TOOL_SCHEMA: list[dict] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "opus":             {"type": "string"},
-                    "exclude_watched":  {"type": "boolean", "default": True},
-                    "limit":            {"type": "integer", "default": 10},
+                    "opus": {"type": "string"},
+                    "exclude_watched": {"type": "boolean", "default": True},
+                    "limit": {"type": "integer", "default": 10},
                 },
                 "required": ["opus"],
             },
@@ -339,8 +379,8 @@ TOOL_SCHEMA: list[dict] = [
                 "type": "object",
                 "properties": {
                     "actress": {"type": "string"},
-                    "tag":     {"type": "string"},
-                    "year":    {"type": "integer"},
+                    "tag": {"type": "string"},
+                    "year": {"type": "integer"},
                 },
             },
         },
@@ -350,8 +390,8 @@ TOOL_SCHEMA: list[dict] = [
 
 TOOL_DISPATCH = {
     "search_videos": search_videos,
-    "similar_to":    similar_to,
-    "get_video":     get_video,
-    "get_actress":   get_actress,
-    "stats":         stats,
+    "similar_to": similar_to,
+    "get_video": get_video,
+    "get_actress": get_actress,
+    "stats": stats,
 }

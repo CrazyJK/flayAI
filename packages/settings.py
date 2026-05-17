@@ -1,4 +1,5 @@
 """config.yaml 로더 (전체 프로젝트 공용)."""
+
 from __future__ import annotations
 
 from functools import lru_cache

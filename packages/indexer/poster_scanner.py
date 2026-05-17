@@ -8,6 +8,7 @@ AI_PLAN.md §5.6, §6.1 [2].
   외부 + 영상 없음                 = kind=instance, video_path=NULL
 - 매칭 실패 → unmatched_posters.log 기록
 """
+
 from __future__ import annotations
 
 import logging
@@ -105,7 +106,7 @@ def _resolve_actresses(raw: str, alias_map: dict[str, str]) -> list[str]:
 def run() -> ScanStats:
     cfg = load_config()
     poster_exts = {f".{e.lower()}" for e in cfg["data"]["poster_extensions"]}
-    video_exts  = {f".{e.lower()}" for e in cfg["data"]["video_extensions"]}
+    video_exts = {f".{e.lower()}" for e in cfg["data"]["video_extensions"]}
     archive_root = Path(cfg["data"]["archive_root"])
     roots = [Path(p) for p in cfg["data"]["poster_roots"]]
     # archive_root 도 스캔 대상에 포함 (이미 poster_roots 안에 있으면 dedupe)
@@ -125,12 +126,14 @@ def run() -> ScanStats:
     with conn:
         conn.execute("DELETE FROM posters")
         conn.execute("DELETE FROM video_actresses")
-        conn.execute("UPDATE videos SET has_poster = 0, studio = NULL, "
-                     "release_date = NULL, release_year = NULL, release_month = NULL, kind = NULL")
+        conn.execute(
+            "UPDATE videos SET has_poster = 0, studio = NULL, "
+            "release_date = NULL, release_year = NULL, release_month = NULL, kind = NULL"
+        )
 
     poster_rows: list[tuple] = []
     va_rows: list[tuple] = []
-    video_updates: dict[str, tuple] = {}     # opus -> (studio, date, year, month, kind)
+    video_updates: dict[str, tuple] = {}  # opus -> (studio, date, year, month, kind)
 
     with unmatched_path.open("w", encoding="utf-8") as ulog:
         for root in roots:
@@ -161,13 +164,23 @@ def run() -> ScanStats:
                 except OSError:
                     size, mtime = 0, 0
 
-                poster_rows.append((
-                    parsed.opus, str(p), p.suffix.lower().lstrip("."),
-                    size, mtime, kind, str(video_path) if video_path else None,
-                ))
+                poster_rows.append(
+                    (
+                        parsed.opus,
+                        str(p),
+                        p.suffix.lower().lstrip("."),
+                        size,
+                        mtime,
+                        kind,
+                        str(video_path) if video_path else None,
+                    )
+                )
                 video_updates[parsed.opus] = (
-                    parsed.studio, parsed.release_date,
-                    parsed.release_year, parsed.release_month, kind,
+                    parsed.studio,
+                    parsed.release_date,
+                    parsed.release_year,
+                    parsed.release_month,
+                    kind,
                 )
                 # 배우 링크
                 for canonical in _resolve_actresses(parsed.actresses_raw, alias_map):

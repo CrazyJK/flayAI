@@ -1,4 +1,5 @@
 """포스터 파일명 파서 테스트."""
+
 from packages.indexer.poster_parser import parse_filename
 
 

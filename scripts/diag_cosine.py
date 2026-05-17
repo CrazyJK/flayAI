@@ -4,13 +4,15 @@
 top-1 (자기 자신 제외 top-1) cosine 점수의 분포를 본다. 자기-자신은 1.0이라
 의미가 없고, 의미적 유사 영상의 top-1 가 ≥0.5 비율이 acceptance 지표.
 """
+
 from __future__ import annotations
 
 import random
 import sys
 
-from packages.settings import load_config
 from qdrant_client import QdrantClient
+
+from packages.settings import load_config
 
 
 def main() -> int:

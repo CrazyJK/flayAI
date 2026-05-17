@@ -5,6 +5,7 @@
 - POST /api/image/search        (multipart: file)              -> CLIP image -> posters_clip
 - POST /api/face/search         (multipart: file)              -> InsightFace -> faces 클러스터 집계
 """
+
 from __future__ import annotations
 
 import io
@@ -20,9 +21,11 @@ from pydantic import BaseModel
 from qdrant_client.http import models as qm
 
 from packages.indexer.db import connect
-from packages.indexer.embed_clip import COLLECTION as POSTERS_CLIP, _load_model as _load_clip
+from packages.indexer.embed_clip import COLLECTION as POSTERS_CLIP
+from packages.indexer.embed_clip import _load_model as _load_clip
 from packages.indexer.embed_text import _qdrant
-from packages.indexer.faces import COLLECTION as FACES, _load_face_app
+from packages.indexer.faces import COLLECTION as FACES
+from packages.indexer.faces import _load_face_app
 from packages.rag.tools import _video_to_hit
 
 log = logging.getLogger(__name__)
@@ -30,6 +33,7 @@ router = APIRouter()
 
 
 # --- 모델 ---------------------------------------------------------
+
 
 class ImageTextSearchRequest(BaseModel):
     query: str
@@ -40,9 +44,7 @@ class ImageTextSearchRequest(BaseModel):
 def _kind_filter(kind: str | None) -> qm.Filter | None:
     if kind not in ("instance", "archive"):
         return None
-    return qm.Filter(must=[
-        qm.FieldCondition(key="kind", match=qm.MatchValue(value=kind))
-    ])
+    return qm.Filter(must=[qm.FieldCondition(key="kind", match=qm.MatchValue(value=kind))])
 
 
 def _hits_from_posters(points) -> list[dict[str, Any]]:
@@ -65,6 +67,7 @@ def _hits_from_posters(points) -> list[dict[str, Any]]:
 
 # --- CLIP text ---------------------------------------------------
 
+
 @router.post("/api/image/search/text")
 def image_search_text(req: ImageTextSearchRequest) -> dict[str, Any]:
     import open_clip
@@ -73,6 +76,7 @@ def image_search_text(req: ImageTextSearchRequest) -> dict[str, Any]:
     model, _, device = _load_clip()
     # text tokenizer는 모델 이름 기반
     from packages.settings import load_config
+
     cfg = load_config()
     tokenizer = open_clip.get_tokenizer(cfg["models"]["clip_model"])
     toks = tokenizer([req.query]).to(device)
@@ -94,6 +98,7 @@ def image_search_text(req: ImageTextSearchRequest) -> dict[str, Any]:
 
 # --- CLIP image upload -------------------------------------------
 
+
 def _read_image(file: UploadFile) -> Image.Image:
     try:
         data = file.file.read()
@@ -109,6 +114,7 @@ def image_search(
     kind: str | None = Query(None),
 ) -> dict[str, Any]:
     import torch
+
     im = _read_image(file)
     model, preprocess, device = _load_clip()
     batch = preprocess(im).unsqueeze(0).to(device)
@@ -129,12 +135,12 @@ def image_search(
 
 # --- Face upload --------------------------------------------------
 
+
 @router.post("/api/face/search")
 def face_search(
     file: UploadFile = File(...),
     top_k: int = Query(5, ge=1, le=20, description="반환 배우 수"),
-    face_neighbors: int = Query(50, ge=10, le=200,
-                                description="가까운 얼굴 N개를 끌어와 다수결"),
+    face_neighbors: int = Query(50, ge=10, le=200, description="가까운 얼굴 N개를 끌어와 다수결"),
 ) -> dict[str, Any]:
     t0 = time.time()
     im = _read_image(file)
@@ -143,8 +149,12 @@ def face_search(
     fa = _load_face_app()
     faces = fa.get(arr)
     if not faces:
-        return {"actresses": [], "neighbors": [], "elapsed_ms": int((time.time() - t0) * 1000),
-                "message": "no face detected"}
+        return {
+            "actresses": [],
+            "neighbors": [],
+            "elapsed_ms": int((time.time() - t0) * 1000),
+            "message": "no face detected",
+        }
 
     # 가장 큰(면적) 얼굴 사용
     def _area(f) -> float:
@@ -185,13 +195,15 @@ def face_search(
             actress_votes[a] += 1
             actress_scores[a] = max(actress_scores.get(a, 0.0), score)
         if len(neighbors_out) < 10:
-            neighbors_out.append({
-                "opus": pl.get("opus"),
-                "face_idx": pl.get("face_idx"),
-                "cluster_id": cid,
-                "score": round(score, 4),
-                "actresses": actrs,
-            })
+            neighbors_out.append(
+                {
+                    "opus": pl.get("opus"),
+                    "face_idx": pl.get("face_idx"),
+                    "cluster_id": cid,
+                    "score": round(score, 4),
+                    "actresses": actrs,
+                }
+            )
 
     # 클러스터 → canonical_name 조회
     actress_from_cluster: Counter[str] = Counter()
@@ -241,6 +253,7 @@ def face_search(
 
 
 # --- 얼굴 클러스터 조회/라벨링 ----------------------------------
+
 
 class ClusterLabelRequest(BaseModel):
     canonical_name: str | None  # null → 라벨 해제
@@ -376,7 +389,13 @@ def exclude_sample(cluster_id: int, poster_opus: str, face_idx: int) -> dict[str
                         (cluster_id,),
                     )
         except Exception as e:
-            log.error("exclude_sample error cluster_id=%s opus=%s: %s", cluster_id, poster_opus, e, exc_info=True)
+            log.error(
+                "exclude_sample error cluster_id=%s opus=%s: %s",
+                cluster_id,
+                poster_opus,
+                e,
+                exc_info=True,
+            )
             raise HTTPException(500, f"제외 실패: {e}") from e
     finally:
         conn.close()
