@@ -34,7 +34,7 @@
 ## 프로젝트 컨텍스트
 
 로컬 비디오 컬렉션(`K:\Crazy\*`)을 자연어로 검색하는 **완전 로컬** 개인용 프로젝트.  
-상세 문서: [doc/overview.md](doc/overview.md) · [doc/architecture.md](doc/architecture.md) · [AI_PLAN.md](AI_PLAN.md)
+상세 문서: [doc/overview.md](../doc/overview.md) · [doc/architecture.md](../doc/architecture.md) · [AI_PLAN.md](../AI_PLAN.md)
 
 ### 컴포넌트 및 포트
 
@@ -69,7 +69,7 @@ bin\reindex.bat sync       # 텍스트 AI 포함 동기화
 bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 ```
 
-자세한 bat 사용법: [bin/README.md](bin/README.md)
+자세한 bat 사용법: [bin/README.md](../bin/README.md)
 
 ### 핵심 함정 (에이전트 주의)
 
