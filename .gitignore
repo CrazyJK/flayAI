@@ -172,6 +172,11 @@ apps/web/.next/
 apps/web/out/
 apps/web/node_modules/
 apps/web/.turbo/
+apps/web/next-env.d.ts
+apps/web/src/app/examples.json
+
+# Vercel
+.vercel
 
 # IDE
 .idea/
