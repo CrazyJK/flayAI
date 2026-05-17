@@ -53,6 +53,39 @@ def _ratio_ok(src: str, tgt: str, lo: float, hi: float) -> bool:
     return lo <= r <= hi
 
 
+# CJK Unified Ideographs (한자) — 일본 한자(漢字)도 포함되지만, 한국어 번역
+# 결과에 한자가 다수 섞이면 중국어/일본어 오염으로 간주.
+_HAN_RE = re.compile(r"[\u4E00-\u9FFF]")
+_HANGUL_RE = re.compile(r"[\uAC00-\uD7A3]")
+
+
+def _looks_corrupted(text: str) -> bool:
+    """번역 결과의 품질 이상 감지.
+
+    트리거 조건:
+    - 같은 토큰(공백 분리)이 5회 이상 연속 반복 → NLLB repetition collapse
+    - 길이가 충분(>=20자)한데 한자 비율이 한글 비율보다 높음 → 중국어 오염
+    """
+    if not text:
+        return False
+    tokens = text.split()
+    run = 1
+    for i in range(1, len(tokens)):
+        if tokens[i] == tokens[i - 1]:
+            run += 1
+            if run >= 5:
+                return True
+        else:
+            run = 1
+    han = len(_HAN_RE.findall(text))
+    kor = len(_HANGUL_RE.findall(text))
+    # 한자가 3자 이상 + 한글보다 많거나 같으면 중국어 오염으로 간주.
+    # (한국어 정상 번역에는 한자가 거의 안 섞이며, 섞이더라도 1~2자 수준)
+    if han >= 3 and han >= kor:
+        return True
+    return False
+
+
 # --- 모델 로딩 ----------------------------------------------------
 
 def _load_model() -> None:
@@ -83,33 +116,63 @@ def _translate_batch(texts: list[str], target: str = "ko") -> list[str]:
     batch = _TOKENIZER(texts, return_tensors="pt", padding=True, truncation=True,
                        max_length=512).to(_DEVICE)
     with torch.no_grad():
-        # greedy(num_beams=1) 로 충분한 품질 + 4배 속도. ratio 실패 시 LLM 폴백 존재.
-        out = _MODEL.generate(**batch, forced_bos_token_id=forced_bos,
-                              max_new_tokens=256, num_beams=1)
+        # greedy + 반복 억제. no_repeat_ngram_size=3 으로 "어 어 어" 같은 토큰
+        # collapse 차단, repetition_penalty 로 logit-level 추가 억제.
+        out = _MODEL.generate(
+            **batch,
+            forced_bos_token_id=forced_bos,
+            max_new_tokens=256,
+            num_beams=1,
+            no_repeat_ngram_size=3,
+            repetition_penalty=1.3,
+        )
     return [_TOKENIZER.decode(t, skip_special_tokens=True) for t in out]
 
 
 # --- LLM 폴백 -----------------------------------------------------
 
 def _llm_translate(text: str, target: str = "ko") -> str | None:
-    """Ollama generate 로 번역 폴백. 실패 시 None."""
+    """Ollama generate 로 번역 폴백. 실패 시 None.
+
+    Qwen 의 중국어 관성 때문에 영어 프롬프트로 "into Korean" 만 지시하면
+    중국어로 응답하는 사례 발견. 프롬프트를 한국어로 강하게 작성하고,
+    응답 후 _looks_corrupted 로 한 번 더 검증.
+    """
     cfg = load_config()
     try:
         url = cfg["server"]["ollama"].rstrip("/") + "/api/generate"
-        prompt = (
-            f"Translate the following Japanese text into {('Korean' if target == 'ko' else target)}. "
-            "Return only the translation, no explanations.\n\n"
-            f"---\n{text}\n---"
-        )
+        if target == "ko":
+            prompt = (
+                "다음 일본어 문장을 한국어(한글)로만 번역하세요. "
+                "중국어 한자(简体/繁体), 영어 문장, 설명 금지. "
+                "고유명사(인명/제목)는 원문 그대로 두어도 됩니다. "
+                "번역문만 한 줄로 출력하세요.\n\n"
+                f"원문: {text}\n번역:"
+            )
+        else:
+            prompt = (
+                f"Translate the following Japanese text into {target}. "
+                "Return only the translation, no explanations.\n\n"
+                f"---\n{text}\n---"
+            )
         r = httpx.post(url, json={
             "model": cfg["models"]["llm"],
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.1},
+            "options": {
+                "temperature": 0.1,
+                "repeat_penalty": 1.2,
+                "num_predict": 512,
+            },
         }, timeout=120.0)
         r.raise_for_status()
         out = (r.json().get("response") or "").strip()
-        return out or None
+        if not out:
+            return None
+        if target == "ko" and _looks_corrupted(out):
+            log.warning("LLM fallback produced corrupted output: %r", out[:80])
+            return None
+        return out
     except Exception as e:
         log.warning("LLM fallback failed: %s", e)
         return None
@@ -166,10 +229,19 @@ def translate_text(
         translations = _translate_batch([c for _, c in todo], target=target)
         for (i, src), tgt in zip(todo, translations):
             tgt = (tgt or "").strip()
-            if tgt and not _ratio_ok(src, tgt, lo, hi):
+            # 폴백 트리거: (a) 길이 비율 이상 (b) 반복/언어 오염
+            needs_fb = bool(tgt) and (
+                not _ratio_ok(src, tgt, lo, hi) or _looks_corrupted(tgt)
+            )
+            if needs_fb:
                 fb = _llm_translate(src, target)
-                if fb and _ratio_ok(src, fb, lo, hi):
+                # LLM 결과도 검증; 통과 못 하면 NLLB 결과 유지 (또는 원문)
+                if fb and _ratio_ok(src, fb, lo, hi) and not _looks_corrupted(fb):
                     tgt = fb
+                elif _looks_corrupted(tgt):
+                    # 둘 다 오염이면 차라리 원문(JP) 을 보존 — 빈 값보다 정보량 많음
+                    log.warning("translate corrupted; keep src for: %r", src[:60])
+                    tgt = src
             out_chunks[i] = tgt
             _cache_put(conn, _hash(model_name, "ja", target, src), src, tgt, "ja", target)
 
