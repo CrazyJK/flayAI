@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +63,15 @@ def save_state(state: dict[str, Any]) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, p)
+        # Windows에서 다른 프로세스가 대상 파일을 열고 있으면 PermissionError 발생 — 재시도
+        for attempt in range(5):
+            try:
+                os.replace(tmp, p)
+                return
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.1 * (attempt + 1))
     except Exception:
         try:
             os.unlink(tmp)

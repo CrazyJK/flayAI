@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import subprocess
 import sys
 import time
 from typing import Any
@@ -103,13 +104,14 @@ async def start_job(job: str, request: Request) -> dict[str, Any]:
     if info and info.get("status") == "running":
         return {"status": "already_running", "job": job, "pid": info.get("pid")}
 
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-m",
-        "packages.indexer.cli",
-        job,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    # sys.executable은 디버거/uv 환경에선 프로젝트 venv가 아닐 수 있으므로 명시적으로 지정
+    venv_python = str(REPO_ROOT / ".venv" / "Scripts" / "python.exe")
+    # Windows 디버거 환경에서 asyncio.create_subprocess_exec가 NotImplementedError를
+    # 발생시킬 수 있으므로 subprocess.Popen 사용
+    proc = subprocess.Popen(
+        [venv_python, "-m", "packages.indexer.cli", job],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         cwd=str(REPO_ROOT),
     )
     _running_jobs[job] = {
@@ -117,19 +119,18 @@ async def start_job(job: str, request: Request) -> dict[str, Any]:
         "pid": proc.pid,
         "started_at": time.time(),
     }
-    asyncio.create_task(_wait_job(job, proc))
+    asyncio.get_event_loop().run_in_executor(None, _wait_job_sync, job, proc)
     return {"status": "started", "job": job, "pid": proc.pid}
 
 
-async def _wait_job(job: str, proc: asyncio.subprocess.Process) -> None:
-    """서브프로세스 완료를 기다리고 결과를 _running_jobs에 기록한다."""
+def _wait_job_sync(job: str, proc: subprocess.Popen) -> None:
+    """서브프로세스 완료를 동기적으로 기다리고 결과를 _running_jobs에 기록한다."""
     try:
-        stdout, stderr = await proc.communicate()
+        stdout, stderr = proc.communicate()
         _running_jobs[job].update(
             {
                 "status": "done" if proc.returncode == 0 else "failed",
                 "returncode": proc.returncode,
-                # 마지막 4000자만 보관해 메모리 낭비 방지
                 "stdout": stdout.decode("utf-8", errors="replace")[-4000:],
                 "stderr": stderr.decode("utf-8", errors="replace")[-4000:],
                 "finished_at": time.time(),

@@ -558,6 +558,8 @@ function IndexerSection({
     setBusy(job);
     try {
       await onStartJob(job);
+    } catch (e) {
+      alert(`작업 시작 실패: ${(e as Error).message}`);
     } finally {
       setBusy(null);
     }
