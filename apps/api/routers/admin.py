@@ -326,10 +326,31 @@ async def _ollama_stats() -> dict[str, Any]:
         return {"available": False, "error": str(e), "models": [], "running_count": 0}
 
 
-def _indexer_stats() -> dict[str, Any]:
-    """state.json + DB 집계로 인덱서 진행 현황을 반환한다.
+def _qdrant_points_counts() -> dict[str, int]:
+    """Qdrant 컬렉션별 points_count를 {컬렉션명: 포인트수} 딕셔너리로 반환."""
+    try:
+        from qdrant_client import QdrantClient
 
-    pending 은 각 단계의 '아직 처리 안 된 예상 수'를 나타낸다.
+        cfg = load_config()
+        qc = QdrantClient(url=cfg["server"]["qdrant"])
+        result: dict[str, int] = {}
+        for name in ("videos", "posters_clip", "poster_ocr", "faces"):
+            try:
+                info = qc.get_collection(name)
+                result[name] = getattr(info, "points_count", 0) or 0
+            except Exception:
+                result[name] = 0
+        return result
+    except Exception:
+        return {}
+
+
+def _indexer_stats() -> dict[str, Any]:
+    """state.json + DB + Qdrant 집계로 인덱서 진행 현황을 반환한다.
+
+    벡터 기반 단계(embed_text, embed_clip, ocr_posters, extract_faces)는
+    Qdrant points_count를 신뢰할 수 있는 완료 수로 사용한다.
+    state.json이나 SQLite 컬럼은 scan/load 재실행으로 초기화될 수 있기 때문.
     """
     try:
         state = load_state()
@@ -342,10 +363,6 @@ def _indexer_stats() -> dict[str, Any]:
             translated: int = conn.execute(
                 "SELECT COUNT(*) FROM videos WHERE title_ko IS NOT NULL AND title_ko != ''"
             ).fetchone()[0]
-            # OCR 완료 수 (posters.ocr_text 가 있는 것)
-            ocr_done: int = conn.execute(
-                "SELECT COUNT(*) FROM posters WHERE ocr_text IS NOT NULL AND ocr_text != ''"
-            ).fetchone()[0]
             # 얼굴 클러스터 수
             face_clusters: int = conn.execute("SELECT COUNT(*) FROM face_clusters").fetchone()[0]
             labeled_clusters: int = conn.execute(
@@ -355,10 +372,12 @@ def _indexer_stats() -> dict[str, Any]:
         finally:
             conn.close()
 
-        stages = state.get("stages", {})
-        embed_done = stages.get("embed_text", {}).get("completed", 0)
-        embed_clip_done = stages.get("embed_clip", {}).get("completed", 0)
-        faces_done = stages.get("extract_faces", {}).get("completed", 0)
+        # Qdrant points_count를 벡터 단계 완료 수의 기준으로 사용
+        qdrant_counts = _qdrant_points_counts()
+        embed_done = qdrant_counts.get("videos", 0)
+        embed_clip_done = qdrant_counts.get("posters_clip", 0)
+        ocr_done = qdrant_counts.get("poster_ocr", 0)
+        faces_done = state.get("stages", {}).get("extract_faces", {}).get("completed", 0)
 
         pending = {
             "translate": max(0, total_videos - translated),
@@ -370,7 +389,7 @@ def _indexer_stats() -> dict[str, Any]:
 
         return {
             "available": True,
-            "state": stages,
+            "state": state.get("stages", {}),
             "totals": {
                 "videos": total_videos,
                 "posters": total_posters,
