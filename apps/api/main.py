@@ -91,9 +91,20 @@ async def _warmup_face_model() -> None:
         log.warning("InsightFace warmup failed (will retry on first request): %s", e)
 
 
+def _quiet_exception_handler(loop, context):
+    """Windows ProactorEventLoop에서 클라이언트 연결 종료 시 발생하는
+    ConnectionResetError 콜백 로그를 억제한다."""
+    exc = context.get("exception")
+    if isinstance(exc, ConnectionResetError):
+        return
+    loop.default_exception_handler(context)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     import asyncio
+
+    asyncio.get_running_loop().set_exception_handler(_quiet_exception_handler)
 
     cfg = load_config()
     host = cfg["server"]["host"]
