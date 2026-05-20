@@ -39,7 +39,7 @@ REM ---- 3. Next.js build (skippable) ------------------------
 if "%SKIP_BUILD%"=="0" (
     echo [3/5] Next.js build... ^(logs\web-build.log^)
     pushd "%ROOT%\apps\web"
-    npm run build > "%ROOT%\logs\web-build.log" 2>&1
+    call npm run build > "%ROOT%\logs\web-build.log" 2>&1
     if errorlevel 1 (
         echo   ERROR: build failed. see logs\web-build.log
         popd
