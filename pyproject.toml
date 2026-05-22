@@ -60,7 +60,7 @@ dependencies = [
 ]
 
 [project.scripts]
-flay-api    = "apps.api.main:start"
+flay-api    = "apps.api.main:main"
 flay-index  = "packages.indexer.cli:app"
 
 [build-system]

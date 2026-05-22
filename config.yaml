@@ -50,7 +50,7 @@ models:
   embedding:      "BAAI/bge-m3"
   clip_model:     "ViT-L-14"
   clip_pretrained: "laion2b_s32b_b82k"
-  ocr_lang:       ["ch", "en", "japan"]   # PaddleOCR 언어 (한글 포함 ch 모델 사용)
+  ocr_lang:       ["ch", "en", "japan"]   # (레거시) PaddleOCR 시절 언어 설정. 현재 OCR 은 RapidOCR(onnxruntime) — 이 값 미사용
   translator:     "facebook/nllb-200-distilled-600M"   # JP(jpn_Jpan) -> KO(kor_Hang)
   face_model:     "buffalo_l"
 
@@ -62,7 +62,7 @@ indexing:
   embed_batch_size: 64
   ocr_batch_size: 8
   clip_batch_size: 32
-  # HDBSCAN 파라미터
+  # 얼굴 클러스터링 파라미터 (구현은 HDBSCAN 이 아닌 mutual-kNN + Union-Find; 키명은 레거시)
   hdbscan_min_cluster_size: 3
   hdbscan_min_samples: 1
   # 얼굴 자동 매핑 신뢰도 임계값

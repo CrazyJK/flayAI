@@ -10,9 +10,11 @@
 | 4 | [chat-and-rag.md](chat-and-rag.md) | "회사 배경 영상" 한 줄이 답으로 돌아오기까지 |
 | 5 | [api-reference.md](api-reference.md) | REST 엔드포인트 목록 |
 | 6 | [dev-guide.md](dev-guide.md) | 로컬 실행, 자주 쓰는 명령 |
+| 7 | [admin.md](admin.md) | 관리자 모니터링 페이지 + 인덱서 작업 트리거 |
 
-상위 문서로 [`AI_PLAN.md`](../AI_PLAN.md) 가 있습니다. 거기는 전체 설계 명세이고,
+상위 문서로 [`AI_PLAN.md`](AI_PLAN.md) 가 있습니다. 거기는 전체 설계 명세이고,
 이 폴더는 **이미 구현된 것을 기준으로 한 동작 설명서**입니다.
+검토로 드러난 문서·구현 불일치와 남은 작업은 [`TODO.md`](TODO.md) 에 정리되어 있습니다.
 
 ## 한 줄 요약
 
@@ -21,11 +23,11 @@
 
 ## 기술 스택 (한눈에)
 
-- **백엔드**: Python 3.12 + FastAPI (포트 8000)
+- **백엔드**: Python 3.11 + FastAPI (포트 8000)
 - **프론트**: Next.js 16 + React 19 + Tailwind 4 (포트 3000)
 - **벡터 DB**: Qdrant (Docker, 포트 6333) — 4 컬렉션
 - **관계 DB**: SQLite (`data/sqlite/flay.db`) — 메타데이터 + FTS5
-- **LLM**: Ollama 로 띄운 Qwen2.5 14B — 한국어 + 도구 호출
+- **LLM**: Ollama 로 띄운 Qwen2.5 7B (`huihui_ai/qwen2.5-abliterate:7b`) — 한국어 + 도구 호출
 - **임베딩**: BGE-M3 (1024d, 텍스트), OpenCLIP ViT-L/14 (768d, 이미지)
 - **얼굴**: InsightFace buffalo_l (512d)
 - **OCR**: RapidOCR (ONNX Runtime)

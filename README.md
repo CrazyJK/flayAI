@@ -8,7 +8,7 @@
 
 | 영역      | 기술                                                  |
 |-----------|-------------------------------------------------------|
-| 백엔드    | Python 3.12 + FastAPI (`:8000`)                       |
+| 백엔드    | Python 3.11 + FastAPI (`:8000`)                       |
 | 프론트    | Next.js 16 + React 19 + Tailwind 4 (`:3000`)          |
 | 벡터 DB   | Qdrant (Docker, `:6333`) — 4 컬렉션                    |
 | 관계 DB   | SQLite (`data/sqlite/flay.db`) + FTS5                 |
@@ -27,7 +27,7 @@ config.yaml  데이터 경로/모델/포트 설정
 data/        SQLite + Qdrant 영속 데이터
 docs/         상세 가이드 (overview / architecture / ...)
 logs/        실행 로그
-AI_PLAN.md   전체 설계 명세 (마일스톤 M1~M9)
+docs/AI_PLAN.md  전체 설계 명세 (마일스톤 M1~M9)
 ```
 
 ## 빠른 시작
@@ -35,7 +35,7 @@ AI_PLAN.md   전체 설계 명세 (마일스톤 M1~M9)
 ### 1. 사전 요구
 
 - Windows + Docker Desktop
-- Python 3.12 (`.venv` 가 `uv` 로 구성됨)
+- Python 3.11 (`.venv` 가 `uv` 로 구성됨)
 - Node.js (`apps/web` 의 `npm install` 용)
 - [Ollama](https://ollama.com/) 설치 후 모델 pull:
   ```cmd
@@ -76,7 +76,7 @@ bin\reindex.bat clean   :: 고아 dry-run  (apply 인자로 실제 삭제)
   - [overview](docs/overview.md) · [architecture](docs/architecture.md)
   - [indexing-pipeline](docs/indexing-pipeline.md) · [chat-and-rag](docs/chat-and-rag.md)
   - [api-reference](docs/api-reference.md) · [dev-guide](docs/dev-guide.md)
-- 전체 설계/마일스톤: [`AI_PLAN.md`](AI_PLAN.md)
+- 전체 설계/마일스톤: [`docs/AI_PLAN.md`](docs/AI_PLAN.md)
 
 ## 라이선스
 

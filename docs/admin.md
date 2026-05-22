@@ -95,7 +95,7 @@ Qdrant 컬렉션별 현황을 카드 형태로 표시합니다.
 | 포스터 스캔     | `scan`          | 포스터 디렉토리 탐색 + instance/archive 분류 |
 | 히스토리 CSV    | `history`       | 재생 히스토리 CSV → SQLite                   |
 | FTS 재구축      | `fts`           | videos_fts5 전문 검색 인덱스 재생성          |
-| 얼굴 클러스터링 | `cluster-faces` | HDBSCAN으로 얼굴 벡터 배우 단위 그룹화       |
+| 얼굴 클러스터링 | `cluster-faces` | mutual-kNN + Union-Find 로 얼굴 벡터 배우 단위 그룹화       |
 | 페이로드 동기화 | `sync-payload`  | Qdrant payload를 SQLite 최신 데이터로 갱신   |
 
 ---

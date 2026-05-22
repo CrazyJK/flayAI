@@ -97,7 +97,7 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 - **번역 모델**: `facebook/nllb-200-distilled-600M`, `src_lang=jpn_Jpan`, `forced_bos_token_id` 로 `kor_Hang` 지정
 - **Qdrant 포인트 ID**: opus 의 SHA1 앞 8 바이트(uint63) — 4개 컬렉션 공통. cross-reference 용
 - **스튜디오 alias**: DB 에서 `"S1"` 같은 공식명이 아닌 `"sone"`, `"s1no1style"` 등으로 저장될 수 있음 → alias 없는 검색 필터는 0건 반환
-- **CORS**: API 는 localhost 전용, 외부 네트워크 노출 금지
+- **CORS**: `config.yaml.server.cors_origins` 화이트리스트만 허용 (ai.kamoru.jk / localhost, http·https). 공용 인터넷 노출 금지
 
 ### Python 린트 규칙 (ruff)
 
