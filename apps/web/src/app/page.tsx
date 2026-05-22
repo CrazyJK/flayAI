@@ -188,7 +188,7 @@ function AssistantBlock({ msg }: { msg: Message }) {
       {allHits.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-xs text-neutral-500 font-mono text-center">↳ {allHits.length} items</div>
-          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
+          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(440px,1fr))]">
             {allHits.map((h) => (
               <VideoCard key={h.opus} hit={h} />
             ))}
