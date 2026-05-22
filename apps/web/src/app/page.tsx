@@ -346,8 +346,8 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <main className="flex-1 flex flex-col mx-auto w-full max-w-4xl px-4 xl:max-w-none xl:px-6">
-      <header className="py-4 border-b border-neutral-800 flex items-baseline gap-2">
+    <main className="flex-1 flex flex-col w-full min-h-0">
+      <header className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-4 border-b border-neutral-800 flex items-baseline gap-2">
         <h1 className="text-lg font-semibold">flayAI</h1>
         <span className="text-xs text-neutral-500 font-mono">{API_BASE}</span>
         <nav className="ml-auto flex items-center gap-3 text-xs">
@@ -369,7 +369,7 @@ export default function ChatPage() {
         </nav>
       </header>
 
-      <div className="flex-1 overflow-y-auto py-4 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto w-full px-4 xl:px-6 py-4 space-y-6">
         {messages.length === 0 && (
           <div className="text-sm text-neutral-400 space-y-3">
             <p>자연어로 비디오 컬렉션을 검색하세요. 예시:</p>
@@ -406,7 +406,7 @@ export default function ChatPage() {
       </div>
 
       <form
-        className="py-3 border-t border-neutral-800 flex gap-2"
+        className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-3 border-t border-neutral-800 flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           const q = input;
