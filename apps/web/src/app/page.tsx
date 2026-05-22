@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import examples from "./examples.json";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
+const LIMIT_OPTIONS = [5, 10, 20, 30, 50];
+const LIMIT_STORAGE_KEY = "flayai-chat-limit";
 
 type VideoHit = {
   opus: string;
@@ -225,6 +227,12 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // limit 선택값을 localStorage 에서 복원 (마운트 후 — SSR 하이드레이션 불일치 방지)
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem(LIMIT_STORAGE_KEY));
+    if (LIMIT_OPTIONS.includes(saved)) setLimit(saved);
+  }, []);
+
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? patch(m) : m)));
   }, []);
@@ -424,11 +432,15 @@ export default function ChatPage() {
         <select
           className="px-2 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-sm text-neutral-300 outline-none focus:border-blue-500 shrink-0"
           value={limit}
-          onChange={(e) => setLimit(Number(e.target.value))}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            setLimit(n);
+            window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+          }}
           disabled={busy}
           title="검색 결과 개수"
         >
-          {[5, 10, 20, 30, 50].map((n) => (
+          {LIMIT_OPTIONS.map((n) => (
             <option key={n} value={n}>
               {n}개
             </option>
