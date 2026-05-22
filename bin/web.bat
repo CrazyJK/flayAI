@@ -1,12 +1,12 @@
 @echo off
 REM ============================================================
-REM  flayAI - Web 프론트엔드 (Next.js dev)
-REM    포트     : 127.0.0.1:3000
-REM    위치     : apps/web
-REM    의존성   : API(8000)
-REM    사전요건 : apps/web 에서 `npm install` 1회 완료
+REM  flayAI - Web frontend (Next.js dev)
+REM    Port     : 127.0.0.1:3000
+REM    Location : apps/web
+REM    Depends  : API(8000)
+REM    Prereq   : run `npm install` once in apps/web
 REM
-REM  사용법: web.bat <start|stop|restart>
+REM  Usage: web.bat <start|stop|restart>
 REM ============================================================
 setlocal
 set "ACTION=%~1"

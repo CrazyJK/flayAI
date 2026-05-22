@@ -1,13 +1,13 @@
 @echo off
 REM ============================================================
-REM  flayAI - 전체 프로세스 일괄 제어
-REM    구성     : qdrant(6333) + ollama(11434) + api(8000) + web(3000)
-REM    start    : qdrant -> ollama -> api -> web (의존성 순)
-REM    stop     : web -> api -> ollama -> qdrant (역순)
+REM  flayAI - control all processes at once
+REM    Components: qdrant(6333) + ollama(11434) + api(8000) + web(3000)
+REM    start    : qdrant -> ollama -> api -> web (dependency order)
+REM    stop     : web -> api -> ollama -> qdrant (reverse)
 REM    restart  : stop -> 3s -> start
-REM    status   : 4개 포트 LISTEN 상태 + qdrant 컨테이너 상태
+REM    status   : 4 port LISTEN states + qdrant container status
 REM
-REM  사용법: all.bat <start|stop|restart|status>
+REM  Usage: all.bat <start|stop|restart|status>
 REM ============================================================
 setlocal enabledelayedexpansion
 set "ACTION=%~1"
@@ -21,16 +21,30 @@ echo Usage: all.bat ^<start^|stop^|restart^|status^>
 exit /b 1
 
 :start
-call "%BIN%qdrant.bat" start
-timeout /t 3 /nobreak >nul
-call "%BIN%ollama.bat" start
-timeout /t 2 /nobreak >nul
-call "%BIN%api.bat" start
-timeout /t 3 /nobreak >nul
-call "%BIN%web.bat" start
+call :start_one  6333 qdrant "%BIN%qdrant.bat"
+call :start_one 11434 ollama "%BIN%ollama.bat"
+call :start_one  8000 api    "%BIN%api.bat"
+call :start_one  3000 web    "%BIN%web.bat"
 echo.
 echo [all start] done. open https://ai.kamoru.jk:3000
 goto :eof
+
+:start_one
+REM  %1=port  %2=name  %3=service bat path
+REM  skip if the port is already LISTENING; otherwise start and wait
+set "PORT=%~1"
+set "NAME=%~2"
+set "SVC=%~3"
+set "PID="
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":%PORT% " ^| findstr "LISTENING"') do set "PID=%%P"
+if defined PID (
+    echo   [skip ] %NAME% already listening on port %PORT% ^(pid !PID!^)
+) else (
+    echo   [start] %NAME% ...
+    call "%SVC%" start
+    timeout /t 3 /nobreak >nul
+)
+exit /b 0
 
 :stop
 call "%BIN%web.bat" stop

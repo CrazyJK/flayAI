@@ -1,12 +1,12 @@
 @echo off
 REM ============================================================
-REM  flayAI - API 서버 (FastAPI / uvicorn)
-REM    포트     : 127.0.0.1:8000
-REM    진입점   : apps.api.main:app
-REM    의존성   : Qdrant(6333), Ollama(11434)
-REM    로그     : 새 콘솔창 stdout + logs/flayai.log
+REM  flayAI - API server (FastAPI / uvicorn)
+REM    Port      : 127.0.0.1:8000
+REM    Entrypoint: apps.api.main:app
+REM    Depends   : Qdrant(6333), Ollama(11434)
+REM    Logs      : new console stdout + logs/flayai.log
 REM
-REM  사용법: api.bat <start|stop|restart>
+REM  Usage: api.bat <start|stop|restart>
 REM ============================================================
 setlocal
 set "ACTION=%~1"

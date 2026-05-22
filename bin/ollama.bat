@@ -1,12 +1,12 @@
 @echo off
 REM ============================================================
-REM  flayAI - Ollama 로컬 LLM 서버
-REM    포트     : 127.0.0.1:11434
-REM    모델     : huihui_ai/qwen2.5-abliterate:7b (config.yaml)
-REM    비고     : Windows 설치판은 트레이 서비스로 상주.
-REM               stop 후 트레이가 재기동하면 트레이에서 Quit 필요.
+REM  flayAI - Ollama local LLM server
+REM    Port      : 127.0.0.1:11434
+REM    Model     : huihui_ai/qwen2.5-abliterate:7b (config.yaml)
+REM    Note      : Windows installer runs as a tray service.
+REM                If the tray restarts it after stop, Quit from the tray.
 REM
-REM  사용법: ollama.bat <start|stop|restart>
+REM  Usage: ollama.bat <start|stop|restart>
 REM ============================================================
 setlocal
 set "ACTION=%~1"
