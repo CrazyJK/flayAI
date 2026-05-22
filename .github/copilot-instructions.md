@@ -46,6 +46,14 @@
 
 프로세스 재시작이 필요한지 알려주고, 재시작 해야 하는 bin/*.bat 파일과 명령어를 제시한다.
 
+### Git 워크플로
+
+개인 프로젝트이므로 별도 피처 브랜치·PR 절차를 두지 않는다.
+
+- 작업은 `main` 브랜치에서 직접 하고, 변경이 마무리되면 곧바로 `main` 에 커밋한다 (피처 브랜치/PR 생성 금지).
+- 커밋 메시지는 Conventional Commits 형식(`feat:`/`fix:`/`docs:`/`chore:` …) 을 따른다.
+- 커밋 후 `origin/main` 으로 push 한다. 서버 배포(`pull`)는 사용자가 직접 수행한다.
+
 ## 프로젝트 컨텍스트
 
 로컬 비디오 컬렉션(`K:\Crazy\*`)을 자연어로 검색하는 **완전 로컬** 개인용 프로젝트.  
@@ -91,7 +99,8 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 
 - **Python 실행**: Python **3.11** (`.python-version`, `pyproject.toml requires-python>=3.11`). `.\.venv\Scripts\python.exe` 사용 (`python` 이나 `uv run` 이 PATH에 없을 수 있음)
 - **호스팅/TLS**: API·웹은 로컬 도메인 `ai.kamoru.jk`(hosts 파일 매핑) + 자체 서명 인증서(`.cert/kamoru.jk.{key,pem}`)로 **HTTPS** 서빙. `config.yaml.server.host`, CORS 화이트리스트, `main.py` 호스트 검증 모두 `127.0.0.1`/`localhost`/`::1`/`ai.kamoru.jk` 만 허용 — **공용 인터넷 노출 금지**. (`.cert/` 는 `.gitignore`)
-- **OCR 의존성**: 런타임은 `rapidocr-onnxruntime`(`packages/indexer/ocr.py`) 사용. 단 `pyproject.toml` 에는 미선언이고 미사용 `paddleocr`/`paddlepaddle-gpu` 가 남아있음 → 새 환경 구성 시 주의 ([docs/TODO.md](../docs/TODO.md))
+- **OCR 의존성**: 런타임은 `rapidocr-onnxruntime`(`packages/indexer/ocr.py`) 사용 — `pyproject.toml`/`uv.lock` 에 선언됨. (구 `paddleocr`/`paddlepaddle-gpu` 는 제거됨)
+- **torch 는 CUDA 빌드(수동 설치)**: `.venv` 의 `torch`/`torchvision` 은 `+cuXXX`(예: `2.6.0+cu124`) GPU 빌드를 PyTorch 인덱스에서 **수동 설치**한 것. `pyproject.toml`/`uv.lock` 에는 CPU 빌드만 잡혀 있어 **`uv sync` 를 돌리면 GPU torch 가 CPU 로 교체되고 잔존 DLL 과 충돌해 import 자체가 깨진다**. 의존성을 바꿔도 `uv sync` 는 돌리지 말 것 — torch 는 uv 바깥에서 수동 관리. 복구: `pip install torch==<ver>+cu124 torchvision==<ver>+cu124 --index-url https://download.pytorch.org/whl/cu124`
 - **Qdrant v1.18+**: `collection.search()` 삭제됨 → `client.query_points(collection_name, query=vec, limit=N, with_payload=True)` 사용, 반환값은 `result.points`
 - **FTS5 쿼리**: 토큰을 `"phrase"` 로 감싸고 `OR` 로 결합 (예: `"alice" OR "앨리스"`). 그냥 키워드 쓰면 CJK/짧은 토큰에서 `syntax error near "?"` 발생
 - **번역 모델**: `facebook/nllb-200-distilled-600M`, `src_lang=jpn_Jpan`, `forced_bos_token_id` 로 `kor_Hang` 지정

@@ -33,7 +33,7 @@
 - **A3** [`pyproject.toml`](../pyproject.toml): 미사용 `llama-index-*`(4종)·`faiss-cpu`·`hdbscan` 제거. [`config.yaml`](../config.yaml) `data.faiss_poster`/`faiss_faces` 경로 제거(코드 참조 없음 확인).
 - **lock 재생성**: `uv lock` → 146 packages resolved. 위 패키지 + 고아 transitive(aiohttp·sqlalchemy·nltk·tiktoken 등) 제거, `rapidocr-onnxruntime 1.4.4`·`onnxruntime 1.26.0` 추가. `uv lock --check` 통과.
 
-> ⚠️ **venv 실설치(`uv sync`)는 미수행**: `.venv` 에는 아직 구 패키지가 남아 있다. 실제 정리는 환경에서 `uv sync` 실행(실행 중 Python/torch 프로세스 종료 후 — DLL 잠금 주의).
+> ⚠️ **`uv sync` 금지 (torch 깨짐)**: `.venv` 정리 목적으로 `uv sync` 를 돌렸더니, lock 에 CPU torch 만 잡혀 있어 수동 설치된 GPU 빌드(`torch 2.6.0+cu124`)가 CPU(`2.12.0`)로 교체되고 잔존 CUDA DLL 과 충돌해 torch import 자체가 깨졌다. **앞으로 의존성을 바꿔도 `uv sync` 는 돌리지 말 것** — torch 는 uv 바깥에서 PyTorch cu124 인덱스로 수동 관리. (자세한 함정: [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) 핵심 함정)
 
 ---
 
