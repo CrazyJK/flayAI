@@ -63,12 +63,7 @@ echo --- history (history.csv)
 %CLI% history
 if errorlevel 1 goto :fail
 
-echo.
-echo --- fts (videos_fts rebuild)
-%CLI% fts
-if errorlevel 1 goto :fail
-
-if /i "%MODE%"=="quick" goto :sync_payload
+if /i "%MODE%"=="quick" goto :finalize
 
 echo.
 echo --- translate (JP/EN -^> KO)
@@ -80,7 +75,7 @@ echo --- embed (bge-m3 -^> Qdrant videos)
 %CLI% embed
 if errorlevel 1 goto :fail
 
-if /i "%MODE%"=="sync" goto :sync_payload
+if /i "%MODE%"=="sync" goto :finalize
 
 echo.
 echo --- embed-clip (OpenCLIP -^> Qdrant posters_clip)
@@ -102,7 +97,12 @@ echo --- ocr-posters (RapidOCR -^> Qdrant poster_ocr)
 %CLI% ocr-posters
 if errorlevel 1 goto :fail
 
-:sync_payload
+:finalize
+echo.
+echo --- fts (videos_fts rebuild - reflects latest title_ko/desc_ko)
+%CLI% fts
+if errorlevel 1 goto :fail
+
 echo.
 echo --- sync-payload (kind/playable Qdrant sync)
 %CLI% sync-payload
