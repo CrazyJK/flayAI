@@ -572,6 +572,15 @@ function IndexerSection({
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
 
   async function handleStart(job: string) {
+    // 파괴적 작업은 실행 전 한 번 더 확인
+    if (job === "rebuild") {
+      const ok = window.confirm(
+        "전체 재구축: videos 를 처음부터 재적재합니다.\n" +
+          "번역(title_ko/desc_ko) 등 파생 데이터가 모두 초기화되어 다시 번역/임베딩해야 합니다.\n\n" +
+          "계속하시겠습니까?",
+      );
+      if (!ok) return;
+    }
     setBusy(job);
     try {
       await onStartJob(job);
@@ -631,6 +640,44 @@ function IndexerSection({
             <div className="text-neutral-400 text-xs mt-0.5">{item.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* 일괄 작업 — 한 번 클릭으로 메타데이터 파이프라인 실행 */}
+      <div className="mb-5">
+        <p className="text-sm font-medium text-neutral-400 mb-2">일괄 작업</p>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 px-1 py-0.5">
+            <JobButton
+              job="refresh"
+              label="증분 갱신"
+              info={jobs["refresh"]}
+              busy={busy}
+              onStart={(j) => void handleStart(j)}
+              onToggleLog={toggleLog}
+              expanded={expandedJob === "refresh"}
+            />
+            <span className="text-xs text-neutral-400 flex-1">
+              신규 영상 · instance↔archive 이동 · JSON/CSV 변경을 한 번에 반영 (load 증분 → scan
+              → history → fts → sync-payload) · 번역 등 파생 데이터 보존
+            </span>
+          </div>
+          {expandedJob === "refresh" && jobs["refresh"] && <LogBox info={jobs["refresh"]} />}
+          <div className="flex items-center gap-2 px-1 py-0.5">
+            <JobButton
+              job="rebuild"
+              label="⚠ 전체 재구축"
+              info={jobs["rebuild"]}
+              busy={busy}
+              onStart={(j) => void handleStart(j)}
+              onToggleLog={toggleLog}
+              expanded={expandedJob === "rebuild"}
+            />
+            <span className="text-xs text-neutral-400 flex-1">
+              videos 를 처음부터 재적재 — 번역(title_ko) 등 파생 데이터 초기화. 클릭 시 확인창
+            </span>
+          </div>
+          {expandedJob === "rebuild" && jobs["rebuild"] && <LogBox info={jobs["rebuild"]} />}
+        </div>
       </div>
 
       {/* 파이프라인 단계별 진행률 + 배치 버튼 통합 */}

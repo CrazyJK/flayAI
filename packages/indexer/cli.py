@@ -1,11 +1,13 @@
 """flay-index CLI (typer).
 
 서브커맨드:
-  load          -- K:/Crazy/Info/*.json → SQLite
+  load          -- K:/Crazy/Info/*.json → SQLite (기본 증분 UPSERT; --rebuild 면 전체 재적재)
   scan          -- 포스터 디렉토리 스캔 + classify (instance/archive)
   history       -- history.csv → SQLite
   fts           -- videos_fts 재구축
   all           -- load → scan → history → fts 순차 실행
+  refresh       -- 증분 갱신: load → scan → history → fts → sync-payload (파생 데이터 보존)
+  rebuild       -- 전체 재구축: load --rebuild → scan → history → fts → sync-payload (파생 데이터 초기화)
   translate     -- JP→KO 번역 (NLLB-200)
   embed         -- bge-m3 → Qdrant videos
   embed-clip    -- OpenCLIP ViT-L/14 → Qdrant posters_clip
@@ -59,11 +61,16 @@ def _print(title: str, payload: dict | object) -> None:
 
 
 @app.command()
-def load(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
-    """JSON ETL."""
+def load(
+    rebuild: bool = typer.Option(
+        False, "--rebuild", help="전체 재적재(번역 등 파생 데이터 초기화). 기본은 증분 UPSERT"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """JSON ETL. 기본은 증분(UPSERT)으로 title_ko/desc_ko 보존. --rebuild 면 전체 재적재."""
     _setup_log(verbose)
     t = time.time()
-    stats = load_mod.run()
+    stats = load_mod.run(rebuild=rebuild)
     stats["elapsed_sec"] = round(time.time() - t, 2)
     _print("load_jsons", stats)
 
@@ -105,12 +112,42 @@ def fts(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
 
 @app.command()
 def all(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
-    """load → scan → history → fts 순차 실행."""
+    """load(증분) → scan → history → fts 순차 실행."""
     _setup_log(verbose)
-    load(verbose)
+    load(rebuild=False, verbose=verbose)
     scan(verbose)
     history(verbose)
     fts(verbose)
+
+
+@app.command()
+def refresh(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
+    """증분 갱신: load(증분) → scan → history → fts → sync-payload.
+
+    신규 영상 추가 · instance↔archive 이동 · JSON/CSV 수정을 한 번에 반영한다.
+    번역(title_ko/desc_ko) 등 파생 데이터는 보존된다.
+    """
+    _setup_log(verbose)
+    load(rebuild=False, verbose=verbose)
+    scan(verbose)
+    history(verbose)
+    fts(verbose)
+    sync_payload(verbose)
+
+
+@app.command()
+def rebuild(verbose: bool = typer.Option(False, "--verbose", "-v")) -> None:
+    """전체 재구축: load(--rebuild) → scan → history → fts → sync-payload.
+
+    videos 를 처음부터 재적재하므로 title_ko/desc_ko 등 파생 데이터가 초기화된다.
+    번역·임베딩 등은 이후 다시 실행해야 한다.
+    """
+    _setup_log(verbose)
+    load(rebuild=True, verbose=verbose)
+    scan(verbose)
+    history(verbose)
+    fts(verbose)
+    sync_payload(verbose)
 
 
 @app.command()

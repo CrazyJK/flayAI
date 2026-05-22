@@ -32,6 +32,8 @@ ALLOWED_JOBS: set[str] = {
     "history",
     "fts",
     "all",
+    "refresh",
+    "rebuild",
     "translate",
     "embed",
     "embed-clip",

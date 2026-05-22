@@ -111,16 +111,25 @@ def load_actresses(conn) -> tuple[int, int]:
     return len(actresses), len(aliases)
 
 
-def load_videos(conn) -> tuple[int, int, int]:
-    """videos + tags(보강) + video_tags + likes.
-    반환 = (videos, video_tags, likes)."""
+def load_videos(conn, rebuild: bool = False) -> tuple[int, int, int]:
+    """videos + tags(보강) + video_tags + likes. 반환 = (videos, video_tags, likes).
+
+    rebuild=False (기본, 증분): videos 를 opus UPSERT 로 갱신. load 소유 컬럼
+      (title_jp/desc_jp/comment/play/rank/last_*/like_count)만 덮어쓰고, 번역 결과
+      (title_ko/desc_ko)와 scan 소유 컬럼(studio/release_*/has_poster/kind)은 보존한다.
+      JSON 에서 사라진 opus 는 남겨두며 cleanup 이 정리한다.
+    rebuild=True (전체 재구축): videos 를 비우고 처음부터 재적재 — title_ko/desc_ko 등
+      파생 데이터가 모두 초기화되므로 번역/임베딩을 다시 돌려야 한다.
+    """
     rows = _read_json(_info_path("video.json"))
 
-    # 기존 데이터 wipe (video_actresses 는 포스터 스캔 단계가 채우므로 여기서 비움)
+    # likes / video_tags 는 JSON 에서 완전 파생되므로 항상 비우고 재적재(손실 없음).
     conn.execute("DELETE FROM likes")
     conn.execute("DELETE FROM video_tags")
-    conn.execute("DELETE FROM video_actresses")
-    conn.execute("DELETE FROM videos")
+    if rebuild:
+        # video_actresses 는 scan 이 다시 채우고, videos 는 처음부터 재적재.
+        conn.execute("DELETE FROM video_actresses")
+        conn.execute("DELETE FROM videos")
 
     video_rows: list[tuple] = []
     tag_upsert: dict[int, tuple] = {}
@@ -158,13 +167,33 @@ def load_videos(conn) -> tuple[int, int, int]:
         for ts in likes:
             like_rows.append((opus, int(ts)))
 
-    conn.executemany(
-        """INSERT INTO videos(
-            opus, title_jp, desc_jp, comment, play, rank,
-            last_play, last_access, last_modified, like_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        video_rows,
-    )
+    if rebuild:
+        conn.executemany(
+            """INSERT INTO videos(
+                opus, title_jp, desc_jp, comment, play, rank,
+                last_play, last_access, last_modified, like_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            video_rows,
+        )
+    else:
+        # 증분 UPSERT — title_ko/desc_ko 및 scan 소유 컬럼은 건드리지 않는다.
+        conn.executemany(
+            """INSERT INTO videos(
+                opus, title_jp, desc_jp, comment, play, rank,
+                last_play, last_access, last_modified, like_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(opus) DO UPDATE SET
+                title_jp=excluded.title_jp,
+                desc_jp=excluded.desc_jp,
+                comment=excluded.comment,
+                play=excluded.play,
+                rank=excluded.rank,
+                last_play=excluded.last_play,
+                last_access=excluded.last_access,
+                last_modified=excluded.last_modified,
+                like_count=excluded.like_count""",
+            video_rows,
+        )
     if tag_upsert:
         conn.executemany(
             "INSERT OR REPLACE INTO tags(id, name, group_id, description) VALUES (?, ?, ?, ?)",
@@ -186,8 +215,8 @@ def load_videos(conn) -> tuple[int, int, int]:
 # --- 오케스트레이션 ---------------------------------------------------
 
 
-def run() -> dict[str, int]:
-    """전체 ETL. 반환 = 통계 dict."""
+def run(rebuild: bool = False) -> dict[str, int]:
+    """전체 ETL. rebuild=True 면 videos 를 처음부터 재적재(번역 등 파생 데이터 초기화). 반환 = 통계 dict."""
     conn = connect()
     try:
         init_schema(conn)
@@ -197,7 +226,7 @@ def run() -> dict[str, int]:
             n_groups = load_tag_groups(conn)
             n_tags = load_tags(conn)
             n_actr, n_alias = load_actresses(conn)
-            n_vid, n_vt, n_likes = load_videos(conn)
+            n_vid, n_vt, n_likes = load_videos(conn, rebuild=rebuild)
 
         stats = {
             "studios": n_studios,
