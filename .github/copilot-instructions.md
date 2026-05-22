@@ -52,7 +52,7 @@
 
 - 작업은 `main` 브랜치에서 직접 하고, 변경이 마무리되면 곧바로 `main` 에 커밋한다 (피처 브랜치/PR 생성 금지).
 - 커밋 메시지는 Conventional Commits 형식(`feat:`/`fix:`/`docs:`/`chore:` …) 을 따른다.
-- 커밋 후 `origin/main` 으로 push 한다. 서버 배포(`pull`)는 사용자가 직접 수행한다.
+- **`git push` 는 하지 않는다 — 원격 push 와 서버 배포(`pull`)는 사용자가 직접 수행한다.** 에이전트는 로컬 `main` 커밋까지만.
 
 ## 프로젝트 컨텍스트
 
