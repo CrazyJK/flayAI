@@ -40,8 +40,6 @@ data:
 
   # 로컬 데이터 경로
   db_path:         "data/sqlite/flay.db"
-  faiss_poster:    "data/faiss/posters.index"
-  faiss_faces:     "data/faiss/actor_faces.index"
   state_path:      "data/state.json"
 
 models:

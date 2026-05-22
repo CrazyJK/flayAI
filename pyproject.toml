@@ -13,12 +13,6 @@ dependencies = [
     "structlog>=24.1",
     "python-multipart>=0.0.9",
 
-    # LlamaIndex / RAG
-    "llama-index-core>=0.10",
-    "llama-index-llms-ollama>=0.2",
-    "llama-index-embeddings-huggingface>=0.2",
-    "llama-index-vector-stores-qdrant>=0.2",
-
     # Vector DB
     "qdrant-client>=1.9",
 
@@ -31,14 +25,11 @@ dependencies = [
     "onnxruntime-gpu>=1.18",
 
     # Image / OCR
-    "paddlepaddle-gpu>=2.6; sys_platform == 'win32'",
-    "paddleocr>=2.7",
+    "rapidocr-onnxruntime>=1.4",
     "Pillow>=10.3",
 
     # Clustering
-    "hdbscan>=0.8",
     "scikit-learn>=1.5",
-    "faiss-cpu>=1.8",  # 20K vectors fit in RAM; GPU wheel unavailable on Windows + py311
 
     # Translation
     "sentencepiece>=0.2",
