@@ -2,7 +2,7 @@
 
 AI_PLAN.md §5.6, §6.1 [2].
 - config.data.poster_roots 재귀 탐색
-- 파일명 파싱 → posters / videos.studio,release_*,has_poster,kind,title_ko(비어있을 때만) / video_actresses
+- 파일명 파싱 → posters / videos.studio,release_*,has_poster,kind,title_ko(파일명 제목 우선) / video_actresses
 - archive_root 하위 = kind=archive
   외부 + same-stem 영상파일 존재 = kind=instance, video_path=설정
   외부 + 영상 없음                 = kind=instance, video_path=NULL
@@ -203,8 +203,10 @@ def run() -> ScanStats:
             stats.actress_links = len(va_rows)
 
         # videos 갱신: video.json 에 없는 opus 는 INSERT 로 stub 생성.
-        # title_ko 는 비어 있을 때만 파일명 제목으로 백필 — 기존 번역은 보존한다
-        # (COALESCE(NULLIF(기존,''), 파일명제목)).
+        # 포스터가 영상의 primary 원천이고 파일명에 한글 제목이 항상 있으므로,
+        # title_ko 는 파일명 제목을 우선 적용한다(포스터 rename 시 자동 반영).
+        # 파일명 제목이 비어 있을 때만 기존값 유지: COALESCE(NULLIF(파일명,''), 기존).
+        # 포스터 없는 영상은 video_updates 에 없어 scan 이 건드리지 않음 → translate(NLLB) 가 채움.
         for opus, (studio, rdate, year, month, kind, title) in video_updates.items():
             conn.execute(
                 """INSERT INTO videos(opus, studio, release_date, release_year, release_month,
@@ -217,7 +219,7 @@ def run() -> ScanStats:
                      release_month=excluded.release_month,
                      has_poster=1,
                      kind=excluded.kind,
-                     title_ko=COALESCE(NULLIF(videos.title_ko, ''), excluded.title_ko)""",
+                     title_ko=COALESCE(NULLIF(excluded.title_ko, ''), videos.title_ko)""",
                 (opus, studio, rdate, year, month, kind, title),
             )
 
