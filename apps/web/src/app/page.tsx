@@ -54,10 +54,10 @@ function KindBadge({ kind }: { kind?: string | null }) {
   return (
     <span
       className={
-        "px-1.5 py-0.5 text-[10px] rounded font-mono " +
+        "px-1.5 py-0.5 text-xs rounded font-mono " +
         (isInstance
-          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-          : "bg-neutral-500/20 text-neutral-300 border border-neutral-500/40")
+          ? "bg-emerald-500/30 text-emerald-200 border border-emerald-500/50"
+          : "bg-neutral-500/30 text-neutral-200 border border-neutral-500/50")
       }
     >
       {isInstance ? "INSTANCE" : "ARCHIVE"}
@@ -91,22 +91,22 @@ function VideoCard({ hit }: { hit: VideoHit }) {
       />
 
       {/* 상단 오버레이: opus, 배지, 스코어 */}
-      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/75 to-transparent px-2 py-1.5">
+      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/45 to-transparent px-2 py-2 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-mono text-xs text-amber-300">{hit.opus}</span>
+          <span className="font-mono text-sm text-amber-300">{hit.opus}</span>
           <KindBadge kind={hit.kind} />
           {hit.playable && (
-            <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/30 text-blue-200 border border-blue-500/50">
               ▶ PLAYABLE
             </span>
           )}
           {typeof hit.rank === "number" && hit.rank > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] rounded bg-yellow-500/20 text-yellow-200">
+            <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-500/30 text-yellow-100">
               {"⭐".repeat(hit.rank)}
             </span>
           )}
           {typeof hit.score === "number" && (
-            <span className="ml-auto font-mono text-[10px] text-neutral-300">
+            <span className="ml-auto font-mono text-xs text-neutral-200">
               {hit.score.toFixed(3)}
             </span>
           )}
@@ -114,9 +114,9 @@ function VideoCard({ hit }: { hit: VideoHit }) {
       </div>
 
       {/* 하단 오버레이: 제목, 메타 정보 */}
-      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 to-transparent px-2 pt-6 pb-1.5">
-        <div className="font-medium text-sm text-neutral-100 truncate">{title}</div>
-        <div className="mt-0.5 text-xs text-neutral-300 flex flex-wrap gap-x-2 gap-y-0">
+      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-2 pt-8 pb-2 [text-shadow:0_1px_2px_rgba(0,0,0,0.95)]">
+        <div className="font-semibold text-base text-white truncate">{title}</div>
+        <div className="mt-0.5 text-sm text-neutral-200 flex flex-wrap gap-x-2 gap-y-0">
           {hit.studio && <span>{hit.studio}</span>}
           {hit.year && (
             <span>
@@ -188,7 +188,7 @@ function AssistantBlock({ msg }: { msg: Message }) {
       {allHits.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-xs text-neutral-500 font-mono">↳ {allHits.length} items</div>
-          <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
             {allHits.map((h) => (
               <VideoCard key={h.opus} hit={h} />
             ))}
@@ -211,6 +211,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [limit, setLimit] = useState(10);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -251,7 +252,7 @@ export default function ChatPage() {
         const r = await fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "content-type": "application/json", accept: "text/event-stream" },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query, limit }),
           signal: ac.signal,
         });
         if (!r.ok || !r.body) {
@@ -337,7 +338,7 @@ export default function ChatPage() {
         setBusy(false);
       }
     },
-    [busy, updateAssistant]
+    [busy, limit, updateAssistant]
   );
 
   const abort = useCallback(() => {
@@ -345,7 +346,7 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <main className="flex-1 flex flex-col mx-auto w-full max-w-4xl px-4">
+    <main className="flex-1 flex flex-col mx-auto w-full max-w-4xl px-4 xl:max-w-none xl:px-6">
       <header className="py-4 border-b border-neutral-800 flex items-baseline gap-2">
         <h1 className="text-lg font-semibold">flayAI</h1>
         <span className="text-xs text-neutral-500 font-mono">{API_BASE}</span>
@@ -413,6 +414,19 @@ export default function ChatPage() {
           void send(q);
         }}
       >
+        <select
+          className="px-2 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-sm text-neutral-300 outline-none focus:border-blue-500 shrink-0"
+          value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))}
+          disabled={busy}
+          title="검색 결과 개수"
+        >
+          {[5, 10, 20, 30, 50].map((n) => (
+            <option key={n} value={n}>
+              {n}개
+            </option>
+          ))}
+        </select>
         <input
           className="flex-1 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 outline-none focus:border-blue-500 text-sm"
           placeholder="무엇을 찾을까요?"

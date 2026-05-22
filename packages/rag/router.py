@@ -203,7 +203,9 @@ async def _collect_korean_answer(client: httpx.AsyncClient, messages: list[dict]
     return buf.strip()
 
 
-async def route_chat(user_query: str, history: list[dict] | None = None) -> AsyncIterator[dict]:
+async def route_chat(
+    user_query: str, history: list[dict] | None = None, limit: int = 10
+) -> AsyncIterator[dict]:
     """async generator. event dict 시리즈를 yield.
 
     이벤트 타입:
@@ -236,7 +238,7 @@ async def route_chat(user_query: str, history: list[dict] | None = None) -> Asyn
                 {
                     "function": {
                         "name": "search_videos",
-                        "arguments": {"query": user_query, "limit": 10},
+                        "arguments": {"query": user_query, "limit": limit},
                     }
                 }
             ]
@@ -254,7 +256,7 @@ async def route_chat(user_query: str, history: list[dict] | None = None) -> Asyn
                         {
                             "function": {
                                 "name": "search_videos",
-                                "arguments": {"query": user_query, "limit": 10},
+                                "arguments": {"query": user_query, "limit": limit},
                             }
                         }
                     )
@@ -295,6 +297,21 @@ async def route_chat(user_query: str, history: list[dict] | None = None) -> Asyn
                     log.info("router meta boost: search_videos args <- %s", meta)
                     fn["arguments"] = args
                     c["function"] = fn
+
+        # 프론트에서 지정한 limit 을 search_videos 에 강제 주입 (LLM 기본값 무시)
+        for c in tool_calls:
+            fn = c.get("function") or {}
+            if fn.get("name") != "search_videos":
+                continue
+            args = fn.get("arguments") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {}
+            args["limit"] = limit
+            fn["arguments"] = args
+            c["function"] = fn
 
         results_for_history: list[dict] = []
         for call in tool_calls:
