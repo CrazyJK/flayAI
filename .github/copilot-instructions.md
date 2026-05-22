@@ -1,3 +1,15 @@
+## 지침 파일 구성 (Copilot · Claude 공용)
+
+이 저장소는 **GitHub Copilot 과 Claude Code 를 함께** 사용한다. AI 보조 지침은 계층화되어 있다.
+
+- **이 파일** (`.github/copilot-instructions.md`): 저장소 전역 기본 지침 — 항상 적용.
+- **`.github/instructions/*.instructions.md`**: 경로별 세부 지침. 각 파일의 `applyTo` 글롭에 매칭되는 파일을 편집할 때 자동 적용 (python / frontend / indexer / rag / scripts).
+- **`.github/prompts/*.prompt.md`**: 반복 작업용 프롬프트. Copilot Chat 에서 `/이름` 으로 호출 (재인덱싱 · 서비스 재시작 · RAG 도구 추가 · API 엔드포인트 추가 · 문서 동기화 점검).
+- **`.github/chatmodes/*.chatmode.md`**: flayAI 전용 채팅 모드.
+- **`CLAUDE.md`** (루트): Claude Code 진입점 — 위 Copilot 문서들을 그대로 참조하도록 연결.
+
+상세 동작 설명서는 [`docs/`](../docs/README.md), 검토로 드러난 미해결 작업은 [`docs/TODO.md`](../docs/TODO.md) 에 정리되어 있다.
+
 ## 기본 규칙 (우선순위 순)
 
 우선순위가 충돌하는 경우(예: 문서 업데이트가 필요하면서 AI/ML 설명도 필요한 경우) 낮은 번호 순위를 먼저 적용한다. 즉, 1순위(언어) → 2순위(문서) → 3순위(설명 수준) 순으로 처리한다.
@@ -65,7 +77,8 @@ cd apps\web ; npm run build ; npm run lint
 ### 프로세스 기동 (bin/*.bat)
 
 ```cmd
-bin\all.bat start          # qdrant → ollama → api → web 순차 기동
+bin\all.bat start          # (개발) qdrant → ollama → api → web 순차 기동
+bin\prod.bat               # (운영) HTTPS 일괄 기동 (next build → next start, uvicorn no-reload)
 bin\api.bat restart        # API만 재시작
 bin\reindex.bat quick      # 메타만 빠른 재인덱싱 (AI 없음)
 bin\reindex.bat sync       # 텍스트 AI 포함 동기화
@@ -76,7 +89,9 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 
 ### 핵심 함정 (에이전트 주의)
 
-- **Python 실행**: `.\.venv\Scripts\python.exe` 사용 (`python` 이나 `uv run` 이 PATH에 없을 수 있음)
+- **Python 실행**: Python **3.11** (`.python-version`, `pyproject.toml requires-python>=3.11`). `.\.venv\Scripts\python.exe` 사용 (`python` 이나 `uv run` 이 PATH에 없을 수 있음)
+- **호스팅/TLS**: API·웹은 로컬 도메인 `ai.kamoru.jk`(hosts 파일 매핑) + 자체 서명 인증서(`.cert/kamoru.jk.{key,pem}`)로 **HTTPS** 서빙. `config.yaml.server.host`, CORS 화이트리스트, `main.py` 호스트 검증 모두 `127.0.0.1`/`localhost`/`::1`/`ai.kamoru.jk` 만 허용 — **공용 인터넷 노출 금지**. (`.cert/` 는 `.gitignore`)
+- **OCR 의존성**: 런타임은 `rapidocr-onnxruntime`(`packages/indexer/ocr.py`) 사용. 단 `pyproject.toml` 에는 미선언이고 미사용 `paddleocr`/`paddlepaddle-gpu` 가 남아있음 → 새 환경 구성 시 주의 ([docs/TODO.md](../docs/TODO.md))
 - **Qdrant v1.18+**: `collection.search()` 삭제됨 → `client.query_points(collection_name, query=vec, limit=N, with_payload=True)` 사용, 반환값은 `result.points`
 - **FTS5 쿼리**: 토큰을 `"phrase"` 로 감싸고 `OR` 로 결합 (예: `"alice" OR "앨리스"`). 그냥 키워드 쓰면 CJK/짧은 토큰에서 `syntax error near "?"` 발생
 - **번역 모델**: `facebook/nllb-200-distilled-600M`, `src_lang=jpn_Jpan`, `forced_bos_token_id` 로 `kor_Hang` 지정
