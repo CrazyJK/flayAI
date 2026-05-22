@@ -24,3 +24,52 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * 스크롤바 (flayground 5.scrollbar.scss 기준)
+ * - 얇은 스크롤바 + 반투명 thumb. flayAI 는 항상 다크 테마라 흰색 thumb 적용.
+ */
+:root {
+  --scroll-unit: 0.25rem;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+/* 웹킷 기반 브라우저 (Chrome, Safari, Edge) — 스크롤바 영역 전체 */
+::-webkit-scrollbar {
+  background-color: transparent;
+  border: 0;
+  width: var(--scroll-unit);
+  height: var(--scroll-unit);
+}
+
+/* 상하/좌우 화살표 버튼 숨김 */
+::-webkit-scrollbar-button:start:decrement,
+::-webkit-scrollbar-button:end:increment {
+  display: none;
+}
+
+/* 트랙(몸통) */
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* 실제 움직이는 thumb */
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: calc(var(--scroll-unit) / 2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: calc(var(--scroll-unit) / 4);
+}
+
+/* 가로·세로가 만나는 코너 */
+::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
