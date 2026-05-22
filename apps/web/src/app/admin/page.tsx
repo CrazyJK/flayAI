@@ -398,7 +398,8 @@ type PipelineStep = {
   totalKey: "videos" | "posters";
   label: string;
   desc: string;
-  // 건당 평균 소요시간(초). 대기 건수 × 이 값 = 예상 소요시간.
+  // 건당 최악 소요시간(초) — 캐시·백필 없이 전건을 모델로 처리하는 기준.
+  // 대기 건수 × 이 값 = "최대" 소요시간(상한). 실제는 보통 이보다 훨씬 빠름.
   secPerItem: number;
 };
 
@@ -408,7 +409,7 @@ const PIPELINE_STEPS: PipelineStep[] = [
     completedKey: "translate",
     totalKey: "videos",
     label: "번역",
-    desc: "일본어 제목·설명을 한국어로 번역 (NLLB-200) · 증분 · GPU",
+    desc: "일본어 제목·설명을 한국어로 번역 (NLLB-200) · 증분 · GPU · 제목은 포스터 파일명에서 먼저 채워지고, 캐시 적중 시 거의 즉시",
     secPerItem: 1.2,
   },
   {
@@ -417,7 +418,7 @@ const PIPELINE_STEPS: PipelineStep[] = [
     totalKey: "videos",
     label: "텍스트 임베딩",
     desc: "영상 텍스트를 벡터화해 Qdrant videos 컬렉션에 저장 (bge-m3) · 전체 재처리 · GPU",
-    secPerItem: 0.09,
+    secPerItem: 0.008,
   },
   {
     job: "embed-clip",
@@ -616,7 +617,7 @@ function IndexerSection({
       title="인덱서"
       badge={
         totalPending > 0
-          ? `대기 ${fmtNum(totalPending)} · 예상 ~${fmtDuration(totalEtaSec)}`
+          ? `대기 ${fmtNum(totalPending)} · 최대 ~${fmtDuration(totalEtaSec)}`
           : "모두 완료"
       }
       available
@@ -682,7 +683,11 @@ function IndexerSection({
 
       {/* 파이프라인 단계별 진행률 + 배치 버튼 통합 */}
       <div className="mb-4">
-        <p className="text-sm font-medium text-neutral-400 mb-2">파이프라인 (진행률 · 시작)</p>
+        <p className="text-sm font-medium text-neutral-400 mb-1">파이프라인 (진행률 · 시작)</p>
+        <p className="text-xs text-neutral-500 mb-2">
+          ⓘ 시간은 <span className="text-amber-400">최대(상한)</span> 추정 — 전건을 모델로 처리하는 기준입니다.
+          실제는 번역 캐시 · 포스터 파일명 제목 · GPU 배치 덕에 보통 훨씬 빠릅니다.
+        </p>
         <div className="space-y-3">
           {PIPELINE_STEPS.map((step) => {
             const done = completed[step.completedKey] ?? 0;
@@ -716,7 +721,7 @@ function IndexerSection({
                     {fmtNum(done)}/{fmtNum(total)}
                     {pending > 0 && (
                       <span className="ml-1 text-amber-400">
-                        +{fmtNum(pending)} · 예상 ~{fmtDuration(pending * step.secPerItem)}
+                        +{fmtNum(pending)} · 최대 ~{fmtDuration(pending * step.secPerItem)}
                       </span>
                     )}
                   </span>
