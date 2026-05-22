@@ -8,7 +8,7 @@
  │  - 채팅 / 이미지 / 얼굴 / 라벨링 페이지
  │  - SSE 로 /api/chat 구독
  └──────────┬───────────┘
-            │ HTTP (CORS: localhost 만)
+            │ HTTPS (ai.kamoru.jk, CORS 화이트리스트)
  ┌──────────▼───────────┐
  │  FastAPI (api)       │  포트 8000
  │  - apps/api/main.py  │
@@ -77,8 +77,8 @@
 
 `http://127.0.0.1:11434`. OpenAI 와 비슷한 `/api/chat` 호환 엔드포인트.
 
-- **메인 모델**: `huihui_ai/qwen2.5-abliterate:14b` — 한국어/도구 호출 지원 양호
-- 14B 모델이 GPU 7~9GB 사용. 추론 중에만 로드.
+- **메인 모델**: `huihui_ai/qwen2.5-abliterate:7b` — 한국어/도구 호출 지원 양호
+- 7B 모델이 추론 중 GPU 약 5GB 사용. 추론 중에만 로드.
 
 ### 4. 모델 캐시 — `~/.cache/huggingface`
 

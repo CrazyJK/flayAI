@@ -1,6 +1,6 @@
 # API Reference
 
-베이스 URL: `http://127.0.0.1:8000`. 모든 엔드포인트는 localhost 전용.
+베이스 URL: `https://ai.kamoru.jk:8000` (자체 서명 TLS). 모든 엔드포인트는 로컬 전용 (127.0.0.1 / localhost / ::1 / ai.kamoru.jk) — 공용 인터넷 노출 금지.
 
 ## 채팅
 
@@ -175,7 +175,7 @@ multipart/form-data:
 
 ### `GET /api/admin/stats`
 
-요청자 IP 가 127.0.0.1/localhost/::1 이 아니면 403.
+요청자 IP 가 127.0.0.1 / localhost / ::1 / ai.kamoru.jk 가 아니면 403.
 
 ```json
 { "videos": 20818, "actresses": ..., "posters": ..., ... }
@@ -197,7 +197,7 @@ multipart/form-data:
 ```ts
 // 채팅 스트리밍
 async function* chat(query: string) {
-  const r = await fetch("http://127.0.0.1:8000/api/chat", {
+  const r = await fetch("https://ai.kamoru.jk:8000/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
@@ -218,7 +218,7 @@ async function* chat(query: string) {
 }
 
 // 메타 검색
-const { items } = await fetch("http://127.0.0.1:8000/api/search/videos", {
+const { items } = await fetch("https://ai.kamoru.jk:8000/api/search/videos", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ actress: "alice", year: 2023, limit: 5 }),

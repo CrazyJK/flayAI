@@ -5,7 +5,7 @@
 - Windows 10/11, NVIDIA GPU (12GB 권장)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Qdrant 컨테이너)
 - [Ollama for Windows](https://ollama.com/download/windows)
-- Python 3.12 + [uv](https://docs.astral.sh/uv/) — `pip install uv`
+- Python 3.11 + [uv](https://docs.astral.sh/uv/) — `pip install uv`
 - Node.js 20+ + npm (Next.js 16)
 - 데이터: `K:\Crazy\` 가 마운트되어 있고 `K:\Crazy\Info\video.json` 등이 있어야 함
 
@@ -13,7 +13,7 @@
 
 ```powershell
 # 1) Python 환경
-cd C:\kamoru\Workspace\git\flayAI
+cd C:\Handyground\Workspace\git\flayAI
 uv venv
 .\.venv\Scripts\Activate.ps1
 uv pip install -e ".[dev]"     # pyproject.toml 의 의존성 일괄 설치
@@ -23,7 +23,7 @@ docker compose up -d qdrant
 curl http://127.0.0.1:6333/healthz     # 200 확인
 
 # 3) LLM 받기
-ollama pull huihui_ai/qwen2.5-abliterate:14b
+ollama pull huihui_ai/qwen2.5-abliterate:7b
 
 # 4) 웹 의존성
 cd apps\web
@@ -61,6 +61,8 @@ python -m packages.indexer.cli ocr-posters
 
 두 개의 터미널 또는 [`scripts/overnight.ps1`](../scripts/overnight.ps1) 같은 헬퍼 사용.
 
+> 표준 기동은 `bin\all.bat start`(개발) / `bin\prod.bat`(운영)이며, `config.yaml.server.host = ai.kamoru.jk` + 자체 서명 TLS(`.cert/`)로 **HTTPS** 서빙한다. 아래 수동 `--host 127.0.0.1` 명령은 TLS 없이 로컬에서 직접 띄우는 대안이다.
+
 ```powershell
 # 터미널 1 — Qdrant 가 이미 떠 있다고 가정
 # FastAPI (포어그라운드, 콘솔 로그 보기)
@@ -77,7 +79,7 @@ Start-Process -FilePath .\.venv\Scripts\python.exe `
 ```powershell
 # 터미널 2 — Next.js
 cd apps\web
-npm run dev          # http://127.0.0.1:3000
+npm run dev          # https://ai.kamoru.jk:3000 (자체 TLS)
 ```
 
 ## 자주 쓰는 명령 모음
@@ -139,7 +141,7 @@ Windows Task Scheduler 등록 예:
 
 ```powershell
 schtasks /Create /SC DAILY /ST 03:00 /TN flayAI-Nightly `
-  /TR "powershell.exe -ExecutionPolicy Bypass -File C:\kamoru\Workspace\git\flayAI\scripts\nightly_index.ps1"
+  /TR "powershell.exe -ExecutionPolicy Bypass -File C:\Handyground\Workspace\git\flayAI\scripts\nightly_index.ps1"
 ```
 
 ## 디버그 / 진단 스크립트

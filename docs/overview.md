@@ -19,7 +19,7 @@
 웹 개발자에게 익숙한 용어로 풀면:
 
 - **LLM (Large Language Model)** = "한국어를 잘하는 응답 생성기".
-  여기서는 `Qwen2.5 14B` 를 [Ollama](https://ollama.com) 로 띄워서 씁니다.
+  여기서는 `Qwen2.5 7B`(`huihui_ai/qwen2.5-abliterate:7b`) 를 [Ollama](https://ollama.com) 로 띄워서 씁니다.
   하지만 LLM 은 내 데이터를 모릅니다.
 - **RAG (Retrieval-Augmented Generation)** = "검색해서 그 결과를 LLM 에게 보여주고 답하게 한다".
   즉, "LLM 단독" 이 아니라 "DB 검색 + LLM 종합".
@@ -66,4 +66,4 @@ for (const call of llmResp.tool_calls) {
 
 - Windows 11
 - 12GB GPU (RTX 4070 Ti) — InsightFace · CLIP · LLM 추론용
-- 외부 네트워크는 모델/패키지 다운로드 시에만 사용. 운영 트래픽은 100% 로컬 (127.0.0.1).
+- 외부 네트워크는 모델/패키지 다운로드 시에만 사용. 운영 트래픽은 로컬 도메인 `ai.kamoru.jk`(hosts 매핑) + 자체 서명 TLS 로 **HTTPS** 서빙 — PC 내부/LAN 한정, 공용 인터넷 노출 없음.

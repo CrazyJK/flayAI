@@ -1,12 +1,20 @@
 """flay-index CLI (typer).
 
 서브커맨드:
-  load     -- K:/Crazy/Info/*.json → SQLite
-  scan     -- 포스터 디렉토리 스캔 + classify (instance/archive)
-  history  -- history.csv → SQLite
-  fts      -- videos_fts 재구축
-  all      -- load → scan → history → fts 순차 실행
-  status   -- state.json 요약
+  load          -- K:/Crazy/Info/*.json → SQLite
+  scan          -- 포스터 디렉토리 스캔 + classify (instance/archive)
+  history       -- history.csv → SQLite
+  fts           -- videos_fts 재구축
+  all           -- load → scan → history → fts 순차 실행
+  translate     -- JP→KO 번역 (NLLB-200)
+  embed         -- bge-m3 → Qdrant videos
+  embed-clip    -- OpenCLIP ViT-L/14 → Qdrant posters_clip
+  extract-faces -- InsightFace buffalo_l → poster_faces + Qdrant faces
+  cluster-faces -- 얼굴 클러스터링(mutual-kNN + Union-Find) + 배우 자동 매핑
+  ocr-posters   -- RapidOCR(onnx) → posters.ocr_text + Qdrant poster_ocr
+  sync-payload  -- SQLite kind/playable 변경분을 Qdrant payload 에 반영
+  cleanup       -- 고아 row/point 정리 (dry-run 기본)
+  status        -- state.json 요약
 """
 
 from __future__ import annotations
@@ -173,7 +181,7 @@ def cluster_faces(
     confidence: float = typer.Option(0.0, "--confidence", "-c", help="0이면 config 기본값"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """HDBSCAN → face_clusters + cluster_id 채우기 + 배우 자동 매핑."""
+    """얼굴 클러스터링(mutual-kNN + Union-Find) → face_clusters + cluster_id + 배우 자동 매핑."""
     _setup_log(verbose)
     t = time.time()
     out = cluster_mod.run(
