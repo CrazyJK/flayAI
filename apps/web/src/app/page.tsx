@@ -370,23 +370,6 @@ export default function ChatPage() {
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto w-full px-4 xl:px-6 py-4 space-y-6">
-        {messages.length === 0 && (
-          <div className="text-sm text-neutral-400 space-y-3">
-            <p>자연어로 비디오 컬렉션을 검색하세요. 예시:</p>
-            <div className="flex flex-wrap gap-2">
-              {examples.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => send(q)}
-                  className="px-2.5 py-1 text-xs rounded border border-neutral-700 hover:bg-neutral-800"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         {messages.map((m) =>
           m.role === "user" ? (
             <div key={m.id} className="flex justify-end">
@@ -404,6 +387,24 @@ export default function ChatPage() {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {messages.length === 0 && (
+        <div className="shrink-0 mx-auto w-full max-w-[900px] px-4 pb-1 text-sm text-neutral-400 space-y-2">
+          <p className="text-center">자연어로 비디오 컬렉션을 검색하세요. 예시:</p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {examples.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => send(q)}
+                className="px-2.5 py-1 text-xs rounded border border-neutral-700 hover:bg-neutral-800"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <form
         className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-3 border-t border-neutral-800 flex gap-2"
