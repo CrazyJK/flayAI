@@ -33,7 +33,7 @@
 - **A3** [`pyproject.toml`](../pyproject.toml): 미사용 `llama-index-*`(4종)·`faiss-cpu`·`hdbscan` 제거. [`config.yaml`](../config.yaml) `data.faiss_poster`/`faiss_faces` 경로 제거(코드 참조 없음 확인).
 - **lock 재생성**: `uv lock` → 146 packages resolved. 위 패키지 + 고아 transitive(aiohttp·sqlalchemy·nltk·tiktoken 등) 제거, `rapidocr-onnxruntime 1.4.4`·`onnxruntime 1.26.0` 추가. `uv lock --check` 통과.
 
-> ⚠️ **`uv sync` 금지 (torch 깨짐)**: `.venv` 정리 목적으로 `uv sync` 를 돌렸더니, lock 에 CPU torch 만 잡혀 있어 수동 설치된 GPU 빌드(`torch 2.6.0+cu124`)가 CPU(`2.12.0`)로 교체되고 잔존 CUDA DLL 과 충돌해 torch import 자체가 깨졌다. **앞으로 의존성을 바꿔도 `uv sync` 는 돌리지 말 것** — torch 는 uv 바깥에서 PyTorch cu124 인덱스로 수동 관리. (자세한 함정: [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) 핵심 함정)
+> ✅ **`uv sync` 안전화 완료 (GPU 빌드 lock 고정)**: 한때 `uv sync` 가 lock 의 CPU torch 로 GPU torch 를 덮어써 깨졌고 rapidocr 가 끌어온 CPU `onnxruntime` 이 `onnxruntime-gpu` 를 가려 InsightFace 가 CPU 로 떨어졌었다. 이제 [`pyproject.toml`](../pyproject.toml) `[tool.uv]` 에서 torch/torchvision 은 PyTorch cu124 인덱스로, onnxruntime 은 CPU판 제외(`override-dependencies`)로 고정 → `uv lock`/`uv sync` 가 GPU 빌드(`torch 2.6.0+cu124`·`torchvision 0.21.0+cu124`·`onnxruntime-gpu`)를 유지한다. **단 NVIDIA GPU + CUDA 12.4 단일 개인 PC 전제**(CPU/다른 CUDA 배포 시 깨질 수 있음 — 의도된 가정). 검증: `uv sync` 후 `torch.cuda.is_available()` / onnxruntime `CUDAExecutionProvider` 모두 True.
 
 ---
 

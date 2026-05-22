@@ -19,7 +19,8 @@ dependencies = [
     # Embedding / ML
     "sentence-transformers>=3.0",
     "transformers>=4.41",
-    "torch>=2.3",
+    "torch==2.6.0",
+    "torchvision==0.21.0",
     "open-clip-torch>=2.24",
     "insightface>=0.7",
     "onnxruntime-gpu>=1.18",
@@ -41,6 +42,7 @@ dependencies = [
     "pypdf>=4.2",
 
     # Utilities
+    "setuptools>=70",  # pkg_resources 런타임 사용 라이브러리 대비 (uv 가 고아로 제거하지 않게 명시)
     "sqlite-utils>=3.36",
     "watchdog>=4.0",
     "httpx>=0.27",
@@ -60,6 +62,24 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["apps", "packages"]
+
+# GPU 빌드 고정 — 이 프로젝트는 단일 개인 PC(NVIDIA GPU + CUDA 12.4) 전제.
+# lock 에 GPU 빌드를 박아두어 `uv sync` 가 CPU 빌드로 되돌리지 않게 한다.
+# (CPU/다른 CUDA 환경에 배포하면 깨질 수 있음 — 의도된 가정.)
+[tool.uv]
+# rapidocr-onnxruntime 가 끌어오는 CPU onnxruntime 를 제외(불가능 마커로 무력화).
+# onnxruntime 와 onnxruntime-gpu 는 같은 모듈명이라 공존 불가 — CPU 가 GPU 를 덮어쓰면
+# CUDAExecutionProvider 가 사라져 InsightFace 가 CPU 로 동작한다. onnxruntime-gpu 만 남긴다.
+override-dependencies = ["onnxruntime; sys_platform == 'emscripten'"]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124" }]
+torchvision = [{ index = "pytorch-cu124" }]
 
 [dependency-groups]
 dev = [
