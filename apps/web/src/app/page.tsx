@@ -143,7 +143,7 @@ function ToolCallChip({ ev }: { ev: ToolEvent }) {
   const truncatable = argsStr.length > 80;
   const displayed = truncatable && !expanded ? argsStr.slice(0, 80) + "…" : argsStr;
   return (
-    <div className="text-xs font-mono text-neutral-400 flex items-start gap-1 flex-wrap">
+    <div className="text-xs font-mono text-neutral-400 flex items-start gap-1 flex-wrap justify-center">
       <span className="text-cyan-300 shrink-0">⚙ {ev.name}</span>
       <span className="text-neutral-600 break-all">
         {argsStr.length > 0 ? `(${displayed})` : "()"}
@@ -181,13 +181,13 @@ function AssistantBlock({ msg }: { msg: Message }) {
         <ToolCallChip key={`c-${i}`} ev={c} />
       ))}
       {emptyResults.map((r, i) => (
-        <div key={`r-empty-${i}`} className="text-xs text-neutral-500 font-mono">
+        <div key={`r-empty-${i}`} className="text-xs text-neutral-500 font-mono text-center">
           ↳ {r.name} → 0 items
         </div>
       ))}
       {allHits.length > 0 && (
         <div className="space-y-1.5">
-          <div className="text-xs text-neutral-500 font-mono">↳ {allHits.length} items</div>
+          <div className="text-xs text-neutral-500 font-mono text-center">↳ {allHits.length} items</div>
           <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
             {allHits.map((h) => (
               <VideoCard key={h.opus} hit={h} />
@@ -196,13 +196,19 @@ function AssistantBlock({ msg }: { msg: Message }) {
         </div>
       )}
       {msg.text && (
-        <div className="whitespace-pre-wrap text-neutral-100 leading-relaxed">{msg.text}</div>
+        <div className="whitespace-pre-wrap text-neutral-100 leading-relaxed text-center">
+          {msg.text}
+        </div>
       )}
       {msg.status === "streaming" && (
-        <div className="text-xs text-neutral-500 animate-pulse">생성 중…</div>
+        <div className="text-xs text-neutral-500 animate-pulse text-center">생성 중…</div>
       )}
-      {msg.status === "aborted" && <div className="text-xs text-amber-400">⏹ 중단됨</div>}
-      {msg.status === "error" && <div className="text-xs text-red-400">⚠ {msg.error}</div>}
+      {msg.status === "aborted" && (
+        <div className="text-xs text-amber-400 text-center">⏹ 중단됨</div>
+      )}
+      {msg.status === "error" && (
+        <div className="text-xs text-red-400 text-center">⚠ {msg.error}</div>
+      )}
     </div>
   );
 }
