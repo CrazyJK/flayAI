@@ -25,24 +25,24 @@
 
 ---
 
+## ✅ 완료 (2차 처리, 2026-05-22)
+
+이 PC 에 `uv`/Ollama/Docker 가 설치되어, 1차에서 "uv 미설치" 로 보류했던 의존성 정리(A1 의존성 / A3)를 처리하고 `uv.lock` 을 재생성했다.
+
+- **A1(의존성)** [`pyproject.toml`](../pyproject.toml): 런타임이 쓰는 `rapidocr-onnxruntime>=1.4` 추가, 미사용 `paddlepaddle-gpu`·`paddleocr` 제거.
+- **A3** [`pyproject.toml`](../pyproject.toml): 미사용 `llama-index-*`(4종)·`faiss-cpu`·`hdbscan` 제거. [`config.yaml`](../config.yaml) `data.faiss_poster`/`faiss_faces` 경로 제거(코드 참조 없음 확인).
+- **lock 재생성**: `uv lock` → 146 packages resolved. 위 패키지 + 고아 transitive(aiohttp·sqlalchemy·nltk·tiktoken 등) 제거, `rapidocr-onnxruntime 1.4.4`·`onnxruntime 1.26.0` 추가. `uv lock --check` 통과.
+
+> ⚠️ **venv 실설치(`uv sync`)는 미수행**: `.venv` 에는 아직 구 패키지가 남아 있다. 실제 정리는 환경에서 `uv sync` 실행(실행 중 Python/torch 프로세스 종료 후 — DLL 잠금 주의).
+
+---
+
 ## 남은 작업
 
-### 🔴 A1(의존성). OCR 의존성 미선언 + 미사용 PaddleOCR 잔존
+### ⚪ A5. scikit-learn 미사용 의심 (확인 필요)
 
-- 런타임은 `rapidocr_onnxruntime` 사용 ([`packages/indexer/ocr.py`](../packages/indexer/ocr.py)) — 그러나 [`pyproject.toml`](../pyproject.toml)/`uv.lock` 에 **미선언**.
-- 반대로 미사용 `paddleocr` · `paddlepaddle-gpu` 가 의존성에 남아있음.
-- **조치**: `rapidocr-onnxruntime` 추가 + paddle 계열 제거 후 `uv lock` 재생성.
-- **보류 사유**: 현재 PC 에 `uv` 미설치 → `uv.lock` 동기화 불가. uv 사용 가능 환경에서 진행.
-
-### 🟡 A3. 미사용 의존성 — LlamaIndex / FAISS / HDBSCAN
-
-런타임 코드에서 import 되지 않음(`packages/**` + `apps/**` 확인):
-
-- `llama-index-*` — RAG 라우터는 `httpx` 로 Ollama tool calling 직접 구현. LlamaIndex 미사용.
-- `faiss-cpu` — 이미지/얼굴은 Qdrant `posters_clip`/`faces` 사용. [`config.yaml`](../config.yaml) `data.faiss_poster`/`faiss_faces` 경로도 사용처 없음.
-- `hdbscan` — [`cluster_faces.py`](../packages/indexer/cluster_faces.py) 는 mutual-kNN + Union-Find 커스텀 구현.
-- **조치**: 의존성 + config faiss 경로 정리 후 `uv lock` 재생성.
-- **보류 사유**: A1 과 동일 (uv 미설치).
+- `packages/**`·`apps/**` 어디서도 `sklearn` import 없음. 얼굴 클러스터링은 numpy+torch 로 직접 구현([`cluster_faces.py`](../packages/indexer/cluster_faces.py)).
+- A3 범위(LlamaIndex/FAISS/HDBSCAN)에 명시되지 않아 이번엔 제거하지 않음. 정말 미사용이면 `pyproject.toml` 에서 함께 제거 후 `uv lock` 가능.
 
 ### D — 미구현 / 남은 마일스톤 (환경 필요)
 
@@ -80,5 +80,5 @@
 
 ## 참고
 
-- 이 PC 에는 Ollama/Docker/uv 미설치 상태 — 의존성 lock 재생성(A1/A3)·환경 필요 작업(D)은 환경 구성 후 진행.
-- 1차 처리는 정적 편집만 수행했으며 실제 실행/테스트는 하지 않음.
+- (갱신 2026-05-22) 이 PC 에 `uv`/Ollama/Docker 설치 확인됨 → 의존성 lock 재생성(A1/A3) 완료. D(M5/M6)는 실행·시간이 필요한 마일스톤이라 여전히 별도 진행.
+- 1차 처리는 정적 편집만 수행. 2차 처리는 manifest 편집 + `uv lock` 재생성까지 수행했으나, venv 실설치(`uv sync`)·서비스 구동·인덱싱·테스트는 하지 않음.
