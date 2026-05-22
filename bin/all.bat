@@ -29,7 +29,7 @@ call "%BIN%api.bat" start
 timeout /t 3 /nobreak >nul
 call "%BIN%web.bat" start
 echo.
-echo [all start] done. open http://127.0.0.1:3000
+echo [all start] done. open https://ai.kamoru.jk:3000
 goto :eof
 
 :stop

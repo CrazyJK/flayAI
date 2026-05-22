@@ -12,7 +12,9 @@ services:
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=/dev/null", "http://localhost:6333/healthz"]
-      interval: 10s
+      # qdrant 이미지엔 wget/curl 이 없음 → bash 의 /dev/tcp 로 6333 포트 TCP liveness 체크
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      interval: 30s
       timeout: 5s
       retries: 5
+      start_period: 10s
