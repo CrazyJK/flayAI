@@ -112,6 +112,16 @@ function fmtNum(n: number): string {
   return n.toLocaleString("ko-KR");
 }
 
+// 처리 대상 건수 × 건당 소요시간(초) 으로 추정한 예상 소요시간을 사람이 읽기 좋게 포맷
+function fmtDuration(sec: number): string {
+  if (sec <= 0) return "—";
+  if (sec < 60) return `${Math.round(sec)}초`;
+  if (sec < 3600) return `${Math.round(sec / 60)}분`;
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+}
+
 function elapsed(startTs: number): string {
   const sec = Math.round(Date.now() / 1000 - startTs);
   if (sec < 60) return `${sec}초 전`;
@@ -388,6 +398,8 @@ type PipelineStep = {
   totalKey: "videos" | "posters";
   label: string;
   desc: string;
+  // 건당 평균 소요시간(초). 대기 건수 × 이 값 = 예상 소요시간.
+  secPerItem: number;
 };
 
 const PIPELINE_STEPS: PipelineStep[] = [
@@ -396,35 +408,40 @@ const PIPELINE_STEPS: PipelineStep[] = [
     completedKey: "translate",
     totalKey: "videos",
     label: "번역",
-    desc: "일본어 제목·설명을 한국어로 번역 (NLLB-200) · 증분 · GPU · 전체 ~7시간",
+    desc: "일본어 제목·설명을 한국어로 번역 (NLLB-200) · 증분 · GPU",
+    secPerItem: 1.2,
   },
   {
     job: "embed",
     completedKey: "embed_text",
     totalKey: "videos",
     label: "텍스트 임베딩",
-    desc: "영상 텍스트를 벡터화해 Qdrant videos 컬렉션에 저장 (bge-m3) · 전체 재처리 · GPU · ~30분",
+    desc: "영상 텍스트를 벡터화해 Qdrant videos 컬렉션에 저장 (bge-m3) · 전체 재처리 · GPU",
+    secPerItem: 0.09,
   },
   {
     job: "embed-clip",
     completedKey: "embed_clip",
     totalKey: "posters",
     label: "이미지 임베딩",
-    desc: "포스터 이미지를 벡터화해 Qdrant posters_clip 컬렉션에 저장 (CLIP ViT-L/14) · 전체 재처리 · GPU · ~11분",
+    desc: "포스터 이미지를 벡터화해 Qdrant posters_clip 컬렉션에 저장 (CLIP ViT-L/14) · 전체 재처리 · GPU",
+    secPerItem: 0.033,
   },
   {
     job: "ocr-posters",
     completedKey: "ocr_posters",
     totalKey: "posters",
     label: "포스터 OCR",
-    desc: "포스터 이미지에서 텍스트를 추출해 Qdrant poster_ocr 컬렉션에 저장 (RapidOCR) · 증분 · CPU · ~8시간",
+    desc: "포스터 이미지에서 텍스트를 추출해 Qdrant poster_ocr 컬렉션에 저장 (RapidOCR) · 증분 · CPU",
+    secPerItem: 1.4,
   },
   {
     job: "extract-faces",
     completedKey: "extract_faces",
     totalKey: "posters",
     label: "얼굴 추출",
-    desc: "포스터에서 얼굴을 감지·벡터화해 Qdrant faces 컬렉션에 저장 (InsightFace buffalo_l) · 증분 · GPU · ~79분",
+    desc: "포스터에서 얼굴을 감지·벡터화해 Qdrant faces 컬렉션에 저장 (InsightFace buffalo_l) · 증분 · GPU",
+    secPerItem: 0.23,
   },
 ];
 
@@ -579,11 +596,20 @@ function IndexerSection({
 
   const { totals, completed } = data;
   const totalPending = Object.values(data.pending).reduce((a, b) => a + b, 0);
+  // 대기 건수 기반 전체 예상 소요시간 (각 단계 대기 × 건당 소요시간 합산)
+  const totalEtaSec = PIPELINE_STEPS.reduce(
+    (sum, s) => sum + (data.pending[s.completedKey] ?? 0) * s.secPerItem,
+    0,
+  );
 
   return (
     <SectionCard
       title="인덱서"
-      badge={totalPending > 0 ? `대기 ${fmtNum(totalPending)}` : "모두 완료"}
+      badge={
+        totalPending > 0
+          ? `대기 ${fmtNum(totalPending)} · 예상 ~${fmtDuration(totalEtaSec)}`
+          : "모두 완료"
+      }
       available
     >
       {/* 집계 수치 */}
@@ -639,9 +665,13 @@ function IndexerSection({
                 </div>
                 <div className="flex items-center gap-2">
                   <ProgressBar done={done} total={total} />
-                  <span className="text-xs font-mono text-neutral-400 shrink-0 w-28 text-right">
+                  <span className="text-xs font-mono text-neutral-400 shrink-0 text-right whitespace-nowrap">
                     {fmtNum(done)}/{fmtNum(total)}
-                    {pending > 0 && <span className="ml-1 text-amber-400">+{fmtNum(pending)}</span>}
+                    {pending > 0 && (
+                      <span className="ml-1 text-amber-400">
+                        +{fmtNum(pending)} · 예상 ~{fmtDuration(pending * step.secPerItem)}
+                      </span>
+                    )}
                   </span>
                 </div>
                 {expandedJob === step.job && jobInfo && <LogBox info={jobInfo} />}
