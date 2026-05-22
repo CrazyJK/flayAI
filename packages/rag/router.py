@@ -54,7 +54,9 @@ SYSTEM_PROMPT = (
     "- 날짜 표기는 'YYYY-MM' 또는 'YYYY년 M월' 형식.\n"
     "- 답변이 중국어로 흘러가려 하면 즉시 멈추고 한국어로 다시 쓰세요.\n"
     "\n"
-    "도구 결과를 받으면 opus/제목/제작사/연도/배우만 2~3문장으로 짧게 한국어로 요약."
+    "도구 결과를 받으면, opus·제목·제작사·배우를 한 줄씩 나열하지 말고(카드에 이미 보임), "
+    "뽑힌 영상들의 공통 소재·분위기와 질문에 왜 맞는지를 2~3문장으로 짧게 한국어로만 설명. "
+    "한자(중국어)·일본어 가나·영어 문장 절대 금지 — 한자가 떠오르면 한글로 바꿔 쓴다."
 )
 
 
@@ -66,6 +68,10 @@ def _ollama_url(path: str) -> str:
 def _llm_model() -> str:
     return load_config()["models"]["llm"]
 
+
+# 한자(중국어/일본어 kanji) 범위 — Qwen 7B 가 한국어 답변 중 중국어로 새는 것을 차단할 때 사용.
+# title_ko 는 한글이라 정상 답변엔 한자가 거의 없음 → 한자가 보이면 드리프트로 간주.
+_HANZI_RE = re.compile(r"[一-鿿]")
 
 _YEAR_RE = re.compile(r"(19|20)(\d{2})\s*년")
 _MONTH_RE = re.compile(r"(?<!\d)([1-9]|1[0-2])\s*월")
@@ -168,6 +174,33 @@ async def _call_chat(
                     continue
 
     return gen()
+
+
+async def _collect_korean_answer(client: httpx.AsyncClient, messages: list[dict]) -> str:
+    """최종 답변을 스트리밍으로 받되, 한자(중국어/일본어)가 나오면 그 앞까지만 모아 반환.
+
+    Qwen 7B 가 한국어 답변 도중 중국어로 새는 현상 방어. 한자 등장 시 즉시 break +
+    aclose 로 서버 생성을 중단시켜 불필요한 토큰 생성을 막는다.
+    """
+    buf = ""
+    gen = await _call_chat(client, messages, tools=None, stream=True)
+    try:
+        async for chunk in gen:  # type: ignore[union-attr]
+            piece = (chunk.get("message") or {}).get("content") or ""
+            if piece:
+                m = _HANZI_RE.search(piece)
+                if m:
+                    buf += piece[: m.start()]
+                    break
+                buf += piece
+            if chunk.get("done"):
+                break
+    finally:
+        try:
+            await gen.aclose()  # type: ignore[union-attr]
+        except Exception:
+            pass
+    return buf.strip()
 
 
 async def route_chat(user_query: str, history: list[dict] | None = None) -> AsyncIterator[dict]:
@@ -307,9 +340,12 @@ async def route_chat(user_query: str, history: list[dict] | None = None) -> Asyn
                 {
                     "role": "user",
                     "content": (
-                        "위 도구 결과 목록을 한국어(한글)로만 요약해 주세요. "
-                        "중국어 한자, 일본어 가나, 영어 문장 사용 금지. "
-                        "각 항목을 'opus · 제목 · 제작사 · YYYY-MM · 배우' 한 줄로 나열."
+                        "위 도구 결과(영상 목록)를 보고 한국어(한글)로만 짧게 설명해 주세요.\n"
+                        "규칙 1) 한글만 사용 — 한자·중국어·일본어 가나·영어 문장 절대 금지. "
+                        "한자가 떠오르면 순우리말/한글로 바꿔 쓰세요.\n"
+                        "규칙 2) opus·제목·제작사·배우를 한 줄씩 나열하지 마세요 (카드에 이미 있음).\n"
+                        "규칙 3) 뽑힌 영상들의 공통 소재·분위기와 질문에 왜 맞는지를 2~3문장으로만 간단히. "
+                        "2~3문장을 마치면 더 쓰지 말고 멈추세요."
                     ),
                 }
             )
@@ -320,25 +356,18 @@ async def route_chat(user_query: str, history: list[dict] | None = None) -> Asyn
             yield {"type": "done", "message": text, "tool_calls": [], "results": []}
             return
 
+        # 최종 답변: 스트림을 버퍼에 모으되 한자(중국어 드리프트)가 나오면 그 앞까지만 취함.
+        # 초반 드리프트로 너무 짧게 잘리면 재생성(temperature 0.2 라 매번 결과가 다름).
+        # 여러 번 시도해 가장 긴(=가장 덜 잘린) 한글 답변을 채택.
         full = ""
-        gen = await _call_chat(client, messages, tools=None, stream=True)
-        try:
-            async for chunk in gen:
-                piece = (chunk.get("message") or {}).get("content") or ""
-                if piece:
-                    full += piece
-                    yield {"type": "token", "text": piece}
-                if chunk.get("done"):
-                    break
-        finally:
-            # break 후 generator 가 client.stream() 컨텍스트 안에 suspend 된 채 남아
-            # httpx 연결이 닫히지 않으면 SSE 응답 전체가 hang → 프론트가 영원히 대기.
-            # 명시적으로 aclose() 해서 내부 async with 를 풀어 connection 을 반환.
-            try:
-                await gen.aclose()
-            except Exception:
-                pass
-
+        for _ in range(3):
+            cand = await _collect_korean_answer(client, messages)
+            if len(cand) > len(full):
+                full = cand
+            if len(full) >= 30:
+                break
+        if full:
+            yield {"type": "token", "text": full}
         yield {
             "type": "done",
             "message": full,
