@@ -103,10 +103,10 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 
 ### `POST /api/image/search/text`
 
-텍스트 → 포스터 이미지 의미 검색 (CLIP cross-modal).
+텍스트 → 포스터 검색. **CLIP cross-modal(`posters_clip`) + VLM 캡션 의미검색(`poster_caption`, bge-m3)을 RRF 로 결합한 하이브리드.** CLIP 의 약한 한국어 자연어를 캡션이 보완한다. (`poster_caption` 은 `caption-posters` 단계로 채워짐. 없으면 CLIP 단독으로 자동 폴백.)
 
 ```json
-{ "query": "office uniform", "limit": 10, "kind": "instance" }
+{ "query": "해변 교복", "limit": 10, "kind": "instance" }
 ```
 
 ### `POST /api/image/search`

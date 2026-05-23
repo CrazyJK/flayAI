@@ -116,8 +116,12 @@
 
 - 모델: `config.models.vision` (예: `huihui_ai/gemma-4-abliterated:e4b`). Ollama `/api/chat`, `think=False` (gemma 계열은 thinking 을 꺼야 빠름).
 - 비전 모델이 포스터를 보고 **한국어 장면 설명 + 태그**(장소/의상 종류/분위기/인원/화면 텍스트 — 비노골 검색 속성)를 생성.
-- 출력: SQLite `posters.caption` (실패/빈 결과도 빈 문자열로 저장 → 재시도 방지).
-- **검색 반영**: 캡션은 이후 `embed` 단계에서 videos 임베딩 문서의 `[장면]` 블록으로 합류 → 채팅 검색이 "해변/교실/야외/분위기" 같은 시각 질의를 잡게 됨. **그러므로 caption-posters 후 `embed` 를 재실행해야 검색에 반영된다.**
+- 출력 (두 곳):
+  - SQLite `posters.caption` (실패/빈 결과도 빈 문자열로 저장 → 재시도 방지).
+  - Qdrant `poster_caption` (bge-m3 임베딩) — 이미지 화면 텍스트→포스터 하이브리드 검색용. (생성과 동시에 인라인 임베딩)
+- **검색 반영**:
+  - **채팅**: 캡션은 이후 `embed` 단계에서 videos 임베딩 문서의 `[장면]` 블록으로 합류 → "해변/교실/야외/분위기" 시각 질의를 잡게 됨. **caption-posters 후 `embed` 재실행 필요.**
+  - **이미지 화면(텍스트→포스터)**: `poster_caption` 컬렉션은 즉시 사용됨 — `/api/image/search/text` 가 CLIP(`posters_clip`) + 캡션(`poster_caption`)을 RRF 로 결합. CLIP 의 약한 한국어를 bge-m3 캡션이 보완.
 - 성능: 약 1 it/s(워밍 후, e4b GPU) → 20K 포스터 약 15~18시간. 야간/백그라운드용. 증분(이미 캡션된 것 skip, `--force` 로 전체).
 
 ## 진행 추적

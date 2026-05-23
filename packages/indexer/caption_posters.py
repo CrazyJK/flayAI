@@ -1,15 +1,13 @@
-"""VLM(비전언어모델) 포스터 캡션 -> posters.caption.
+"""VLM(비전언어모델) 포스터 캡션 -> posters.caption + Qdrant poster_caption.
 
-비전 모델이 포스터 이미지를 보고 한국어 '검색용 장면 설명 + 태그'를 생성해
-posters.caption 에 저장한다. 이 텍스트는 embed_text 의 [장면] 블록으로 합류해
-videos 임베딩에 포함되므로, 채팅 검색에서 시각/장면 질의("해변", "교복", "야외" 등)가
-잡히게 된다.
+비전 모델이 포스터 이미지를 보고 한국어 '검색용 장면 설명 + 태그'를 생성한다. 결과는 두 곳에 쓰인다:
+- SQLite posters.caption -> embed_text 의 [장면] 블록으로 videos 임베딩에 합류(채팅 검색).
+- Qdrant poster_caption -> bge-m3 임베딩(이미지 화면 텍스트->포스터 CLIP+캡션 하이브리드 검색).
 
 - 모델: config.models.vision (예: huihui_ai/gemma-4-abliterated:e4b). Ollama /api/chat.
   gemma 계열은 think=False 로 추론을 꺼서 빠르게 답을 받는다(장당 ~3초).
 - caption 이 비어있는 포스터만 처리(resumable). 전체 재생성은 force=True.
-- 프롬프트는 '검색용 비노골 속성'(장소/의상 종류/분위기/인원/화면 텍스트)에 집중 — 노골적
-  성적 묘사가 아니라 검색 키워드를 뽑는 것이 목적이고, 그게 검색 품질에도 유리하다.
+- 프롬프트는 '검색용 비노골 속성'(장소/의상 종류/분위기/인원/화면 텍스트)에 집중.
 """
 
 from __future__ import annotations
@@ -18,14 +16,21 @@ import base64
 import logging
 import sqlite3
 import time
+from collections.abc import Iterable
 
 import httpx
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qm
 
 from packages.indexer.db import connect, init_schema
+from packages.indexer.embed_text import _embedder, _qdrant, opus_to_id
 from packages.indexer.state import update_stage
 from packages.settings import load_config
 
 log = logging.getLogger(__name__)
+
+COLLECTION = "poster_caption"
+VECTOR_DIM = 1024  # bge-m3
 
 # 검색 메타데이터 목적의 비노골 속성 추출 프롬프트
 PROMPT = (
@@ -43,14 +48,60 @@ PROMPT = (
 )
 
 
+# --- Qdrant ------------------------------------------------------
+
+
+def ensure_collection(client: QdrantClient) -> None:
+    existing = {c.name for c in client.get_collections().collections}
+    if COLLECTION in existing:
+        return
+    log.info("creating qdrant collection %s (size=%d, cosine)", COLLECTION, VECTOR_DIM)
+    client.create_collection(
+        collection_name=COLLECTION,
+        vectors_config=qm.VectorParams(size=VECTOR_DIM, distance=qm.Distance.COSINE),
+    )
+    for field, ftype in [
+        ("opus", qm.PayloadSchemaType.KEYWORD),
+        ("kind", qm.PayloadSchemaType.KEYWORD),
+        ("year", qm.PayloadSchemaType.INTEGER),
+        ("month", qm.PayloadSchemaType.INTEGER),
+        ("studio", qm.PayloadSchemaType.KEYWORD),
+        ("canonical_actresses", qm.PayloadSchemaType.KEYWORD),
+        ("playable", qm.PayloadSchemaType.BOOL),
+    ]:
+        try:
+            client.create_payload_index(COLLECTION, field, field_schema=ftype)
+        except Exception as e:
+            log.debug("payload index skipped %s: %s", field, e)
+
+
+# --- 데이터 ------------------------------------------------------
+
+
 def _fetch_targets(conn: sqlite3.Connection, force: bool, limit: int | None) -> list[dict]:
     where = "WHERE path IS NOT NULL"
     if not force:
         where += " AND (caption IS NULL OR caption = '')"
-    sql = f"SELECT opus, path FROM posters {where} ORDER BY opus"
+    sql = f"SELECT opus, path, kind, video_path FROM posters {where} ORDER BY opus"
     if limit:
         sql += f" LIMIT {int(limit)}"
     return [dict(r) for r in conn.execute(sql)]
+
+
+def _fetch_payload_extra(conn: sqlite3.Connection, opus: str) -> dict:
+    v = conn.execute(
+        "SELECT release_year, release_month, studio FROM videos WHERE opus = ?", (opus,)
+    ).fetchone()
+    actrs = [
+        r["canonical_name"]
+        for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
+    ]
+    return {
+        "year": v["release_year"] if v else None,
+        "month": v["release_month"] if v else None,
+        "studio": v["studio"] if v else None,
+        "actresses": actrs,
+    }
 
 
 def _caption_one(client: httpx.Client, url: str, model: str, path: str) -> str:
@@ -81,7 +132,15 @@ def _caption_one(client: httpx.Client, url: str, model: str, path: str) -> str:
         return ""
 
 
-def run(limit: int | None = None, force: bool = False) -> dict:
+# --- 실행 --------------------------------------------------------
+
+
+def _batched(seq: list, n: int) -> Iterable[list]:
+    for i in range(0, len(seq), n):
+        yield seq[i : i + n]
+
+
+def run(limit: int | None = None, force: bool = False, embed_batch: int = 16) -> dict:
     cfg = load_config()
     model = cfg["models"].get("vision")
     if not model:
@@ -90,39 +149,82 @@ def run(limit: int | None = None, force: bool = False) -> dict:
 
     conn = connect()
     init_schema(conn)
+    qc = _qdrant()
+    ensure_collection(qc)
+    emb = _embedder()
+
     targets = _fetch_targets(conn, force=force, limit=limit)
     total = len(targets)
     log.info("caption_posters: %d targets (model=%s force=%s)", total, model, force)
 
     done = 0
     failed = 0
+    embedded = 0
     t_start = time.time()
-    with httpx.Client() as client:
+    pending: list[tuple[str, str, dict]] = []  # (opus, caption, payload_extra)
+
+    def _flush(batch: list[tuple[str, str, dict]]) -> None:
+        nonlocal embedded
+        if not batch:
+            return
+        docs = [c for _, c, _ in batch]
+        vecs = emb.encode(
+            docs, batch_size=embed_batch, normalize_embeddings=True, show_progress_bar=False
+        )
+        points = []
+        for (opus, cap, extra), vec in zip(batch, vecs):
+            payload = {
+                "opus": opus,
+                "kind": extra.get("kind"),
+                "year": extra.get("year"),
+                "month": extra.get("month"),
+                "studio": extra.get("studio"),
+                "canonical_actresses": extra.get("actresses", []),
+                "playable": bool(extra.get("video_path")),
+                "caption": cap,
+            }
+            points.append(qm.PointStruct(id=opus_to_id(opus), vector=vec.tolist(), payload=payload))
+        qc.upsert(collection_name=COLLECTION, points=points, wait=False)
+        embedded += len(points)
+
+    with httpx.Client() as hc:
         for row in targets:
             opus, path = row["opus"], row["path"]
-            cap = _caption_one(client, url, model, path)
+            cap = _caption_one(hc, url, model, path)
             # 빈 결과도 저장해 재시도를 막는다(force 로만 재실행).
             conn.execute("UPDATE posters SET caption = ? WHERE opus = ?", (cap, opus))
             if not cap:
                 failed += 1
+            else:
+                extra = _fetch_payload_extra(conn, opus)
+                extra["kind"] = row.get("kind")
+                extra["video_path"] = row.get("video_path")
+                pending.append((opus, cap, extra))
             done += 1
 
             if done % 10 == 0:
                 conn.commit()
+            if len(pending) >= embed_batch:
+                _flush(pending)
+                pending.clear()
             if done % 20 == 0 or done == total:
                 elapsed = time.time() - t_start
                 rate = done / elapsed if elapsed > 0 else 0
                 eta = (total - done) / rate if rate > 0 else 0
                 log.info(
-                    "caption_posters %d/%d  failed=%d  %.2f it/s  ETA %.0fs",
+                    "caption_posters %d/%d  failed=%d  embedded=%d  %.2f it/s  ETA %.0fs",
                     done,
                     total,
                     failed,
+                    embedded,
                     rate,
                     eta,
                 )
-                update_stage("caption_posters", completed=done, total=total, failed=failed)
+                update_stage(
+                    "caption_posters", completed=done, total=total, failed=failed, embedded=embedded
+                )
 
+    _flush(pending)
     conn.commit()
     update_stage(
         "caption_posters",
@@ -130,11 +232,13 @@ def run(limit: int | None = None, force: bool = False) -> dict:
         completed=done,
         total=total,
         failed=failed,
+        embedded=embedded,
     )
     conn.close()
     return {
         "total": total,
         "processed": done,
+        "embedded": embedded,
         "failed": failed,
         "elapsed_sec": round(time.time() - t_start, 2),
     }

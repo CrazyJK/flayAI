@@ -20,10 +20,11 @@ from PIL import Image
 from pydantic import BaseModel
 from qdrant_client.http import models as qm
 
+from packages.indexer.caption_posters import COLLECTION as POSTER_CAPTION
 from packages.indexer.db import connect
 from packages.indexer.embed_clip import COLLECTION as POSTERS_CLIP
 from packages.indexer.embed_clip import _load_model as _load_clip
-from packages.indexer.embed_text import _qdrant
+from packages.indexer.embed_text import _embedder, _qdrant
 from packages.indexer.faces import COLLECTION as FACES
 from packages.indexer.faces import _load_face_app
 from packages.rag.tools import _video_to_hit
@@ -65,7 +66,60 @@ def _hits_from_posters(points) -> list[dict[str, Any]]:
     return out
 
 
-# --- CLIP text ---------------------------------------------------
+def _hits_from_opus(opus_list: list[str], score_map: dict[str, float]) -> list[dict[str, Any]]:
+    """opus 리스트 → video hit 형식 (RRF 결합 결과용)."""
+    conn = connect()
+    out = []
+    try:
+        for opus in opus_list:
+            hit = _video_to_hit(conn, opus)
+            if hit:
+                hit["score"] = round(float(score_map.get(opus, 0.0)), 4)
+                out.append(hit)
+    finally:
+        conn.close()
+    return out
+
+
+RRF_K = 60
+
+
+def _rrf_merge(*point_lists) -> tuple[list[str], dict[str, float]]:
+    """여러 검색 결과(points)를 RRF(rank 기반)로 결합. (정렬된 opus, opus별 최대 raw score)."""
+    rrf: dict[str, float] = {}
+    raw: dict[str, float] = {}
+    for pts in point_lists:
+        for rank, p in enumerate(pts):
+            opus = (p.payload or {}).get("opus")
+            if not opus:
+                continue
+            rrf[opus] = rrf.get(opus, 0.0) + 1.0 / (RRF_K + rank + 1)
+            raw[opus] = max(raw.get(opus, 0.0), float(p.score))
+    ordered = sorted(rrf, key=lambda o: rrf[o], reverse=True)
+    return ordered, raw
+
+
+def _caption_search(query: str, limit: int, kind: str | None):
+    """bge-m3 로 질의 임베딩 → poster_caption 검색. 컬렉션 없으면(캡션 미실행) 빈 결과."""
+    try:
+        vec = _embedder().encode([query], normalize_embeddings=True)[0].tolist()
+        return (
+            _qdrant()
+            .query_points(
+                collection_name=POSTER_CAPTION,
+                query=vec,
+                limit=limit,
+                query_filter=_kind_filter(kind),
+                with_payload=True,
+            )
+            .points
+        )
+    except Exception as e:
+        log.debug("caption search skipped (poster_caption 미존재 가능): %s", e)
+        return []
+
+
+# --- 텍스트 → 포스터 (CLIP + 캡션 하이브리드) --------------------
 
 
 @router.post("/api/image/search/text")
@@ -73,27 +127,34 @@ def image_search_text(req: ImageTextSearchRequest) -> dict[str, Any]:
     import open_clip
     import torch
 
-    model, _, device = _load_clip()
-    # text tokenizer는 모델 이름 기반
     from packages.settings import load_config
 
+    pool = max(req.limit * 2, 20)  # RRF 결합 여유분
+
+    # 1) CLIP 텍스트 → posters_clip (시각 유사)
+    model, _, device = _load_clip()
     cfg = load_config()
     tokenizer = open_clip.get_tokenizer(cfg["models"]["clip_model"])
     toks = tokenizer([req.query]).to(device)
     with torch.no_grad():
         feats = model.encode_text(toks)
         feats = feats / feats.norm(dim=-1, keepdim=True)
-    vec = feats[0].cpu().tolist()
-
+    clip_vec = feats[0].cpu().tolist()
     qc = _qdrant()
-    res = qc.query_points(
+    clip_pts = qc.query_points(
         collection_name=POSTERS_CLIP,
-        query=vec,
-        limit=req.limit,
+        query=clip_vec,
+        limit=pool,
         query_filter=_kind_filter(req.kind),
         with_payload=True,
     ).points
-    return {"items": _hits_from_posters(res)}
+
+    # 2) bge-m3 캡션 → poster_caption (한국어 자연어 의미; 캡션 미실행 시 빈 결과)
+    cap_pts = _caption_search(req.query, pool, req.kind)
+
+    # 3) RRF 결합 후 상위 limit
+    ordered, raw = _rrf_merge(clip_pts, cap_pts)
+    return {"items": _hits_from_opus(ordered[: req.limit], raw)}
 
 
 # --- CLIP image upload -------------------------------------------

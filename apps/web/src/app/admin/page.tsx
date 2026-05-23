@@ -195,6 +195,7 @@ const QDRANT_DESC: Record<string, string> = {
   posters_clip: "포스터 이미지 임베딩 (CLIP ViT-L/14)",
   faces: "얼굴 벡터 (InsightFace buffalo_l)",
   poster_ocr: "포스터 OCR 텍스트 임베딩 (bge-m3)",
+  poster_caption: "포스터 VLM 캡션 임베딩 (bge-m3)",
 };
 
 function QdrantSection({ data }: { data: QdrantData }) {
