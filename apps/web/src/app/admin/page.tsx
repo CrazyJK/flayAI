@@ -1,8 +1,7 @@
 ﻿"use client";
-"use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
@@ -302,11 +301,12 @@ function SqliteSection({ data }: { data: SqliteData }) {
       badge={`${data.tables.length}개 테이블 · 최근 24h 쿼리 ${fmtNum(data.recent_queries_24h)}건`}
       available
     >
-      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
+      {/* 각 카드는 내용(설명) 글자폭에 맞춰 크기 결정 — 말줄임표(…) 없이 전체 표시 */}
+      <div className="flex flex-wrap gap-2">
         {data.tables.map((t) => (
           <div key={t.name} className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="font-mono text-sm text-neutral-200 truncate">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="font-mono text-sm text-neutral-200 whitespace-nowrap">
                 {t.name}
                 {t.note && <span className="ml-1 text-[10px] text-neutral-500">[{t.note}]</span>}
               </span>
@@ -314,7 +314,7 @@ function SqliteSection({ data }: { data: SqliteData }) {
                 {t.count >= 0 ? fmtNum(t.count) : "—"}
               </span>
             </div>
-            <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
+            <div className="text-[11px] text-neutral-500 mt-0.5 whitespace-nowrap">
               {SQLITE_DESC[t.name] ?? ""}
             </div>
           </div>
@@ -763,7 +763,7 @@ function IndexerSection({
             <div key={s.job} className="flex flex-col xl:flex-row xl:items-stretch">
               <div
                 className={
-                  "rounded-lg border px-3 py-2.5 transition-colors xl:w-[250px] xl:flex xl:flex-col " +
+                  "rounded-lg border px-3 py-2.5 transition-colors xl:w-[280px] xl:flex xl:flex-col " +
                   border
                 }
               >
@@ -815,21 +815,20 @@ function IndexerSection({
                   </div>
                 </div>
                 <p className="text-xs text-neutral-400 mt-1 ml-6">{s.desc}</p>
-                <div className="mt-1.5 ml-6 flex items-center gap-2">
+                <div className="mt-1.5 ml-6">
                   {isAI && s.completedKey ? (
-                    <>
-                      <div className="flex-1 max-w-[260px]">
-                        <ProgressBar done={done} total={total} />
-                      </div>
-                      <span className="text-xs font-mono text-neutral-400 whitespace-nowrap">
+                    // 진행률은 두 줄로: 1행 프로그레스바, 2행 건수·ETA (박스 밖으로 넘치지 않게)
+                    <div className="space-y-1">
+                      <ProgressBar done={done} total={total} />
+                      <div className="text-xs font-mono text-neutral-400">
                         {fmtNum(done)}/{fmtNum(total)}
                         {pending > 0 && (
                           <span className="ml-1 text-amber-400">
                             +{fmtNum(pending)} · 최대 ~{fmtDuration(eta)}
                           </span>
                         )}
-                      </span>
-                    </>
+                      </div>
+                    </div>
                   ) : (
                     <span className="text-xs font-mono text-neutral-400">
                       {mc != null ? `대상 ~${fmtNum(mc)}건 · ` : ""}예상 {s.estText ?? "~수초"}
@@ -991,36 +990,20 @@ export default function AdminPage() {
 
   return (
     <main className="flex-1 flex flex-col w-full min-h-0">
-      {/* 상단 고정 헤더 (채팅처럼) */}
-      <header className="shrink-0 px-4 py-3 border-b border-neutral-800 flex items-center gap-3">
-        <h1 className="text-lg font-semibold">flayAI</h1>
-        <span className="text-xs text-neutral-500 font-mono hidden sm:inline">{API_BASE}</span>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="ml-1 px-2.5 py-1 text-xs rounded border border-neutral-700 hover:bg-neutral-800 disabled:opacity-50"
-        >
-          {loading ? "로딩…" : "↻ 새로고침"}
-        </button>
-        <nav className="ml-auto flex items-center gap-3 text-sm">
-          <Link href="/" className="text-neutral-400 hover:text-neutral-200">
-            채팅
-          </Link>
-          <a href="/image" className="text-neutral-400 hover:text-neutral-200">
-            이미지
-          </a>
-          <a href="/face" className="text-neutral-400 hover:text-neutral-200">
-            얼굴
-          </a>
-          <a href="/labels" className="text-neutral-400 hover:text-neutral-200">
-            라벨링
-          </a>
-          <Link href="/admin" className="text-neutral-200">
-            관리자
-          </Link>
-        </nav>
-      </header>
+      {/* 상단 고정 헤더 (채팅과 동일한 공용 헤더) */}
+      <AppHeader
+        active="admin"
+        actions={
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="ml-1 px-2.5 py-1 text-xs rounded border border-neutral-700 hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {loading ? "로딩…" : "↻ 새로고침"}
+          </button>
+        }
+      />
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-8">
         {error && (
@@ -1035,15 +1018,22 @@ export default function AdminPage() {
             모니터링 <span className="text-xs font-normal text-neutral-500">· 실시간 (3초)</span>
           </h2>
           <SystemMonitor sys={monitor?.system} />
-          <QdrantSection
-            data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
-          />
-          <OllamaSection
-            data={
-              monitor?.ollama ??
-              data?.ollama ?? { available: false, models: [], running_count: 0 }
-            }
-          />
+          {/* Qdrant·Ollama: 내용 글자폭 기준 고정폭 — 넓으면 가로, 좁으면 세로(flex-wrap) */}
+          <div className="flex flex-wrap gap-3 items-start">
+            <div className="w-full md:w-[480px]">
+              <QdrantSection
+                data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
+              />
+            </div>
+            <div className="w-full md:w-[460px]">
+              <OllamaSection
+                data={
+                  monitor?.ollama ??
+                  data?.ollama ?? { available: false, models: [], running_count: 0 }
+                }
+              />
+            </div>
+          </div>
         </section>
 
         {/* 인덱싱 작업 */}

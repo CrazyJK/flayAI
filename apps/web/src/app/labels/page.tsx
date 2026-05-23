@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
@@ -246,27 +246,7 @@ export default function LabelsPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <header className="px-4 py-3 border-b border-neutral-800 flex items-center gap-3">
-        <h1 className="text-base font-semibold">얼굴 클러스터 라벨링</h1>
-        <nav className="flex gap-2 text-xs">
-          <Link href="/" className="text-neutral-400 hover:text-neutral-200">
-            채팅
-          </Link>
-          <a href="/image" className="text-neutral-400 hover:text-neutral-200">
-            이미지
-          </a>
-          <a href="/face" className="text-neutral-400 hover:text-neutral-200">
-            얼굴
-          </a>
-          <a href="/labels" className="text-neutral-200">
-            라벨링
-          </a>
-          <a href="/admin" className="text-neutral-400 hover:text-neutral-200">
-            관리자
-          </a>
-        </nav>
-        <span className="ml-auto text-xs text-neutral-500">{total} clusters</span>
-      </header>
+      <AppHeader active="labels" />
 
       <div className="px-4 py-2 border-b border-neutral-800 flex items-center gap-3 text-xs">
         <label className="flex items-center gap-1">
