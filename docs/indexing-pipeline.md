@@ -112,6 +112,14 @@
   - Qdrant `poster_ocr` (BGE-M3 임베딩)
 - 성능: 약 0.7 it/s (CPU) → 20K 포스터 약 8시간. 야간/백그라운드용.
 
+### 11. `caption-posters` — 포스터 VLM 캡션 (검색 강화)
+
+- 모델: `config.models.vision` (예: `huihui_ai/gemma-4-abliterated:e4b`). Ollama `/api/chat`, `think=False` (gemma 계열은 thinking 을 꺼야 빠름).
+- 비전 모델이 포스터를 보고 **한국어 장면 설명 + 태그**(장소/의상 종류/분위기/인원/화면 텍스트 — 비노골 검색 속성)를 생성.
+- 출력: SQLite `posters.caption` (실패/빈 결과도 빈 문자열로 저장 → 재시도 방지).
+- **검색 반영**: 캡션은 이후 `embed` 단계에서 videos 임베딩 문서의 `[장면]` 블록으로 합류 → 채팅 검색이 "해변/교실/야외/분위기" 같은 시각 질의를 잡게 됨. **그러므로 caption-posters 후 `embed` 를 재실행해야 검색에 반영된다.**
+- 성능: 약 1 it/s(워밍 후, e4b GPU) → 20K 포스터 약 15~18시간. 야간/백그라운드용. 증분(이미 캡션된 것 skip, `--force` 로 전체).
+
 ## 진행 추적
 
 모든 잡은 `data/state.json` 의 `stage` 항목에 진행률을 기록 (`packages/indexer/state.py`):
@@ -139,6 +147,7 @@ python -m packages.indexer.cli embed-clip
 python -m packages.indexer.cli extract-faces
 python -m packages.indexer.cli cluster-faces
 python -m packages.indexer.cli ocr-posters
+python -m packages.indexer.cli caption-posters   # VLM 포스터 캡션 → posters.caption (이후 embed 재실행)
 
 # 옵션 공통
 #   -n / --limit N    처음 N건만

@@ -112,12 +112,15 @@ def _fetch_video_bundle(conn: sqlite3.Connection, opus: str) -> dict | None:
             (opus,),
         )
     )
-    poster = conn.execute("SELECT video_path FROM posters WHERE opus = ?", (opus,)).fetchone()
+    poster = conn.execute(
+        "SELECT video_path, caption FROM posters WHERE opus = ?", (opus,)
+    ).fetchone()
     return {
         "video": dict(v),
         "actresses": actrs,
         "tags": tags,
         "video_path": (poster["video_path"] if poster else None),
+        "caption": (poster["caption"] if poster else None),
     }
 
 
@@ -137,6 +140,7 @@ def _build_document(b: dict) -> str:
         f"[제목 JP] {v['title_jp'] or ''}\n"
         f"[제목 KO] {v['title_ko'] or ''}\n"
         f"[설명] {v['desc_ko'] or v['desc_jp'] or ''}\n"
+        f"[장면] {b.get('caption') or ''}\n"  # 포스터 VLM 캡션(장소/의상/분위기 등 시각 속성)
         f"출연: {', '.join(b['actresses'])}\n"
         f"태그: {tag_block}\n"
         f"제작: {v['studio'] or ''}\n"

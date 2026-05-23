@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS posters (
   size       INTEGER,
   mtime      INTEGER,
   ocr_text   TEXT,
+  caption    TEXT,
   kind       TEXT,
   video_path TEXT
 );
@@ -191,8 +192,17 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, col: str, decl: str) -> None:
+    """기존 DB 에 신규 컬럼을 멱등 추가 (CREATE TABLE IF NOT EXISTS 는 컬럼 추가 안 됨)."""
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if col not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    # 마이그레이션 (기존 DB 대비)
+    _ensure_column(conn, "posters", "caption", "TEXT")  # 포스터 VLM 캡션
     conn.commit()
 
 

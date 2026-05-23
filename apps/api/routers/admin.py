@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
-import sys
 import time
 from typing import Any
 
@@ -40,6 +39,7 @@ ALLOWED_JOBS: set[str] = {
     "extract-faces",
     "cluster-faces",
     "ocr-posters",
+    "caption-posters",
     "sync-payload",
 }
 
@@ -503,6 +503,10 @@ def _indexer_stats() -> dict[str, Any]:
             labeled_clusters: int = conn.execute(
                 "SELECT COUNT(*) FROM face_clusters WHERE canonical_name IS NOT NULL"
             ).fetchone()[0]
+            # 캡션 완료 수 (caption 이 비어있지 않은 포스터)
+            captioned: int = conn.execute(
+                "SELECT COUNT(*) FROM posters WHERE caption IS NOT NULL AND caption != ''"
+            ).fetchone()[0]
 
         finally:
             conn.close()
@@ -520,6 +524,7 @@ def _indexer_stats() -> dict[str, Any]:
             "embed_clip": max(0, total_posters - embed_clip_done),
             "ocr_posters": max(0, total_posters - ocr_done),
             "extract_faces": max(0, total_posters - faces_done),
+            "caption_posters": max(0, total_posters - captioned),
         }
 
         return {
@@ -538,6 +543,7 @@ def _indexer_stats() -> dict[str, Any]:
                 "embed_clip": embed_clip_done,
                 "ocr_posters": ocr_done,
                 "extract_faces": faces_done,
+                "caption_posters": captioned,
             },
             "pending": pending,
         }

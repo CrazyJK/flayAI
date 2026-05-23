@@ -508,6 +508,15 @@ const PIPELINE: PipeStage[] = [
     secPerItem: 1.4,
   },
   {
+    job: "caption-posters",
+    label: "포스터 캡션",
+    group: "AI",
+    desc: "VLM(gemma-4)이 포스터 → 한국어 장면 설명/태그 → posters.caption · GPU. 이후 embed 재실행 시 검색 반영",
+    completedKey: "caption_posters",
+    totalKey: "posters",
+    secPerItem: 3.5,
+  },
+  {
     job: "sync-payload",
     label: "페이로드 동기화",
     group: "메타",

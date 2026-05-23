@@ -14,6 +14,7 @@
   extract-faces -- InsightFace buffalo_l → poster_faces + Qdrant faces
   cluster-faces -- 얼굴 클러스터링(mutual-kNN + Union-Find) + 배우 자동 매핑
   ocr-posters   -- RapidOCR(onnx) → posters.ocr_text + Qdrant poster_ocr
+  caption-posters -- VLM(gemma-4) → posters.caption (검색용 장면 설명; embed 로 반영)
   sync-payload  -- SQLite kind/playable 변경분을 Qdrant payload 에 반영
   cleanup       -- 고아 row/point 정리 (dry-run 기본)
   status        -- state.json 요약
@@ -28,6 +29,7 @@ import time
 
 import typer
 
+from packages.indexer import caption_posters as caption_mod
 from packages.indexer import cleanup as cleanup_mod
 from packages.indexer import cluster_faces as cluster_mod
 from packages.indexer import embed_clip as embed_clip_mod
@@ -243,6 +245,23 @@ def ocr_posters(
     out = ocr_mod.run(limit=limit or None, force=force, embed_batch=embed_batch)
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("ocr_posters", out)
+
+
+@app.command(name="caption-posters")
+def caption_posters(
+    limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
+    force: bool = typer.Option(False, "--force", help="이미 캡션된 포스터도 재생성"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """VLM(config.models.vision, 예: gemma-4) → posters.caption (검색용 장면 설명).
+
+    생성된 캡션은 이후 `embed` 단계에서 videos 임베딩의 [장면] 블록으로 반영된다.
+    """
+    _setup_log(verbose)
+    t = time.time()
+    out = caption_mod.run(limit=limit or None, force=force)
+    out["elapsed_sec"] = round(time.time() - t, 2)
+    _print("caption_posters", out)
 
 
 @app.command(name="sync-payload")

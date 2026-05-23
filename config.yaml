@@ -44,6 +44,9 @@ data:
 
 models:
   llm:            "huihui_ai/qwen2.5-abliterate:7b"
+  # 포스터 캡션용 비전(VLM) 모델. think 를 끌 수 있는 gemma 계열(무검열) 사용.
+  # 배치 캡션 전용 — 채팅엔 미사용. 교체 시 이 한 줄만 변경(파이프라인은 모델 비종속).
+  vision:         "huihui_ai/gemma-4-abliterated:e4b"
   embedding:      "BAAI/bge-m3"
   clip_model:     "ViT-L-14"
   clip_pretrained: "laion2b_s32b_b82k"
