@@ -228,6 +228,7 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState(10);
   const [kind, setKind] = useState<string>("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -419,40 +420,6 @@ export default function ChatPage() {
           void send(q);
         }}
       >
-        <select
-          className="px-2 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-sm text-neutral-300 outline-none focus:border-blue-500 shrink-0"
-          value={limit}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            setLimit(n);
-            window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
-          }}
-          disabled={busy}
-          title="검색 결과 개수"
-        >
-          {LIMIT_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n}개
-            </option>
-          ))}
-        </select>
-        <select
-          className="px-2 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-sm text-neutral-300 outline-none focus:border-blue-500 shrink-0"
-          value={kind}
-          onChange={(e) => {
-            const v = e.target.value;
-            setKind(v);
-            window.localStorage.setItem(KIND_STORAGE_KEY, v);
-          }}
-          disabled={busy}
-          title="instance(지금 볼 수 있는) / archive(보관) 필터"
-        >
-          {KIND_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
         <input
           className="flex-1 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 outline-none focus:border-blue-500 text-sm"
           placeholder="무엇을 찾을까요?"
@@ -460,6 +427,84 @@ export default function ChatPage() {
           onChange={(e) => setInput(e.target.value)}
           disabled={busy}
         />
+        {/* 검색 설정(개수·종류) — 톱니바퀴 버튼 → 팝오버 */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((v) => !v)}
+            className="relative px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+            title="검색 설정 (개수·종류)"
+            aria-label="검색 설정"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            {/* 비-기본 필터 적용 시 표시 점 (kind 가 설정됨) */}
+            {kind && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 border border-neutral-900" />
+            )}
+          </button>
+          {settingsOpen && (
+            <>
+              {/* 바깥 클릭 시 닫기 */}
+              <button
+                type="button"
+                aria-label="설정 닫기"
+                className="fixed inset-0 z-10 cursor-default"
+                onClick={() => setSettingsOpen(false)}
+              />
+              <div className="absolute bottom-full right-0 mb-2 z-20 w-56 rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl space-y-3">
+                <div className="text-xs font-semibold text-neutral-300">검색 설정</div>
+                <label className="block space-y-1">
+                  <span className="text-xs text-neutral-400">결과 개수</span>
+                  <select
+                    className="w-full px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-700 text-sm text-neutral-200 outline-none focus:border-blue-500"
+                    value={limit}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setLimit(n);
+                      window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+                    }}
+                  >
+                    {LIMIT_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}개
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-neutral-400">종류 (instance/archive)</span>
+                  <select
+                    className="w-full px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-700 text-sm text-neutral-200 outline-none focus:border-blue-500"
+                    value={kind}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setKind(v);
+                      window.localStorage.setItem(KIND_STORAGE_KEY, v);
+                    }}
+                  >
+                    {KIND_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </>
+          )}
+        </div>
         {busy ? (
           <button
             type="button"
