@@ -15,11 +15,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
 
+from packages.indexer.db import connect
 from packages.rag.tools import TOOL_DISPATCH, TOOL_SCHEMA
 from packages.settings import load_config
 
@@ -119,6 +121,49 @@ def _extract_meta(query: str) -> dict:
     return out
 
 
+# --- 태그명 사전 매칭 -------------------------------------------------
+# DB tags.name 을 캐시해 질문에 등장하면 tag 필터로 주입(테마 질의 정확도↑).
+_TAG_CACHE: list[str] = []
+_TAG_CACHE_TS: float = 0.0
+_TAG_TTL = 600.0  # 10분. 재인덱싱으로 태그가 늘어도 10분 내 자동 반영(또는 API 재시작).
+
+
+def _known_tags() -> list[str]:
+    """DB tags.name 을 길이 내림차순으로 캐시(최장 매칭 우선). 2자 이상만."""
+    global _TAG_CACHE, _TAG_CACHE_TS
+    now = time.monotonic()
+    if _TAG_CACHE and (now - _TAG_CACHE_TS) <= _TAG_TTL:
+        return _TAG_CACHE
+    try:
+        conn = connect()
+        try:
+            rows = conn.execute("SELECT name FROM tags").fetchall()
+        finally:
+            conn.close()
+        _TAG_CACHE = sorted(
+            {r["name"].strip() for r in rows if r["name"] and len(r["name"].strip()) >= 2},
+            key=len,
+            reverse=True,
+        )
+        _TAG_CACHE_TS = now
+    except Exception as e:
+        log.warning("known tags 로드 실패: %s", e)
+    return _TAG_CACHE
+
+
+def _extract_tag(query: str) -> str | None:
+    """질문에 DB 태그명이 그대로 포함되면 가장 긴 것을 반환(정확 tag 필터용).
+
+    한국어는 어미·조사로 변형되지만 테마 명사(며느리·간호사·교복 등)는 보통 원형이
+    그대로 등장하므로 부분문자열 매칭이 실용적. 최장 매칭 우선으로 가장 구체적인 태그 선택.
+    """
+    q = query or ""
+    for name in _known_tags():
+        if name in q:
+            return name
+    return None
+
+
 # 적용된 검색 필터를 한국어 한 줄로 (LLM 묘사 대체용)
 _KIND_LABEL = {"instance": "지금 볼 수 있는 것", "archive": "보관 영상"}
 
@@ -145,6 +190,8 @@ def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
             parts.append(str(a["studio"]))
         if a.get("actress"):
             parts.append(str(a["actress"]))
+        if a.get("tag"):
+            parts.append(f"#{a['tag']}")
         if a.get("min_rank"):
             parts.append(f"평점 {a['min_rank']}+")
         if a.get("rank"):
@@ -291,6 +338,10 @@ async def route_chat(
         # 메타 필터 보강: 질문에서 year/month 가 명확히 추출되면 search_videos args 에 강제 주입
         # (LLM 이 메타 인자를 빠뜨리거나 query 만 보내는 경우 방어)
         meta = _extract_meta(user_query)
+        # 태그명 사전 매칭: 질문에 DB 태그명이 그대로 있으면 tag 필터로 주입(테마 질의 정확도↑).
+        tag_name = _extract_tag(user_query)
+        if tag_name:
+            meta.setdefault("tag", tag_name)
         if meta:
             for c in tool_calls:
                 fn = c.get("function") or {}
