@@ -112,6 +112,11 @@ def search_videos(
     conn = connect()
     try:
         actress_canon = _resolve_actress_alias(conn, actress)
+        # LLM 이 일반명사·테마(예: '며느리')를 actress 로 잘못 넣었거나 미인덱스 배우인 경우,
+        # 필터를 조용히 버리지 말고 query 로 흡수해 의미/FTS 검색에 활용(빈손 결과 방지).
+        if actress and actress_canon is None:
+            query = f"{query} {actress}".strip()
+            log.info("search_videos: unresolved actress %r -> query 로 흡수", actress)
         tag_id = _resolve_tag_id(conn, tag)
         filt = Filters(
             year=year,
