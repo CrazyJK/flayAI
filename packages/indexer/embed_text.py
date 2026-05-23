@@ -64,6 +64,7 @@ def ensure_collection(client: QdrantClient) -> None:
         ("canonical_actresses", qm.PayloadSchemaType.KEYWORD),
         ("tag_ids", qm.PayloadSchemaType.INTEGER),
         ("rank", qm.PayloadSchemaType.INTEGER),
+        ("like_count", qm.PayloadSchemaType.INTEGER),
         ("playable", qm.PayloadSchemaType.BOOL),
     ]:
         try:

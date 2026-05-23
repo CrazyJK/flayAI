@@ -67,7 +67,7 @@ LLM 응답:  { "tool_calls": [
    │  → [hit, hit, hit, ...]                   │
    └──────────────────────────────────────────┘
    │
-   ▼ 코드 필터 보강 (_extract_meta + _extract_tag): year/month/kind/playable/min_rank/rank + DB 태그명 추출 → args 주입
+   ▼ 코드 필터 보강 (_extract_meta + _extract_tag): year/month/kind/playable/min_rank/rank/min_likes + DB 태그명 추출 → args 주입
    │   (LLM 이 tool_call 을 빠뜨려도 폴백 + 이 보강으로 결과가 정확)
    │
    ▼ SSE 로 클라이언트에 tool_call / tool_result 이벤트 즉시 push
@@ -117,7 +117,7 @@ for (;;) {
 
 | 도구 | 시그니처 (요약) | 언제 호출되도록 시켰는가 |
 |------|----------------|------------------------|
-| `search_videos` | `query?, actress?, studio?, year?, month?, kind?, tag?, min_rank?, rank?, playable?, limit=10` | 자연어 검색의 기본. 거의 대부분이 여기. `min_rank`=평점 N 이상(≥), `rank`=정확히 평점 N. |
+| `search_videos` | `query?, actress?, studio?, year?, month?, kind?, tag?, min_rank?, rank?, min_likes?, playable?, limit=10` | 자연어 검색의 기본. 거의 대부분이 여기. `min_rank`=평점 N 이상(≥), `rank`=정확히 평점 N, `min_likes`=좋아요 N 이상(≥). |
 | `similar_to` | `opus, exclude_watched=true, limit=10` | 품번이 명시되어 있을 때 유사 영상 |
 | `get_video` | `opus` | 품번 단일 조회 |
 | `get_actress` | `name` | 배우 메타 + 대표작 |
@@ -134,9 +134,10 @@ for (;;) {
                 ┌─────────────────────────────┐
                 │ Filters: actress, year, ... │  ← LLM tool_call + 코드(_extract_meta)
                 └─────────────────────────────┘
-   ※ year/month/kind/playable/min_rank/rank 는 _extract_meta 가 질문에서 정규식으로 추출해
+   ※ year/month/kind/playable/min_rank/rank/min_likes 는 _extract_meta 가 질문에서 정규식으로 추출해
      search_videos 인자에 주입한다(LLM 누락 방어). "평점 N 이상"→min_rank(≥), "랭크 N"·"별점 N"(수식어
-     없이)→rank(정확히 N). studio/actress 는 query 로 semantic+FTS 매칭.
+     없이)→rank(정확히 N), "좋아요/하트/찜 N(이상)"→min_likes(≥, like_count). studio/actress 는 query 로
+     semantic+FTS 매칭.
    ※ _extract_tag: DB tags.name(2자+, 10분 캐시)이 질문에 그대로 들어 있으면 가장 긴 것을 tag 로 주입
      (테마 질의 정확도↑, 예: "며느리 찾아"→tag=며느리). 한국어 어미·조사 변형('웃고 있는' vs 태그 '웃는')은
      부분문자열로 못 잡으므로 그땐 의미검색에 의존.

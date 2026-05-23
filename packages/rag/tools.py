@@ -103,11 +103,13 @@ def search_videos(
     playable: bool | None = None,
     min_rank: int | None = None,
     rank: int | None = None,
+    min_likes: int | None = None,
     limit: int = 10,
 ) -> list[dict]:
     """자연어 검색 + 메타 필터. query 비어있고 필터만 있어도 동작 (메타 only).
 
     min_rank: 평점 N 이상(rank >= N). rank: 정확히 평점 N(rank == N).
+    min_likes: 좋아요 N 이상(like_count >= N).
     """
     conn = connect()
     try:
@@ -128,6 +130,7 @@ def search_videos(
             playable=playable,
             min_rank=min_rank,
             rank=rank,
+            min_likes=min_likes,
         )
         if query.strip():
             top_k = max(limit * 3, 30)
@@ -166,6 +169,9 @@ def _meta_only_search(conn, f: Filters, limit: int) -> list[dict]:
     if f.rank is not None:
         where.append("v.rank = ?")
         params.append(int(f.rank))
+    if f.min_likes is not None:
+        where.append("v.like_count >= ?")
+        params.append(int(f.min_likes))
     if f.actress_canonical:
         where.append(
             "EXISTS (SELECT 1 FROM video_actresses va "
@@ -339,6 +345,7 @@ TOOL_SCHEMA: list[dict] = [
                     },
                     "min_rank": {"type": "integer", "description": "평점 N 이상(rank >= N)"},
                     "rank": {"type": "integer", "description": "정확히 평점 N(rank == N). '평점 5'처럼 '이상' 없이 특정 평점만."},
+                    "min_likes": {"type": "integer", "description": "좋아요 N 이상(like_count >= N)"},
                     "limit": {"type": "integer", "default": 10},
                 },
             },

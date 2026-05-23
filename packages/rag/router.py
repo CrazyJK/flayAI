@@ -84,13 +84,15 @@ _YEAR_ONLY_RE = re.compile(r"(?<!\d)(19|20)(\d{2})(?!\d)")
 _RANK_MIN_RE = re.compile(r"(?:평점|별점|랭크|등급)\D{0,4}([1-5])\s*(?:점|개|성|등급)?\s*이상")
 # "평점/별점/랭크 5"(이상/이하 수식 없이) → 정확히 그 평점(rank == N). '랭크 5이고'·'별점 5' 등.
 _RANK_EXACT_RE = re.compile(r"(?:평점|별점|랭크|등급)\D{0,4}([1-5])(?!\s*(?:이상|이하|미만|초과|\d))")
+# "좋아요/하트/찜 N(개) 이상" → 최소 좋아요(min_likes, like_count >= N). '이상' 없는 '좋아요 N'도 최소로.
+_LIKES_RE = re.compile(r"(?:좋아요|하트|찜)\D{0,4}(\d{1,4})")
 # "지금 볼 수 있는"(instance) / "예전·보관"(archive) 키워드
 _INSTANCE_RE = re.compile(r"지금|바로|당장|볼\s*수\s*있는|재생\s*가능|플레이\s*가능")
 _ARCHIVE_RE = re.compile(r"예전|옛날|아카이브|보관|지난날")
 
 
 def _extract_meta(query: str) -> dict:
-    """사용자 질문에서 메타 필터(year/month/min_rank/kind/playable)를 코드로 추출.
+    """사용자 질문에서 메타 필터(year/month/min_rank/rank/min_likes/kind/playable)를 코드로 추출.
 
     LLM 이 인자를 빠뜨리거나 tool_call 자체를 안 하는 경우(폴백)에 대비한 코드 레벨
     방어 장치. 이 값을 search_videos 인자에 주입해 LLM 품질과 무관하게 결과를 정확히 만든다.
@@ -113,6 +115,9 @@ def _extract_meta(query: str) -> dict:
         me = _RANK_EXACT_RE.search(query)
         if me:
             out["rank"] = int(me.group(1))
+    ml = _LIKES_RE.search(query)
+    if ml:
+        out["min_likes"] = int(ml.group(1))
     if _INSTANCE_RE.search(query):
         out["kind"] = "instance"
         out["playable"] = True
@@ -196,6 +201,8 @@ def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
             parts.append(f"평점 {a['min_rank']}+")
         if a.get("rank"):
             parts.append(f"평점 {a['rank']}")
+        if a.get("min_likes"):
+            parts.append(f"좋아요 {a['min_likes']}+")
         if a.get("kind") in _KIND_LABEL:
             parts.append(_KIND_LABEL[a["kind"]])
         elif a.get("playable"):

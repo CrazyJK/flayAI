@@ -32,6 +32,7 @@ class Filters:
     playable: bool | None = None
     min_rank: int | None = None  # rank >= N ("N 이상")
     rank: int | None = None  # rank == N (정확히 그 평점)
+    min_likes: int | None = None  # like_count >= N ("좋아요 N 이상")
 
 
 @dataclass
@@ -71,6 +72,8 @@ def _build_qdrant_filter(f: Filters) -> qm.Filter | None:
         must.append(qm.FieldCondition(key="rank", range=qm.Range(gte=int(f.min_rank))))
     if f.rank is not None:
         must.append(qm.FieldCondition(key="rank", match=qm.MatchValue(value=int(f.rank))))
+    if f.min_likes is not None:
+        must.append(qm.FieldCondition(key="like_count", range=qm.Range(gte=int(f.min_likes))))
     return qm.Filter(must=must) if must else None
 
 
@@ -157,6 +160,9 @@ def fts_search(
     if f.rank is not None:
         where.append("v.rank = ?")
         params.append(int(f.rank))
+    if f.min_likes is not None:
+        where.append("v.like_count >= ?")
+        params.append(int(f.min_likes))
     if f.actress_canonical:
         where.append(
             "EXISTS (SELECT 1 FROM video_actresses va "
