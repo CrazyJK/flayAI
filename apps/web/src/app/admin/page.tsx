@@ -4,6 +4,8 @@ import { useCallback, useEffect, useId, useState } from "react";
 import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
+// 각 단계/버튼의 측정 수행시간(초) 저장 키 — 다음 방문에도 표시
+const DURATIONS_KEY = "flayai-indexer-durations";
 
 // ---------------------------------------------------------------------------
 // 타입 정의
@@ -124,14 +126,30 @@ function fmtNum(n: number): string {
   return n.toLocaleString("ko-KR");
 }
 
-// 처리 대상 건수 × 건당 소요시간(초) 으로 추정한 예상 소요시간을 사람이 읽기 좋게 포맷
-function fmtDuration(sec: number): string {
-  if (sec <= 0) return "—";
-  if (sec < 60) return `${Math.round(sec)}초`;
-  if (sec < 3600) return `${Math.round(sec / 60)}분`;
+// 측정/실시간 수행시간을 초 단위까지 사람이 읽기 좋게 포맷
+function fmtElapsed(sec: number): string {
+  sec = Math.max(0, Math.floor(sec));
+  if (sec < 60) return `${sec}초`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초`;
   const h = Math.floor(sec / 3600);
-  const m = Math.round((sec % 3600) / 60);
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+  const m = Math.floor((sec % 3600) / 60);
+  return `${h}시간 ${m}분`;
+}
+
+// 단계/작업의 수행시간 라벨 — 실행중=실시간, 완료=측정값, 미실행=저장값(localStorage).
+function timeLabel(
+  info: { status?: string; started_at?: number; finished_at?: number } | undefined,
+  savedSec: number | undefined,
+  nowMs: number,
+): string {
+  if (info?.status === "running" && info.started_at) {
+    return `⏱ ${fmtElapsed(nowMs / 1000 - info.started_at)} 수행중`;
+  }
+  if (info?.started_at && info?.finished_at) {
+    return `⏱ ${fmtElapsed(info.finished_at - info.started_at)}`;
+  }
+  if (savedSec != null) return `⏱ ${fmtElapsed(savedSec)}`;
+  return "";
 }
 
 function elapsed(startTs: number): string {
@@ -437,7 +455,7 @@ const PIPELINE: PipeStage[] = [
     job: "load",
     label: "JSON 로드",
     group: "메타",
-    desc: "영상 메타데이터를 JSON에서 읽어 DB에 적재",
+    desc: "[증분] 영상 메타데이터를 JSON에서 읽어 DB에 적재",
     metaCount: "videos",
     estText: "~수초",
   },
@@ -445,7 +463,7 @@ const PIPELINE: PipeStage[] = [
     job: "scan",
     label: "포스터 스캔",
     group: "메타",
-    desc: "포스터 파일을 탐색해 분류하고 제목을 보완",
+    desc: "[증분] 포스터 파일을 탐색해 분류하고 제목을 보완",
     metaCount: "posters",
     estText: "~수초",
   },
@@ -469,7 +487,7 @@ const PIPELINE: PipeStage[] = [
     job: "translate",
     label: "번역",
     group: "AI",
-    desc: "일본어 제목·설명을 한국어로 번역",
+    desc: "[증분] 일본어 제목·설명을 한국어로 번역",
     completedKey: "translate",
     totalKey: "videos",
     secPerItem: 1.2,
@@ -478,7 +496,7 @@ const PIPELINE: PipeStage[] = [
     job: "caption-posters",
     label: "포스터 캡션",
     group: "AI",
-    desc: "포스터 이미지를 보고 한국어 장면 설명·태그를 생성",
+    desc: "[증분] 포스터 이미지를 보고 한국어 장면 설명·태그를 생성",
     completedKey: "caption_posters",
     totalKey: "posters",
     secPerItem: 3.5,
@@ -505,7 +523,7 @@ const PIPELINE: PipeStage[] = [
     job: "extract-faces",
     label: "얼굴 추출",
     group: "AI",
-    desc: "포스터에서 얼굴을 찾아 벡터로 변환",
+    desc: "[증분] 포스터에서 얼굴을 찾아 벡터로 변환",
     completedKey: "extract_faces",
     totalKey: "posters",
     secPerItem: 0.23,
@@ -521,7 +539,7 @@ const PIPELINE: PipeStage[] = [
     job: "ocr-posters",
     label: "포스터 OCR",
     group: "AI",
-    desc: "포스터에 인쇄된 글자를 추출(OCR)",
+    desc: "[증분] 포스터에 인쇄된 글자를 추출(OCR)",
     completedKey: "ocr_posters",
     totalKey: "posters",
     secPerItem: 1.4,
@@ -530,7 +548,7 @@ const PIPELINE: PipeStage[] = [
     job: "sync-payload",
     label: "페이로드 동기화",
     group: "메타",
-    desc: "분류·재생 가능 정보를 벡터 DB에 동기화",
+    desc: "[증분] 분류·재생 가능 정보를 벡터 DB에 동기화",
     metaCount: "all",
     estText: "~수초",
   },
@@ -689,6 +707,67 @@ function IndexerSection({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
+  // 측정 수행시간(초) — localStorage 보존. nowMs 는 실행중 실시간 표시용.
+  const [durations, setDurations] = useState<Record<string, number>>({});
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DURATIONS_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (raw) setDurations(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // 실행 중인 작업이 있으면 1초마다 now 갱신(수행시간 실시간 표시)
+  const anyRunning = Object.values(jobs).some(
+    (j) => j.status === "running" || (j.steps ?? []).some((s) => s.status === "running"),
+  );
+  useEffect(() => {
+    if (!anyRunning) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [anyRunning]);
+
+  // 완료된 단계/작업의 측정 수행시간을 durations + localStorage 에 저장
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDurations((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      const consider = (
+        job: string,
+        info?: { status?: string; started_at?: number; finished_at?: number },
+      ) => {
+        if (info?.status === "done" && info.started_at && info.finished_at) {
+          const d = Math.max(0, Math.round(info.finished_at - info.started_at));
+          if (next[job] !== d) {
+            next[job] = d;
+            changed = true;
+          }
+        }
+      };
+      for (const pj of ["refresh", "rebuild"]) {
+        const p = jobs[pj];
+        if (p) {
+          consider(pj, p);
+          for (const s of p.steps ?? []) consider(s.step, s);
+        }
+      }
+      for (const [job, info] of Object.entries(jobs)) consider(job, info);
+      if (changed) {
+        try {
+          window.localStorage.setItem(DURATIONS_KEY, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      }
+      return prev;
+    });
+  }, [jobs]);
 
   async function handleStart(job: string) {
     // 파괴적 작업은 실행 전 한 번 더 확인
@@ -723,21 +802,14 @@ function IndexerSection({
   }
 
   const { totals, completed } = data;
-  // 증분(신규 건만) vs 전체(전부 재처리) 작업량·예상시간 추정 — 각 버튼에 표시.
+  // 증분(신규 건) vs 전체(전부 재처리) 대상 건수 — 각 버튼에 표시. (예상시간은 부정확해 제거)
   const incrCount = Object.values(data.pending).reduce((a, b) => a + b, 0);
-  const incrEtaSec = PIPELINE.reduce(
-    (sum, s) =>
-      sum + (s.completedKey ? (data.pending[s.completedKey] ?? 0) * (s.secPerItem ?? 0) : 0),
-    0,
-  );
   const fullCount = PIPELINE.reduce(
     (sum, s) => sum + (s.completedKey && s.totalKey ? totals[s.totalKey] : 0),
     0,
   );
-  const fullEtaSec = PIPELINE.reduce(
-    (sum, s) => sum + (s.completedKey && s.totalKey ? totals[s.totalKey] * (s.secPerItem ?? 0) : 0),
-    0,
-  );
+  const refreshTime = timeLabel(jobs["refresh"], durations["refresh"], nowMs);
+  const rebuildTime = timeLabel(jobs["rebuild"], durations["rebuild"], nowMs);
   // 메타 단계 대상 건수 (없으면 null)
   const metaCountOf = (s: PipeStage): number | null =>
     s.metaCount === "videos" ? totals.videos : s.metaCount === "posters" ? totals.posters : null;
@@ -795,7 +867,7 @@ function IndexerSection({
         <JobButton
           job="refresh"
           label="증분 인덱싱"
-          sub={`신규 ${fmtNum(incrCount)}건 · 최대 ~${fmtDuration(incrEtaSec)}`}
+          sub={`신규 ${fmtNum(incrCount)}건${refreshTime ? ` · ${refreshTime}` : ""}`}
           info={jobs["refresh"]}
           busy={busy}
           onStart={(j) => void handleStart(j)}
@@ -805,7 +877,7 @@ function IndexerSection({
         <JobButton
           job="rebuild"
           label="⚠ 전체 재인덱싱"
-          sub={`전체 ${fmtNum(fullCount)}건 · 최대 ~${fmtDuration(fullEtaSec)}`}
+          sub={`전체 ${fmtNum(fullCount)}건${rebuildTime ? ` · ${rebuildTime}` : ""}`}
           info={jobs["rebuild"]}
           busy={busy}
           onStart={(j) => void handleStart(j)}
@@ -822,8 +894,8 @@ function IndexerSection({
           const done = s.completedKey ? (completed[s.completedKey] ?? 0) : 0;
           const total = s.totalKey ? totals[s.totalKey] : 0;
           const pending = s.completedKey ? (data.pending[s.completedKey] ?? 0) : 0;
-          const eta = s.secPerItem ? pending * s.secPerItem : 0;
           const stepInfo = info as JobInfo | undefined;
+          const tl = timeLabel(stepInfo, durations[s.job], nowMs);
           const hasLog = !!(stepInfo?.stdout || stepInfo?.stderr);
           const expanded = expandedJob === s.job;
           const mc = metaCountOf(s);
@@ -891,25 +963,24 @@ function IndexerSection({
                   </div>
                 </div>
                 <p className="text-xs text-neutral-400 mt-1 ml-6">{s.desc}</p>
-                <div className="mt-1.5 ml-6">
+                <div className="mt-1.5 ml-6 space-y-1">
                   {isAI && s.completedKey ? (
-                    // 진행률은 두 줄로: 1행 프로그레스바, 2행 건수·ETA (박스 밖으로 넘치지 않게)
-                    <div className="space-y-1">
+                    <>
                       <ProgressBar done={done} total={total} />
                       <div className="text-xs font-mono text-neutral-400">
                         {fmtNum(done)}/{fmtNum(total)}
                         {pending > 0 && (
-                          <span className="ml-1 text-amber-400">
-                            +{fmtNum(pending)} · 최대 ~{fmtDuration(eta)}
-                          </span>
+                          <span className="ml-1 text-amber-400">+{fmtNum(pending)}</span>
                         )}
                       </div>
-                    </div>
+                    </>
                   ) : (
-                    <span className="text-xs font-mono text-neutral-400">
-                      {mc != null ? `대상 ~${fmtNum(mc)}건 · ` : ""}예상 {s.estText ?? "~수초"}
-                    </span>
+                    mc != null && (
+                      <div className="text-xs font-mono text-neutral-400">대상 ~{fmtNum(mc)}건</div>
+                    )
                   )}
+                  {/* 수행시간: 실행중=실시간, 완료=측정, 미실행=저장값 */}
+                  {tl && <div className="text-[11px] font-mono text-neutral-500">{tl}</div>}
                 </div>
                 {expanded && stepInfo && hasLog && <LogBox info={stepInfo} />}
               </div>
