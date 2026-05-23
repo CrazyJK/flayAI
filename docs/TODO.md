@@ -37,6 +37,19 @@
 
 ---
 
+## ✅ 완료 (3차 처리, 2026-05-23) — 채팅 LLM 평가 + RAG 단순화
+
+Ollama 가 구동되어 채팅 LLM 후보를 실측 비교했다. 결론과 근거:
+
+- **채팅 모델 = `qwen2.5-abliterate:7b` 확정.** 12GB VRAM + 앱이 GPU ~3.7GB 점유 → LLM 은 ~5GB 이하(≈7~8B Q4)라야 100% GPU 로 들어감.
+  - 14b(9GB): 26% CPU 오프로드 + 콜드 로드 시 CUDA init 간헐 실패 → 부적합.
+  - qwen3-vl:8b / gemma-4-abliterated: thinking 을 끌 수 없어(`think:false`·`/no_think` 무시) 도구호출에 호출당 ~37초 → 대화형 부적합.
+  - EXAONE 3.5 7.8B(한국어 네이티브): Ollama tools API 미지원(400) + tool 결과를 못 읽어 환각 → RAG 부적합.
+- **RAG 단순화(refactor `3c914fc`):** 2차 LLM 답변 생성을 제거하고 코드 요약(`_summarize_results`)으로 대체. 사용자 목적은 opus 결과(카드)이고 묘사 문장은 불필요. 7B 의 중국어 드리프트 방어 로직 일체 제거. `_extract_meta` 가 min_rank/kind/playable 까지 코드 추출 → 응답 LLM 1회로 단축(워밍 후 1~2초).
+- **다른 모델의 역할(향후):** 포스터 캡션 기능 = `qwen3-vl:8b` 또는 `gemma-4-abliterated`(무검열 비전, 배치라 thinking·VRAM 무관). 개인문서 M5 = `gemma4`(검열 거부 불요 영역 + 128K 컨텍스트).
+
+---
+
 ## 남은 작업
 
 ### ⚪ A5. scikit-learn 미사용 의심 (확인 필요)
