@@ -29,9 +29,6 @@ dependencies = [
     "rapidocr-onnxruntime>=1.4",
     "Pillow>=10.3",
 
-    # Clustering
-    "scikit-learn>=1.5",
-
     # Translation
     "sentencepiece>=0.2",
     "sacremoses>=0.1",
