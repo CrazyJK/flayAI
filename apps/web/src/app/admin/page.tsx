@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
@@ -165,7 +165,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-neutral-800 rounded-lg overflow-hidden">
+    <div className="border border-neutral-800 rounded-lg overflow-hidden flex flex-col">
       <div className="px-4 py-2.5 bg-neutral-900 flex items-center gap-2 border-b border-neutral-800">
         <span className="font-semibold text-base">{title}</span>
         {badge && <span className="text-sm font-mono text-neutral-400 ml-1">{badge}</span>}
@@ -180,7 +180,7 @@ function SectionCard({
           {available ? "UP" : "DOWN"}
         </span>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-4 flex-1">{children}</div>
     </div>
   );
 }
@@ -927,41 +927,112 @@ type SystemData = {
 
 type MonitorData = { system: SystemData; qdrant: QdrantData; ollama: OllamaData };
 
-function Gauge({ label, percent, sub }: { label: string; percent?: number; sub?: string }) {
+// 실시간 차트용 롤링 버퍼 (각 지표 최근 N초 %값)
+type MetricHistory = { cpu: number[]; ram: number[]; gpu: number[]; vram: number[] };
+
+// 현재 %값 헤더 + 최근 추이 SVG 영역 차트.
+// viewBox 0~100 좌표 + preserveAspectRatio=none 으로 카드 높이를 그대로 채운다.
+function MetricChart({
+  label,
+  percent,
+  sub,
+  data,
+}: {
+  label: string;
+  percent?: number;
+  sub?: string;
+  data: number[];
+}) {
+  const uid = useId();
+  const gid = "mc" + uid.replace(/:/g, "");
   const p = percent == null ? null : Math.max(0, Math.min(100, percent));
-  const color = p == null ? "bg-neutral-600" : p >= 85 ? "bg-red-500" : p >= 60 ? "bg-amber-500" : "bg-emerald-500";
+  // 현재값 임계로 색 결정 (emerald < 60 ≤ amber < 85 ≤ red)
+  const stroke = p == null ? "#525252" : p >= 85 ? "#ef4444" : p >= 60 ? "#f59e0b" : "#10b981";
+
+  const pts = data.map((v, i) => {
+    const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * 100;
+    const y = 100 - Math.max(0, Math.min(100, v));
+    return `${x.toFixed(2)} ${y.toFixed(2)}`;
+  });
+  const line = pts.map((pt, i) => `${i === 0 ? "M" : "L"}${pt}`).join(" ");
+  const area = pts.length >= 2 ? `${line} L100 100 L0 100 Z` : "";
+
   return (
-    <div className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2">
+    <div className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2 flex flex-col min-h-0">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs text-neutral-400 truncate">{label}</span>
-        <span className="font-mono text-sm text-neutral-100 shrink-0">{p == null ? "—" : `${p.toFixed(0)}%`}</span>
+        <span className="font-mono text-sm text-neutral-100 shrink-0">
+          {p == null ? "—" : `${p.toFixed(0)}%`}
+        </span>
       </div>
-      <div className="mt-1 h-1.5 bg-neutral-700 rounded-full overflow-hidden">
-        <div className={"h-full " + color} style={{ width: `${p ?? 0}%` }} />
+      <div className="relative flex-1 mt-1 min-h-[36px]">
+        <svg
+          className="absolute inset-0 h-full w-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden
+        >
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={stroke} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          {area && <path d={area} fill={`url(#${gid})`} />}
+          {pts.length >= 2 && (
+            <path
+              d={line}
+              fill="none"
+              stroke={stroke}
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+        </svg>
       </div>
-      {sub && <div className="mt-1 text-[11px] text-neutral-500 font-mono">{sub}</div>}
+      {sub && <div className="mt-1 text-[11px] text-neutral-500 font-mono shrink-0">{sub}</div>}
     </div>
   );
 }
 
-function SystemMonitor({ sys }: { sys?: SystemData }) {
+function SystemMonitor({ sys, history }: { sys?: SystemData; history: MetricHistory }) {
   if (!sys) return <div className="text-sm text-neutral-500 animate-pulse">시스템 정보 로딩…</div>;
   const gb = (b?: number) => (b == null ? "—" : `${(b / 1e9).toFixed(1)}GB`);
   const mib = (m?: number) => (m == null ? "—" : `${(m / 1024).toFixed(1)}GB`);
   const vramPct =
-    sys.vram_total_mib && sys.vram_used_mib != null ? (sys.vram_used_mib / sys.vram_total_mib) * 100 : undefined;
+    sys.vram_total_mib && sys.vram_used_mib != null
+      ? (sys.vram_used_mib / sys.vram_total_mib) * 100
+      : undefined;
+  // h-full + grid-rows-2 로 카드(SectionCard)가 늘어난 높이를 2x2 차트가 그대로 채운다.
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <Gauge label={`CPU${sys.cpu_count ? ` · ${sys.cpu_count}코어` : ""}`} percent={sys.cpu_percent} />
-      <Gauge label="RAM" percent={sys.ram_percent} sub={`${gb(sys.ram_used)} / ${gb(sys.ram_total)}`} />
+    <div className="grid h-full min-h-[200px] grid-cols-2 grid-rows-2 gap-2">
+      <MetricChart
+        label={`CPU${sys.cpu_count ? ` · ${sys.cpu_count}코어` : ""}`}
+        percent={sys.cpu_percent}
+        data={history.cpu}
+      />
+      <MetricChart
+        label="RAM"
+        percent={sys.ram_percent}
+        sub={`${gb(sys.ram_used)} / ${gb(sys.ram_total)}`}
+        data={history.ram}
+      />
       {sys.gpu_available ? (
         <>
-          <Gauge
+          <MetricChart
             label="GPU"
             percent={sys.gpu_percent}
             sub={sys.gpu_temp != null ? `${sys.gpu_temp}°C` : undefined}
+            data={history.gpu}
           />
-          <Gauge label="VRAM" percent={vramPct} sub={`${mib(sys.vram_used_mib)} / ${mib(sys.vram_total_mib)}`} />
+          <MetricChart
+            label="VRAM"
+            percent={vramPct}
+            sub={`${mib(sys.vram_used_mib)} / ${mib(sys.vram_total_mib)}`}
+            data={history.vram}
+          />
         </>
       ) : (
         <div className="col-span-2 text-xs text-neutral-500 px-1">GPU 정보 없음</div>
@@ -970,15 +1041,15 @@ function SystemMonitor({ sys }: { sys?: SystemData }) {
   );
 }
 
-// CPU/RAM/GPU/VRAM 게이지를 Qdrant·Ollama 와 동일한 카드(SectionCard)로 묶는다.
-function SystemSection({ sys }: { sys?: SystemData }) {
+// CPU/RAM/GPU/VRAM 차트를 Qdrant·Ollama 와 동일한 카드(SectionCard)로 묶는다.
+function SystemSection({ sys, history }: { sys?: SystemData; history: MetricHistory }) {
   return (
     <SectionCard
       title="시스템 리소스"
       badge={sys?.gpu_name ? sys.gpu_name.replace("NVIDIA GeForce ", "") : undefined}
       available={!!sys?.available}
     >
-      <SystemMonitor sys={sys} />
+      <SystemMonitor sys={sys} history={history} />
     </SectionCard>
   );
 }
@@ -987,9 +1058,13 @@ function SystemSection({ sys }: { sys?: SystemData }) {
 // 메인 페이지
 // ---------------------------------------------------------------------------
 
+const MONITOR_POLL_MS = 1000; // 모니터 폴링 간격 (psutil 비차단 + nvidia-smi ~50ms 라 1초도 부하 적음)
+const MAX_HISTORY = 60; // 차트 롤링 버퍼 길이 (1초 × 60 = 최근 약 1분)
+
 export default function AdminPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [monitor, setMonitor] = useState<MonitorData | null>(null);
+  const [history, setHistory] = useState<MetricHistory>({ cpu: [], ram: [], gpu: [], vram: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -1013,7 +1088,22 @@ export default function AdminPage() {
   const loadMonitor = useCallback(async () => {
     try {
       const r = await fetch(`${API_BASE}/api/admin/monitor`);
-      if (r.ok) setMonitor((await r.json()) as MonitorData);
+      if (!r.ok) return;
+      const m = (await r.json()) as MonitorData;
+      setMonitor(m);
+      // 차트 롤링 버퍼에 현재 %값 누적 (최근 MAX_HISTORY개 유지)
+      const s = m.system ?? ({} as SystemData);
+      const vramPct =
+        s.vram_total_mib && s.vram_used_mib != null
+          ? (s.vram_used_mib / s.vram_total_mib) * 100
+          : 0;
+      const cap = (arr: number[], v: number) => [...arr, v].slice(-MAX_HISTORY);
+      setHistory((h) => ({
+        cpu: cap(h.cpu, s.cpu_percent ?? 0),
+        ram: cap(h.ram, s.ram_percent ?? 0),
+        gpu: cap(h.gpu, s.gpu_percent ?? 0),
+        vram: cap(h.vram, vramPct),
+      }));
     } catch {
       /* 모니터 폴링 실패는 조용히 무시 */
     }
@@ -1029,7 +1119,7 @@ export default function AdminPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadMonitor();
-    const t = setInterval(() => void loadMonitor(), 3000);
+    const t = setInterval(() => void loadMonitor(), MONITOR_POLL_MS);
     return () => clearInterval(t);
   }, [loadMonitor]);
 
@@ -1080,11 +1170,11 @@ export default function AdminPage() {
         {/* 모니터링 — 실시간(3초) */}
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">
-            모니터링 <span className="text-xs font-normal text-neutral-500">· 실시간 (3초)</span>
+            모니터링 <span className="text-xs font-normal text-neutral-500">· 실시간 (1초)</span>
           </h2>
           {/* 시스템·Qdrant·Ollama: 넓으면 3열로 가로 꽉 채움, 좁으면 세로 스택. 등높이 카드 */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
-            <SystemSection sys={monitor?.system} />
+            <SystemSection sys={monitor?.system} history={history} />
             <QdrantSection
               data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
             />
