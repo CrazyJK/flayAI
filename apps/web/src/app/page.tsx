@@ -28,7 +28,6 @@ type VideoHit = {
   play?: number | null;
   like_count?: number | null;
   actresses?: string[];
-  playable?: boolean;
   score?: number;
 };
 
@@ -104,11 +103,6 @@ function VideoCard({ hit }: { hit: VideoHit }) {
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="font-mono text-sm text-amber-300">{hit.opus}</span>
           <KindBadge kind={hit.kind} />
-          {hit.playable && (
-            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/30 text-blue-200 border border-blue-500/50">
-              ▶ PLAYABLE
-            </span>
-          )}
           {typeof hit.rank === "number" && hit.rank > 0 && (
             <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-500/30 text-yellow-100">
               {"⭐".repeat(hit.rank)}
