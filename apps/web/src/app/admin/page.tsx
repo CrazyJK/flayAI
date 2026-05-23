@@ -302,22 +302,21 @@ function SqliteSection({ data }: { data: SqliteData }) {
       badge={`${data.tables.length}개 테이블 · 최근 24h 쿼리 ${fmtNum(data.recent_queries_24h)}건`}
       available
     >
-      <div className="space-y-1">
+      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
         {data.tables.map((t) => (
-          <div
-            key={t.name}
-            className="flex items-center gap-3 rounded px-2 py-1.5 hover:bg-neutral-800/40 transition-colors"
-          >
-            <span className="font-mono text-sm text-neutral-200 w-36 shrink-0">
-              {t.name}
-              {t.note && <span className="ml-1 text-xs text-neutral-500">[{t.note}]</span>}
-            </span>
-            <span className="text-xs text-neutral-400 flex-1 min-w-0 truncate">
+          <div key={t.name} className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-mono text-sm text-neutral-200 truncate">
+                {t.name}
+                {t.note && <span className="ml-1 text-[10px] text-neutral-500">[{t.note}]</span>}
+              </span>
+              <span className="font-mono text-sm text-neutral-100 shrink-0">
+                {t.count >= 0 ? fmtNum(t.count) : "—"}
+              </span>
+            </div>
+            <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
               {SQLITE_DESC[t.name] ?? ""}
-            </span>
-            <span className="font-mono text-sm text-neutral-300 shrink-0 w-16 text-right">
-              {t.count >= 0 ? fmtNum(t.count) : "—"}
-            </span>
+            </div>
           </div>
         ))}
       </div>
@@ -739,8 +738,8 @@ function IndexerSection({
         배치로 보통 더 빠릅니다. 각 단계 버튼으로 개별 실행도 가능합니다.
       </p>
 
-      {/* 세로 흐름도 — 각 단계 박스 + 아래 화살표 */}
-      <div className="space-y-0">
+      {/* 흐름도 — 좁은 화면은 세로(▼), 넓은 화면은 가로(→) */}
+      <div className="flex flex-col xl:flex-row xl:flex-wrap xl:items-stretch gap-2">
         {PIPELINE.map((s, i) => {
           const { status, info } = stageState(s.job, jobs);
           const isAI = s.group === "AI";
@@ -761,8 +760,13 @@ function IndexerSection({
                   ? "border-red-500/50 bg-red-500/5"
                   : "border-neutral-700/50 bg-neutral-900/40";
           return (
-            <div key={s.job}>
-              <div className={"rounded-lg border px-3 py-2.5 transition-colors " + border}>
+            <div key={s.job} className="flex flex-col xl:flex-row xl:items-stretch">
+              <div
+                className={
+                  "rounded-lg border px-3 py-2.5 transition-colors xl:w-[250px] xl:flex xl:flex-col " +
+                  border
+                }
+              >
                 <div className="flex items-center gap-2">
                   <span className="w-4 text-center shrink-0">
                     {status === "running" ? (
@@ -835,8 +839,12 @@ function IndexerSection({
                 {expanded && stepInfo && hasLog && <LogBox info={stepInfo} />}
               </div>
               {i < PIPELINE.length - 1 && (
-                <div className="flex justify-center text-neutral-600 leading-none py-0.5" aria-hidden>
-                  ▼
+                <div
+                  className="flex items-center justify-center text-neutral-600 leading-none py-0.5 xl:px-1 xl:py-0"
+                  aria-hidden
+                >
+                  <span className="xl:hidden">▼</span>
+                  <span className="hidden xl:inline">→</span>
                 </div>
               )}
             </div>
@@ -848,11 +856,76 @@ function IndexerSection({
 }
 
 // ---------------------------------------------------------------------------
+// 시스템 모니터 (CPU/RAM/GPU/VRAM/온도)
+// ---------------------------------------------------------------------------
+
+type SystemData = {
+  available: boolean;
+  cpu_percent?: number;
+  cpu_count?: number;
+  ram_percent?: number;
+  ram_used?: number;
+  ram_total?: number;
+  gpu_available?: boolean;
+  gpu_percent?: number;
+  vram_used_mib?: number;
+  vram_total_mib?: number;
+  gpu_temp?: number;
+  gpu_name?: string;
+};
+
+type MonitorData = { system: SystemData; qdrant: QdrantData; ollama: OllamaData };
+
+function Gauge({ label, percent, sub }: { label: string; percent?: number; sub?: string }) {
+  const p = percent == null ? null : Math.max(0, Math.min(100, percent));
+  const color = p == null ? "bg-neutral-600" : p >= 85 ? "bg-red-500" : p >= 60 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2 flex-1 min-w-[150px]">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs text-neutral-400 truncate">{label}</span>
+        <span className="font-mono text-sm text-neutral-100 shrink-0">{p == null ? "—" : `${p.toFixed(0)}%`}</span>
+      </div>
+      <div className="mt-1 h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+        <div className={"h-full " + color} style={{ width: `${p ?? 0}%` }} />
+      </div>
+      {sub && <div className="mt-1 text-[11px] text-neutral-500 font-mono">{sub}</div>}
+    </div>
+  );
+}
+
+function SystemMonitor({ sys }: { sys?: SystemData }) {
+  if (!sys) return <div className="text-sm text-neutral-500 animate-pulse">시스템 정보 로딩…</div>;
+  const gb = (b?: number) => (b == null ? "—" : `${(b / 1e9).toFixed(1)}GB`);
+  const mib = (m?: number) => (m == null ? "—" : `${(m / 1024).toFixed(1)}GB`);
+  const vramPct =
+    sys.vram_total_mib && sys.vram_used_mib != null ? (sys.vram_used_mib / sys.vram_total_mib) * 100 : undefined;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Gauge label={`CPU${sys.cpu_count ? ` (${sys.cpu_count}코어)` : ""}`} percent={sys.cpu_percent} />
+      <Gauge label="RAM" percent={sys.ram_percent} sub={`${gb(sys.ram_used)} / ${gb(sys.ram_total)}`} />
+      {sys.gpu_available ? (
+        <>
+          <Gauge
+            label={`GPU${sys.gpu_name ? ` · ${sys.gpu_name.replace("NVIDIA GeForce ", "")}` : ""}`}
+            percent={sys.gpu_percent}
+            sub={sys.gpu_temp != null ? `${sys.gpu_temp}°C` : undefined}
+          />
+          <Gauge label="VRAM" percent={vramPct} sub={`${mib(sys.vram_used_mib)} / ${mib(sys.vram_total_mib)}`} />
+        </>
+      ) : (
+        <div className="text-xs text-neutral-500 self-center px-2">GPU 정보 없음</div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 메인 페이지
 // ---------------------------------------------------------------------------
 
 export default function AdminPage() {
   const [data, setData] = useState<Dashboard | null>(null);
+  const [monitor, setMonitor] = useState<MonitorData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -873,11 +946,28 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadMonitor = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/monitor`);
+      if (r.ok) setMonitor((await r.json()) as MonitorData);
+    } catch {
+      /* 모니터 폴링 실패는 조용히 무시 */
+    }
+  }, []);
+
   // 진입 시 자동으로 한 번 로드 (새로고침 버튼을 누르지 않아도 데이터 표시)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  // 실시간 모니터링: /monitor(경량) 를 3초 간격으로 폴링 (CPU/GPU/Qdrant/Ollama)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadMonitor();
+    const t = setInterval(() => void loadMonitor(), 3000);
+    return () => clearInterval(t);
+  }, [loadMonitor]);
 
   // 작업 실행 중에는 1.5초마다 자동 폴링해 단계 진행상황을 갱신 (평소엔 수동 새로고침)
   useEffect(() => {
@@ -900,10 +990,19 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="flex-1 flex flex-col mx-auto w-full max-w-3xl px-4">
-      <header className="py-4 border-b border-neutral-800 flex items-baseline gap-2">
-        <h1 className="text-xl font-semibold">flayAI</h1>
-        <span className="text-sm text-neutral-400 font-mono">{API_BASE}</span>
+    <main className="flex-1 flex flex-col w-full min-h-0">
+      {/* 상단 고정 헤더 (채팅처럼) */}
+      <header className="shrink-0 px-4 py-3 border-b border-neutral-800 flex items-center gap-3">
+        <h1 className="text-lg font-semibold">flayAI</h1>
+        <span className="text-xs text-neutral-500 font-mono hidden sm:inline">{API_BASE}</span>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className="ml-1 px-2.5 py-1 text-xs rounded border border-neutral-700 hover:bg-neutral-800 disabled:opacity-50"
+        >
+          {loading ? "로딩…" : "↻ 새로고침"}
+        </button>
         <nav className="ml-auto flex items-center gap-3 text-sm">
           <Link href="/" className="text-neutral-400 hover:text-neutral-200">
             채팅
@@ -923,50 +1022,47 @@ export default function AdminPage() {
         </nav>
       </header>
 
-      <div className="py-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">시스템 모니터링</h2>
-            <p className="text-sm text-neutral-400 mt-0.5">
-              {lastRefresh
-                ? `마지막 갱신: ${lastRefresh.toLocaleTimeString("ko-KR")}`
-                : "새로고침 버튼으로 데이터를 로드하세요"}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            className="px-3 py-1.5 text-sm rounded border border-neutral-700 hover:bg-neutral-800 disabled:opacity-50"
-          >
-            {loading ? "로딩…" : "↻ 새로고침"}
-          </button>
-        </div>
-
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-8">
         {error && (
           <div className="rounded border border-red-500/40 bg-red-500/10 px-4 py-3 text-base text-red-400">
             API 연결 실패: {error}
           </div>
         )}
 
-        {loading && !data && (
-          <div className="text-base text-neutral-400 animate-pulse">데이터 로딩 중…</div>
-        )}
+        {/* 모니터링 — 실시간(3초) */}
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">
+            모니터링 <span className="text-xs font-normal text-neutral-500">· 실시간 (3초)</span>
+          </h2>
+          <SystemMonitor sys={monitor?.system} />
+          <QdrantSection
+            data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
+          />
+          <OllamaSection
+            data={
+              monitor?.ollama ??
+              data?.ollama ?? { available: false, models: [], running_count: 0 }
+            }
+          />
+        </section>
 
-        {!data && !loading && !error && (
-          <div className="text-base text-neutral-400">
-            새로고침 버튼을 눌러 시스템 상태를 확인하세요.
-          </div>
-        )}
-
-        {data && (
-          <div className="space-y-6">
-            <QdrantSection data={data.qdrant} />
-            <OllamaSection data={data.ollama} />
-            <SqliteSection data={data.sqlite} />
-            <IndexerSection data={data.indexer} jobs={data.jobs} onStartJob={startJob} />
-          </div>
-        )}
+        {/* 인덱싱 작업 */}
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">
+            인덱싱 작업{" "}
+            <span className="text-xs font-normal text-neutral-500">
+              {lastRefresh ? `· 갱신 ${lastRefresh.toLocaleTimeString("ko-KR")}` : ""}
+            </span>
+          </h2>
+          {data ? (
+            <>
+              <SqliteSection data={data.sqlite} />
+              <IndexerSection data={data.indexer} jobs={data.jobs} onStartJob={startJob} />
+            </>
+          ) : (
+            <div className="text-base text-neutral-400 animate-pulse">데이터 로딩 중…</div>
+          )}
+        </section>
       </div>
     </main>
   );

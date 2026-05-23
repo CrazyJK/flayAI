@@ -43,6 +43,7 @@ dependencies = [
 
     # Utilities
     "setuptools>=70",  # pkg_resources 런타임 사용 라이브러리 대비 (uv 가 고아로 제거하지 않게 명시)
+    "psutil>=5.9",  # 관리자 시스템 모니터링(CPU/RAM)
     "sqlite-utils>=3.36",
     "watchdog>=4.0",
     "httpx>=0.27",

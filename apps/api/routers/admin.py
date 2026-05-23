@@ -96,6 +96,21 @@ async def dashboard(request: Request) -> dict[str, Any]:
     }
 
 
+@router.get("/monitor")
+async def monitor(request: Request) -> dict[str, Any]:
+    """실시간 모니터링용 경량 엔드포인트 — system(CPU/RAM/GPU) + qdrant + ollama.
+
+    무거운 SQLite COUNT(*)·인덱서 집계는 제외해 자주(수초 간격) 폴링해도 부하가 적다.
+    """
+    _localhost_only(request)
+    system_data, qdrant_data, ollama_data = await asyncio.gather(
+        asyncio.to_thread(_system_stats),
+        asyncio.to_thread(_qdrant_stats),
+        _ollama_stats(),
+    )
+    return {"system": system_data, "qdrant": qdrant_data, "ollama": ollama_data}
+
+
 # ---------------------------------------------------------------------------
 # 인덱서 작업
 # ---------------------------------------------------------------------------
@@ -400,6 +415,50 @@ async def _ollama_stats() -> dict[str, Any]:
     except Exception as e:
         log.warning("ollama stats error: %s", e)
         return {"available": False, "error": str(e), "models": [], "running_count": 0}
+
+
+def _system_stats() -> dict[str, Any]:
+    """CPU/RAM(psutil) + GPU/VRAM/온도(nvidia-smi)를 수집한다. 경량·자주 폴링용.
+
+    - CPU: psutil.cpu_percent(interval=None) — 직전 호출 이후 사용률(비차단).
+    - GPU: nvidia-smi 1회 호출(util%, VRAM used/total MiB, 온도). 미설치 시 gpu_error.
+    """
+    out: dict[str, Any] = {"available": True}
+    try:
+        import psutil
+
+        out["cpu_percent"] = psutil.cpu_percent(interval=None)
+        out["cpu_count"] = psutil.cpu_count()
+        vm = psutil.virtual_memory()
+        out["ram_percent"] = vm.percent
+        out["ram_used"] = int(vm.used)
+        out["ram_total"] = int(vm.total)
+    except Exception as e:
+        out["cpu_error"] = str(e)
+    try:
+        r = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,name",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            parts = [p.strip() for p in r.stdout.strip().splitlines()[0].split(",")]
+            if len(parts) >= 4:
+                out["gpu_available"] = True
+                out["gpu_percent"] = float(parts[0])
+                out["vram_used_mib"] = float(parts[1])
+                out["vram_total_mib"] = float(parts[2])
+                out["gpu_temp"] = float(parts[3])
+                if len(parts) >= 5:
+                    out["gpu_name"] = parts[4]
+    except Exception as e:
+        out["gpu_error"] = str(e)
+    return out
 
 
 def _qdrant_points_counts() -> dict[str, int]:
