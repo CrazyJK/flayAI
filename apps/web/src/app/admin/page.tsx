@@ -1017,7 +1017,8 @@ function MetricChart({
 
 function SystemMonitor({ sys, history }: { sys?: SystemData; history: MetricHistory }) {
   if (!sys) return <div className="text-sm text-neutral-500 animate-pulse">시스템 정보 로딩…</div>;
-  const gb = (b?: number) => (b == null ? "—" : `${(b / 1e9).toFixed(1)}GB`);
+  // 2진 GiB 로 표시 (작업관리자·VRAM 표기와 단위 일치; 라벨은 관례상 GB)
+  const gb = (b?: number) => (b == null ? "—" : `${(b / 1024 ** 3).toFixed(1)}GB`);
   const mib = (m?: number) => (m == null ? "—" : `${(m / 1024).toFixed(1)}GB`);
   const vramPct =
     sys.vram_total_mib && sys.vram_used_mib != null
