@@ -653,10 +653,10 @@ function LogBox({ info }: { info: JobInfo }) {
 function StageArrow() {
   return (
     <div
-      className="flex items-center justify-center text-neutral-600 py-1 xl:py-0 xl:px-1"
+      className="flex items-center justify-center text-neutral-600 py-1 lg:py-0 lg:px-1"
       aria-hidden
     >
-      <svg className="xl:hidden" width="16" height="20" viewBox="0 0 16 20" fill="none">
+      <svg className="lg:hidden" width="16" height="20" viewBox="0 0 16 20" fill="none">
         <path
           d="M8 1V15M3 10l5 5 5-5"
           stroke="currentColor"
@@ -665,7 +665,7 @@ function StageArrow() {
           strokeLinejoin="round"
         />
       </svg>
-      <svg className="hidden xl:block" width="22" height="16" viewBox="0 0 22 16" fill="none">
+      <svg className="hidden lg:block" width="22" height="16" viewBox="0 0 22 16" fill="none">
         <path
           d="M1 8h14M11 3l5 5-5 5"
           stroke="currentColor"
@@ -815,7 +815,7 @@ function IndexerSection({
       </div>
 
       {/* 흐름도 — 좁은 화면은 세로(▼), 넓은 화면은 가로(→) */}
-      <div className="flex flex-col xl:flex-row xl:flex-wrap xl:items-stretch gap-2">
+      <div className="flex flex-col lg:flex-row lg:flex-wrap lg:items-stretch gap-2">
         {PIPELINE.map((s, i) => {
           const { status, info } = stageState(s.job, jobs);
           const isAI = s.group === "AI";
@@ -836,10 +836,10 @@ function IndexerSection({
                   ? "border-red-500/50 bg-red-500/5"
                   : "border-neutral-700/50 bg-neutral-900/40";
           return (
-            <div key={s.job} className="flex flex-col xl:flex-row xl:items-stretch">
+            <div key={s.job} className="flex flex-col lg:flex-row lg:items-stretch">
               <div
                 className={
-                  "rounded-lg border px-3 py-2.5 transition-colors xl:w-[360px] xl:flex xl:flex-col " +
+                  "rounded-lg border px-3 py-2.5 transition-colors lg:w-[360px] lg:flex lg:flex-col " +
                   border
                 }
               >
