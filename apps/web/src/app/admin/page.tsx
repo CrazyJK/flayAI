@@ -44,6 +44,7 @@ type OllamaModel = {
   parameter_size?: string | null;
   quantization?: string | null;
   family?: string | null;
+  capabilities?: string[] | null;
   loaded: boolean;
   size_vram?: number | null;
   expires_at?: string | null;
@@ -345,53 +346,61 @@ function OllamaSection({ data }: { data: OllamaData }) {
       badge={`${data.models.length}개 설치 · ${loadedCount}개 VRAM 로드`}
       available
     >
-      <div className="space-y-2">
+      {/* 2 x n 그리드. 각 카드 4줄: 이름 / 메타 / capabilities / 로드상태 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {data.models.map((m) => (
           <div
             key={m.name}
             className={
-              "rounded border px-3 py-2.5 " +
+              "rounded border px-3 py-2 flex flex-col gap-1 " +
               (m.loaded
-                ? "border-emerald-500/30 bg-emerald-500/5"
+                ? "border-emerald-500/40 bg-emerald-500/5"
                 : "border-neutral-700/60 bg-neutral-900/50")
             }
           >
-            <div className="flex items-start gap-2">
+            {/* 1줄: 이름 */}
+            <div className="flex items-center gap-2">
               <span
                 className={
-                  "mt-1 w-2 h-2 rounded-full shrink-0 " +
-                  (m.loaded ? "bg-emerald-400 animate-pulse" : "bg-neutral-600")
+                  "w-2 h-2 rounded-full shrink-0 " +
+                  (m.loaded ? "bg-emerald-400 animate-pulse" : "bg-neutral-700")
                 }
-                title={m.loaded ? "VRAM 로드 중" : "대기"}
+                title={m.loaded ? "VRAM 로드 중" : "미로드"}
               />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="font-mono text-base text-neutral-100">{m.name}</span>
-                  {m.loaded && (
-                    <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                      VRAM 로드 중
+              <span className="font-mono text-sm text-neutral-100 truncate">{m.name}</span>
+            </div>
+            {/* 2줄: 메타 */}
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400">
+              {m.parameter_size && <span>파라미터 {m.parameter_size}</span>}
+              {m.quantization && <span>양자화 {m.quantization}</span>}
+              {m.family && <span>패밀리 {m.family}</span>}
+              <span>크기 {fmtBytes(m.size)}</span>
+            </div>
+            {/* 3줄: capabilities (지원 기능) */}
+            <div className="flex flex-wrap gap-1 min-h-[18px]">
+              {(m.capabilities ?? []).map((c) => (
+                <span
+                  key={c}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700/40 text-neutral-300 font-mono"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            {/* 4줄: 로드 상태 (미로드여도 높이 유지) */}
+            <div className="min-h-[16px] text-[11px] font-mono">
+              {m.loaded ? (
+                <span className="text-emerald-400">
+                  로드 중 · VRAM {fmtBytes(m.size_vram)}
+                  {m.expires_at && (
+                    <span className="text-neutral-400">
+                      {" · "}만료 {new Date(m.expires_at).toLocaleTimeString("ko-KR")}
                     </span>
                   )}
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400">
-                  {m.parameter_size && <span>파라미터 {m.parameter_size}</span>}
-                  {m.quantization && <span>양자화 {m.quantization}</span>}
-                  {m.family && <span>패밀리 {m.family}</span>}
-                  <span>크기 {fmtBytes(m.size)}</span>
-                </div>
-                {m.loaded && (
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 text-[11px]">
-                    {m.size_vram != null && m.size_vram > 0 && (
-                      <span className="text-emerald-400">VRAM {fmtBytes(m.size_vram)}</span>
-                    )}
-                    {m.expires_at && (
-                      <span className="text-neutral-400">
-                        만료 {new Date(m.expires_at).toLocaleTimeString("ko-KR")}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
+                </span>
+              ) : (
+                <span className="text-neutral-600">미로드</span>
+              )}
             </div>
           </div>
         ))}

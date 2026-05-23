@@ -356,11 +356,16 @@ def _sqlite_stats() -> dict[str, Any]:
         return {"available": False, "error": str(e), "tables": []}
 
 
+# 모델 capabilities 는 정적이라 /api/show 로 1회만 조회해 캐시 (매 폴링마다 호출 방지)
+_OLLAMA_CAPS: dict[str, list[str]] = {}
+
+
 async def _ollama_stats() -> dict[str, Any]:
     """Ollama REST API로 설치된 모델 목록과 현재 로드된 모델을 조회한다.
 
     - /api/tags  : 설치된 모델 목록
     - /api/ps    : 현재 VRAM에 로드된 모델 (Ollama 0.1.33+)
+    - /api/show  : 모델 capabilities (vision/tools/thinking/audio) — 정적이라 1회 캐시
     """
     try:
         cfg = load_config()
@@ -379,23 +384,32 @@ async def _ollama_stats() -> dict[str, Any]:
             except Exception:
                 pass
 
-        # 불필요한 대용량 필드 제거 (modelfile, template 등)
-        # running 모델은 이름으로 빠르게 조회할 수 있게 dict로 변환
+            # capabilities: 캐시에 없는 모델만 /api/show 1회 조회 (정적 정보)
+            for m in models:
+                nm = m.get("name", "")
+                if nm and nm not in _OLLAMA_CAPS:
+                    try:
+                        sh = await client.post(f"{base_url}/api/show", json={"model": nm})
+                        _OLLAMA_CAPS[nm] = (
+                            sh.json().get("capabilities") or [] if sh.status_code == 200 else []
+                        )
+                    except Exception:
+                        _OLLAMA_CAPS[nm] = []
+
+        # 로드된 모델은 **정확한 이름**으로만 매칭한다.
+        # (base 이름 매칭은 같은 모델의 다른 태그 e2b/e4b 를 서로 오탐해 둘 다 '로드중'으로
+        #  표시하던 버그의 원인 — 제거함)
         running_map: dict[str, dict] = {}
         for m in running:
-            name = m.get("name", "")
-            running_map[name] = m
-            # "model:tag" 형태일 때 태그 없는 이름도 등록
-            base = name.split(":")[0]
-            if base not in running_map:
-                running_map[base] = m
+            nm = m.get("name") or m.get("model") or ""
+            if nm:
+                running_map[nm] = m
 
         slim_models = []
         for m in models:
             mname: str = m.get("name", "")
             details: dict = m.get("details", {})
-            # running 여부: 정확한 이름 또는 base 이름으로 매칭
-            run_info = running_map.get(mname) or running_map.get(mname.split(":")[0])
+            run_info = running_map.get(mname)
             slim_models.append(
                 {
                     "name": mname,
@@ -405,7 +419,8 @@ async def _ollama_stats() -> dict[str, Any]:
                     "parameter_size": details.get("parameter_size"),
                     "quantization": details.get("quantization_level"),
                     "family": details.get("family"),
-                    # VRAM 로드 상태
+                    "capabilities": _OLLAMA_CAPS.get(mname, []),
+                    # VRAM 로드 상태 (정확한 이름 매칭)
                     "loaded": run_info is not None,
                     "size_vram": run_info.get("size_vram") if run_info else None,
                     "expires_at": run_info.get("expires_at") if run_info else None,
