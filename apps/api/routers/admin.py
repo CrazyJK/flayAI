@@ -43,6 +43,25 @@ ALLOWED_JOBS: set[str] = {
     "sync-payload",
 }
 
+# 일괄(파이프라인) 작업의 단계 정의 — 단계별 진행상황을 추적해 흐름도로 보여준다.
+# refresh/rebuild 는 동일 순서이며, rebuild 만 load 가 --rebuild(전체 재적재).
+PIPELINE_DEFS: dict[str, list[tuple[str, list[str]]]] = {
+    "refresh": [
+        ("load", []),
+        ("scan", []),
+        ("history", []),
+        ("fts", []),
+        ("sync-payload", []),
+    ],
+    "rebuild": [
+        ("load", ["--rebuild"]),
+        ("scan", []),
+        ("history", []),
+        ("fts", []),
+        ("sync-payload", []),
+    ],
+}
+
 # 실행 중·완료 작업 상태 (메모리 전용 — 재시작 시 초기화)
 _running_jobs: dict[str, dict[str, Any]] = {}
 
@@ -108,6 +127,19 @@ async def start_job(job: str, request: Request) -> dict[str, Any]:
 
     # sys.executable은 디버거/uv 환경에선 프로젝트 venv가 아닐 수 있으므로 명시적으로 지정
     venv_python = str(REPO_ROOT / ".venv" / "Scripts" / "python.exe")
+
+    # 파이프라인(refresh/rebuild): 단계별 서브프로세스로 실행하며 진행상황을 추적
+    if job in PIPELINE_DEFS:
+        _running_jobs[job] = {
+            "status": "running",
+            "started_at": time.time(),
+            "current": 0,
+            "steps": [{"step": s, "args": a, "status": "pending"} for s, a in PIPELINE_DEFS[job]],
+        }
+        asyncio.get_event_loop().run_in_executor(None, _run_pipeline_sync, job, venv_python)
+        return {"status": "started", "job": job, "pipeline": True}
+
+    # 단일 작업
     # Windows 디버거 환경에서 asyncio.create_subprocess_exec가 NotImplementedError를
     # 발생시킬 수 있으므로 subprocess.Popen 사용
     proc = subprocess.Popen(
@@ -140,6 +172,47 @@ def _wait_job_sync(job: str, proc: subprocess.Popen) -> None:
         )
     except Exception as e:
         _running_jobs[job].update({"status": "error", "error": str(e)})
+
+
+def _run_pipeline_sync(job: str, venv_python: str) -> None:
+    """파이프라인 단계를 순차 실행하며 _running_jobs[job]['steps'] 진행상황을 갱신한다.
+
+    각 단계는 별도 서브프로세스(`cli <step>`)로 실행하고, 단계 상태를
+    pending -> running -> done/failed 로 갱신한다. 한 단계가 실패하면 중단.
+    """
+    info = _running_jobs[job]
+    steps = info["steps"]
+    for i, st in enumerate(steps):
+        info["current"] = i
+        st["status"] = "running"
+        st["started_at"] = time.time()
+        try:
+            proc = subprocess.Popen(
+                [venv_python, "-m", "packages.indexer.cli", st["step"], *st["args"]],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(REPO_ROOT),
+            )
+            out, err = proc.communicate()
+            st["finished_at"] = time.time()
+            st["returncode"] = proc.returncode
+            st["stdout"] = out.decode("utf-8", errors="replace")[-2000:]
+            if proc.returncode == 0:
+                st["status"] = "done"
+            else:
+                st["status"] = "failed"
+                st["stderr"] = err.decode("utf-8", errors="replace")[-2000:]
+                info["status"] = "failed"
+                info["finished_at"] = time.time()
+                return
+        except Exception as e:
+            st["status"] = "error"
+            info["status"] = "error"
+            info["error"] = str(e)
+            info["finished_at"] = time.time()
+            return
+    info["status"] = "done"
+    info["finished_at"] = time.time()
 
 
 # ---------------------------------------------------------------------------

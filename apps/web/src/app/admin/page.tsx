@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
@@ -73,6 +73,16 @@ type IndexerData = {
   error?: string;
 };
 
+type StepInfo = {
+  step: string;
+  status: "pending" | "running" | "done" | "failed" | "error";
+  started_at?: number;
+  finished_at?: number;
+  returncode?: number;
+  stdout?: string;
+  stderr?: string;
+};
+
 type JobInfo = {
   status: "running" | "done" | "failed" | "error";
   pid?: number;
@@ -82,6 +92,8 @@ type JobInfo = {
   stdout?: string;
   stderr?: string;
   error?: string;
+  current?: number;
+  steps?: StepInfo[];
 };
 
 type Dashboard = {
@@ -392,94 +404,144 @@ function OllamaSection({ data }: { data: OllamaData }) {
 // 인덱서 섹션
 // ---------------------------------------------------------------------------
 
-type PipelineStep = {
-  job: string;
-  completedKey: string;
-  totalKey: "videos" | "posters";
+// 인덱싱 전체 흐름(세로 다이어그램용). 메타 단계 + AI 단계를 논리적 순서로 나열.
+// - 메타(load·scan·history·fts·sync-payload): 증분 갱신/전체 재구축에서 자동 실행.
+// - AI(translate~ocr): 개별 버튼으로 실행. completedKey/secPerItem 으로 진행률·ETA 표시.
+type PipeStage = {
+  job: string; // CLI 작업명 = 실행 버튼 + 파이프라인 단계명(메타)
   label: string;
   desc: string;
-  // 건당 최악 소요시간(초) — 캐시·백필 없이 전건을 모델로 처리하는 기준.
-  // 대기 건수 × 이 값 = "최대" 소요시간(상한). 실제는 보통 이보다 훨씬 빠름.
-  secPerItem: number;
+  group: "메타" | "AI";
+  // AI 단계: 진행률/ETA용
+  completedKey?: string;
+  totalKey?: "videos" | "posters";
+  secPerItem?: number; // 건당 최악 소요시간(초)
+  // 메타 단계: 대상 건수/예상시간 표시용
+  metaCount?: "videos" | "posters" | "all";
+  estText?: string;
 };
 
-const PIPELINE_STEPS: PipelineStep[] = [
-  {
-    job: "translate",
-    completedKey: "translate",
-    totalKey: "videos",
-    label: "번역",
-    desc: "일본어 제목·설명을 한국어로 번역 (NLLB-200) · 증분 · GPU · 제목은 포스터 파일명에서 먼저 채워지고, 캐시 적중 시 거의 즉시",
-    secPerItem: 1.2,
-  },
-  {
-    job: "embed",
-    completedKey: "embed_text",
-    totalKey: "videos",
-    label: "텍스트 임베딩",
-    desc: "영상 텍스트를 벡터화해 Qdrant videos 컬렉션에 저장 (bge-m3) · 전체 재처리 · GPU",
-    secPerItem: 0.008,
-  },
-  {
-    job: "embed-clip",
-    completedKey: "embed_clip",
-    totalKey: "posters",
-    label: "이미지 임베딩",
-    desc: "포스터 이미지를 벡터화해 Qdrant posters_clip 컬렉션에 저장 (CLIP ViT-L/14) · 전체 재처리 · GPU",
-    secPerItem: 0.033,
-  },
-  {
-    job: "ocr-posters",
-    completedKey: "ocr_posters",
-    totalKey: "posters",
-    label: "포스터 OCR",
-    desc: "포스터 이미지에서 텍스트를 추출해 Qdrant poster_ocr 컬렉션에 저장 (RapidOCR) · 증분 · CPU",
-    secPerItem: 1.4,
-  },
-  {
-    job: "extract-faces",
-    completedKey: "extract_faces",
-    totalKey: "posters",
-    label: "얼굴 추출",
-    desc: "포스터에서 얼굴을 감지·벡터화해 Qdrant faces 컬렉션에 저장 (InsightFace buffalo_l) · 증분 · GPU",
-    secPerItem: 0.23,
-  },
-];
-
-type StandaloneJob = { job: string; label: string; desc: string };
-
-const STANDALONE_JOBS: StandaloneJob[] = [
+const PIPELINE: PipeStage[] = [
   {
     job: "load",
     label: "JSON 로드",
-    desc: "K:/Crazy/Info/*.json → SQLite videos 테이블 · 증분 · CPU · ~수초",
+    group: "메타",
+    desc: "K:/Crazy/Info/*.json → SQLite videos (증분; 전체 재구축 시 재적재)",
+    metaCount: "videos",
+    estText: "~수초",
   },
   {
     job: "scan",
     label: "포스터 스캔",
-    desc: "포스터 디렉토리를 탐색해 instance/archive 분류 후 DB 갱신 · 증분 · CPU · ~수초",
+    group: "메타",
+    desc: "포스터 디렉토리 탐색 → instance/archive 분류 + 파일명 한글 제목 백필",
+    metaCount: "posters",
+    estText: "~수초",
   },
   {
     job: "history",
-    label: "히스토리 CSV",
-    desc: "재생 히스토리 CSV를 SQLite history 테이블에 반영 · 증분 · CPU · ~수초",
+    label: "히스토리",
+    group: "메타",
+    desc: "재생 히스토리 CSV → SQLite history",
+    metaCount: "all",
+    estText: "~1초",
   },
   {
     job: "fts",
-    label: "FTS 재구축",
-    desc: "videos_fts5 전문 검색 인덱스를 처음부터 재생성 · 전체 재구축 · CPU · ~수초",
+    label: "FTS 색인",
+    group: "메타",
+    desc: "videos_fts5 전문검색 인덱스 재생성 (제목·설명 반영)",
+    metaCount: "videos",
+    estText: "~1초",
+  },
+  {
+    job: "translate",
+    label: "번역",
+    group: "AI",
+    desc: "JP 제목·설명 → KO (NLLB-200) · 제목은 파일명에서 먼저 채움 · 캐시 적중 시 즉시",
+    completedKey: "translate",
+    totalKey: "videos",
+    secPerItem: 1.2,
+  },
+  {
+    job: "embed",
+    label: "텍스트 임베딩",
+    group: "AI",
+    desc: "영상 텍스트 벡터화 → Qdrant videos (bge-m3) · GPU",
+    completedKey: "embed_text",
+    totalKey: "videos",
+    secPerItem: 0.008,
+  },
+  {
+    job: "embed-clip",
+    label: "이미지 임베딩",
+    group: "AI",
+    desc: "포스터 이미지 벡터화 → Qdrant posters_clip (CLIP ViT-L/14) · GPU",
+    completedKey: "embed_clip",
+    totalKey: "posters",
+    secPerItem: 0.033,
+  },
+  {
+    job: "extract-faces",
+    label: "얼굴 추출",
+    group: "AI",
+    desc: "포스터 얼굴 감지·벡터화 → Qdrant faces (InsightFace buffalo_l) · GPU",
+    completedKey: "extract_faces",
+    totalKey: "posters",
+    secPerItem: 0.23,
   },
   {
     job: "cluster-faces",
     label: "얼굴 클러스터링",
-    desc: "mutual-kNN + Union-Find로 얼굴 벡터를 배우 단위로 자동 그룹화 · 전체 재처리 · GPU · ~77초",
+    group: "AI",
+    desc: "mutual-kNN + Union-Find로 얼굴 → 배우 단위 그룹화 · GPU",
+    estText: "~77초",
+  },
+  {
+    job: "ocr-posters",
+    label: "포스터 OCR",
+    group: "AI",
+    desc: "포스터 텍스트 추출 → Qdrant poster_ocr (RapidOCR) · CPU",
+    completedKey: "ocr_posters",
+    totalKey: "posters",
+    secPerItem: 1.4,
   },
   {
     job: "sync-payload",
     label: "페이로드 동기화",
-    desc: "Qdrant 각 컬렉션 payload를 SQLite 최신 데이터로 갱신 · 전체 · CPU · ~수분",
+    group: "메타",
+    desc: "SQLite kind/playable → Qdrant 4컬렉션 payload 반영",
+    metaCount: "all",
+    estText: "~수초",
   },
 ];
+
+// 한 단계의 현재 상태를 jobs(파이프라인 steps + 개별 작업)에서 해석.
+type StageStatus = "idle" | "running" | "done" | "failed";
+function stageState(
+  job: string,
+  jobs: Record<string, JobInfo>,
+): { status: StageStatus; info?: JobInfo | StepInfo } {
+  const cands: { status: StageStatus; ts: number; info: JobInfo | StepInfo }[] = [];
+  for (const pj of ["refresh", "rebuild"]) {
+    const p = jobs[pj];
+    const s = p?.steps?.find((x) => x.step === job);
+    if (s) {
+      const st = (s.status === "error" ? "failed" : s.status) as StageStatus;
+      cands.push({ status: st, ts: s.started_at ?? p?.started_at ?? 0, info: s });
+    }
+  }
+  const ij = jobs[job];
+  if (ij) {
+    const st = (ij.status === "error" ? "failed" : ij.status) as StageStatus;
+    cands.push({ status: st, ts: ij.started_at ?? 0, info: ij });
+  }
+  if (cands.length === 0) return { status: "idle" };
+  const running = cands.find((c) => c.status === "running");
+  if (running) return { status: "running", info: running.info };
+  cands.sort((a, b) => b.ts - a.ts);
+  return { status: cands[0].status, info: cands[0].info };
+}
 
 function JobButton({
   job,
@@ -606,11 +668,15 @@ function IndexerSection({
 
   const { totals, completed } = data;
   const totalPending = Object.values(data.pending).reduce((a, b) => a + b, 0);
-  // 대기 건수 기반 전체 예상 소요시간 (각 단계 대기 × 건당 소요시간 합산)
-  const totalEtaSec = PIPELINE_STEPS.reduce(
-    (sum, s) => sum + (data.pending[s.completedKey] ?? 0) * s.secPerItem,
+  // 전체 최대 소요시간 (AI 단계 대기 × 건당 소요시간 합산)
+  const totalEtaSec = PIPELINE.reduce(
+    (sum, s) =>
+      sum + (s.completedKey ? (data.pending[s.completedKey] ?? 0) * (s.secPerItem ?? 0) : 0),
     0,
   );
+  // 메타 단계 대상 건수 (없으면 null)
+  const metaCountOf = (s: PipeStage): number | null =>
+    s.metaCount === "videos" ? totals.videos : s.metaCount === "posters" ? totals.posters : null;
 
   return (
     <SectionCard
@@ -643,121 +709,139 @@ function IndexerSection({
         ))}
       </div>
 
-      {/* 일괄 작업 — 한 번 클릭으로 메타데이터 파이프라인 실행 */}
-      <div className="mb-5">
-        <p className="text-sm font-medium text-neutral-400 mb-2">일괄 작업</p>
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2 px-1 py-0.5">
-            <JobButton
-              job="refresh"
-              label="증분 갱신"
-              info={jobs["refresh"]}
-              busy={busy}
-              onStart={(j) => void handleStart(j)}
-              onToggleLog={toggleLog}
-              expanded={expandedJob === "refresh"}
-            />
-            <span className="text-xs text-neutral-400 flex-1">
-              신규 영상 · instance↔archive 이동 · JSON/CSV 변경을 한 번에 반영 (load 증분 → scan
-              → history → fts → sync-payload) · 번역 등 파생 데이터 보존
-            </span>
-          </div>
-          {expandedJob === "refresh" && jobs["refresh"] && <LogBox info={jobs["refresh"]} />}
-          <div className="flex items-center gap-2 px-1 py-0.5">
-            <JobButton
-              job="rebuild"
-              label="⚠ 전체 재구축"
-              info={jobs["rebuild"]}
-              busy={busy}
-              onStart={(j) => void handleStart(j)}
-              onToggleLog={toggleLog}
-              expanded={expandedJob === "rebuild"}
-            />
-            <span className="text-xs text-neutral-400 flex-1">
-              videos 를 처음부터 재적재 — 번역(title_ko) 등 파생 데이터 초기화. 클릭 시 확인창
-            </span>
-          </div>
-          {expandedJob === "rebuild" && jobs["rebuild"] && <LogBox info={jobs["rebuild"]} />}
-        </div>
+      {/* 일괄 작업 (메타 파이프라인 한 번에 실행) */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <JobButton
+          job="refresh"
+          label="증분 갱신"
+          info={jobs["refresh"]}
+          busy={busy}
+          onStart={(j) => void handleStart(j)}
+          onToggleLog={toggleLog}
+          expanded={false}
+        />
+        <JobButton
+          job="rebuild"
+          label="⚠ 전체 재구축"
+          info={jobs["rebuild"]}
+          busy={busy}
+          onStart={(j) => void handleStart(j)}
+          onToggleLog={toggleLog}
+          expanded={false}
+        />
+        <span className="text-xs text-neutral-500">
+          증분 갱신 = load→scan→history→fts→sync-payload(메타·번역 보존). 전체 재구축은 load 부터
+          재적재(확인창).
+        </span>
       </div>
+      <p className="text-xs text-neutral-500 mb-3">
+        ⓘ 시간은 <span className="text-amber-400">최대(상한)</span> 추정 — 실제는 캐시·파일명 제목·GPU
+        배치로 보통 더 빠릅니다. 각 단계 버튼으로 개별 실행도 가능합니다.
+      </p>
 
-      {/* 파이프라인 단계별 진행률 + 배치 버튼 통합 */}
-      <div className="mb-4">
-        <p className="text-sm font-medium text-neutral-400 mb-1">파이프라인 (진행률 · 시작)</p>
-        <p className="text-xs text-neutral-500 mb-2">
-          ⓘ 시간은 <span className="text-amber-400">최대(상한)</span> 추정 — 전건을 모델로 처리하는 기준입니다.
-          실제는 번역 캐시 · 포스터 파일명 제목 · GPU 배치 덕에 보통 훨씬 빠릅니다.
-        </p>
-        <div className="space-y-3">
-          {PIPELINE_STEPS.map((step) => {
-            const done = completed[step.completedKey] ?? 0;
-            const total = totals[step.totalKey];
-            const pendingKey = step.completedKey;
-            const pending = data.pending[pendingKey] ?? 0;
-            const jobInfo = jobs[step.job];
-            return (
-              <div
-                key={step.job}
-                className="rounded border border-neutral-700/50 bg-neutral-900/40 px-3 py-2"
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-sm text-neutral-200 font-medium w-24 shrink-0">
-                    {step.label}
-                  </span>
-                  <span className="text-xs text-neutral-400 flex-1">{step.desc}</span>
-                  <JobButton
-                    job={step.job}
-                    label={step.label}
-                    info={jobInfo}
-                    busy={busy}
-                    onStart={(j) => void handleStart(j)}
-                    onToggleLog={toggleLog}
-                    expanded={expandedJob === step.job}
-                  />
-                </div>
+      {/* 세로 흐름도 — 각 단계 박스 + 아래 화살표 */}
+      <div className="space-y-0">
+        {PIPELINE.map((s, i) => {
+          const { status, info } = stageState(s.job, jobs);
+          const isAI = s.group === "AI";
+          const done = s.completedKey ? (completed[s.completedKey] ?? 0) : 0;
+          const total = s.totalKey ? totals[s.totalKey] : 0;
+          const pending = s.completedKey ? (data.pending[s.completedKey] ?? 0) : 0;
+          const eta = s.secPerItem ? pending * s.secPerItem : 0;
+          const stepInfo = info as JobInfo | undefined;
+          const hasLog = !!(stepInfo?.stdout || stepInfo?.stderr);
+          const expanded = expandedJob === s.job;
+          const mc = metaCountOf(s);
+          const border =
+            status === "running"
+              ? "border-amber-500/60 bg-amber-500/5"
+              : status === "done"
+                ? "border-emerald-500/40 bg-neutral-900/40"
+                : status === "failed"
+                  ? "border-red-500/50 bg-red-500/5"
+                  : "border-neutral-700/50 bg-neutral-900/40";
+          return (
+            <div key={s.job}>
+              <div className={"rounded-lg border px-3 py-2.5 transition-colors " + border}>
                 <div className="flex items-center gap-2">
-                  <ProgressBar done={done} total={total} />
-                  <span className="text-xs font-mono text-neutral-400 shrink-0 text-right whitespace-nowrap">
-                    {fmtNum(done)}/{fmtNum(total)}
-                    {pending > 0 && (
-                      <span className="ml-1 text-amber-400">
-                        +{fmtNum(pending)} · 최대 ~{fmtDuration(pending * step.secPerItem)}
-                      </span>
+                  <span className="w-4 text-center shrink-0">
+                    {status === "running" ? (
+                      <span className="text-amber-400 animate-pulse">●</span>
+                    ) : status === "done" ? (
+                      <span className="text-emerald-400">✓</span>
+                    ) : status === "failed" ? (
+                      <span className="text-red-400">✗</span>
+                    ) : (
+                      <span className="text-neutral-600">○</span>
                     )}
                   </span>
+                  <span className="text-sm font-semibold text-neutral-100">{s.label}</span>
+                  <span
+                    className={
+                      "text-[10px] px-1.5 py-0.5 rounded font-mono " +
+                      (isAI ? "bg-blue-500/15 text-blue-300" : "bg-neutral-600/30 text-neutral-300")
+                    }
+                  >
+                    {s.group}
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    {hasLog && (
+                      <button
+                        type="button"
+                        onClick={() => toggleLog(s.job)}
+                        className="px-1 text-xs text-neutral-400 hover:text-neutral-200"
+                        title="로그"
+                      >
+                        {expanded ? "▲" : "▼"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={!!busy || status === "running"}
+                      onClick={() => void handleStart(s.job)}
+                      className={
+                        "px-2 py-0.5 text-xs rounded border whitespace-nowrap " +
+                        (status === "running"
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300 cursor-wait"
+                          : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700")
+                      }
+                    >
+                      {status === "running" ? "↻ 실행 중" : "실행"}
+                    </button>
+                  </div>
                 </div>
-                {expandedJob === step.job && jobInfo && <LogBox info={jobInfo} />}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 단독 작업 */}
-      <div>
-        <p className="text-sm font-medium text-neutral-400 mb-2">기타 작업</p>
-        <div className="space-y-1.5">
-          {STANDALONE_JOBS.map((sj) => {
-            const jobInfo = jobs[sj.job];
-            return (
-              <div key={sj.job}>
-                <div className="flex items-center gap-2 px-1 py-0.5">
-                  <JobButton
-                    job={sj.job}
-                    label={sj.label}
-                    info={jobInfo}
-                    busy={busy}
-                    onStart={(j) => void handleStart(j)}
-                    onToggleLog={toggleLog}
-                    expanded={expandedJob === sj.job}
-                  />
-                  <span className="text-xs text-neutral-400 flex-1">{sj.desc}</span>
+                <p className="text-xs text-neutral-400 mt-1 ml-6">{s.desc}</p>
+                <div className="mt-1.5 ml-6 flex items-center gap-2">
+                  {isAI && s.completedKey ? (
+                    <>
+                      <div className="flex-1 max-w-[260px]">
+                        <ProgressBar done={done} total={total} />
+                      </div>
+                      <span className="text-xs font-mono text-neutral-400 whitespace-nowrap">
+                        {fmtNum(done)}/{fmtNum(total)}
+                        {pending > 0 && (
+                          <span className="ml-1 text-amber-400">
+                            +{fmtNum(pending)} · 최대 ~{fmtDuration(eta)}
+                          </span>
+                        )}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-mono text-neutral-400">
+                      {mc != null ? `대상 ~${fmtNum(mc)}건 · ` : ""}예상 {s.estText ?? "~수초"}
+                    </span>
+                  )}
                 </div>
-                {expandedJob === sj.job && jobInfo && <LogBox info={jobInfo} />}
+                {expanded && stepInfo && hasLog && <LogBox info={stepInfo} />}
               </div>
-            );
-          })}
-        </div>
+              {i < PIPELINE.length - 1 && (
+                <div className="flex justify-center text-neutral-600 leading-none py-0.5" aria-hidden>
+                  ▼
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </SectionCard>
   );
@@ -789,7 +873,13 @@ export default function AdminPage() {
     }
   }, []);
 
-  // 자동 갱신 없음 — 수동 새로고침만 지원 (부하 절약)
+  // 작업 실행 중에는 1.5초마다 자동 폴링해 단계 진행상황을 갱신 (평소엔 수동 새로고침)
+  useEffect(() => {
+    const running = data && Object.values(data.jobs).some((j) => j.status === "running");
+    if (!running) return;
+    const t = setInterval(() => void load(), 1500);
+    return () => clearInterval(t);
+  }, [data, load]);
 
   async function startJob(job: string) {
     const r = await fetch(`${API_BASE}/api/admin/jobs/${encodeURIComponent(job)}`, {
@@ -799,7 +889,8 @@ export default function AdminPage() {
       const body = (await r.json().catch(() => ({}))) as { detail?: string };
       throw new Error(body.detail ?? `HTTP ${r.status}`);
     }
-    setTimeout(() => void load(), 3000);
+    // 곧바로 한 번 로드해 실행 상태를 띄우면 위 폴링이 이어받음
+    setTimeout(() => void load(), 600);
   }
 
   return (
