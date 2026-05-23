@@ -101,6 +101,20 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 
 자세한 bat 사용법: [bin/README.md](../bin/README.md)
 
+#### 개발 모드 — 에이전트 인앱 구동 (로그 가시성)
+
+에이전트(Claude Code)가 개발용 api/web 을 직접 띄울 때는 별도 PowerShell 창
+(`bin\api.bat`/`bin\web.bat` 의 `start cmd /k`) 대신 **클로드 앱 내부 백그라운드
+프로세스**로 실행한다. 그래야 stdout 로그가 에이전트에게 실시간 스트리밍되어 즉시
+진단할 수 있다. 사용자가 "서버 띄워줘 / 재시작해줘" 류로 요청하면 이 방식을 쓴다.
+
+- API: `.venv\Scripts\python.exe -m uvicorn apps.api.main:app --host ai.kamoru.jk --port 8000 --ssl-keyfile .cert/kamoru.jk.key --ssl-certfile .cert/kamoru.jk.pem`
+- Web: `apps/web` 에서 `npm run dev`
+- 사전 의존성 qdrant(6333)·ollama(11434)는 먼저 떠 있어야 한다 — 없으면 `bin\qdrant.bat`/`ollama` 로 기동 후 진행.
+- API 재시작: FastAPI 는 자동 reload 없음 → 에이전트가 해당 백그라운드 프로세스를 종료하고 다시 띄운다(별도 창 안 뜸).
+- **한계**: 이 프로세스들은 에이전트 세션의 자식이라 클로드 앱이 종료/업데이트되면 함께 죽는다. 앱과 독립적으로 유지하려면 `bin\*.bat`(별도 창) 또는 운영용 `bin\prod.bat` 를 쓴다.
+- **운영(`bin\prod.bat`)은 변경 없음** — 단일 터미널 백그라운드 + `logs\*.log` 그대로 유지.
+
 ### 핵심 함정 (에이전트 주의)
 
 - **Python 실행**: Python **3.11** (`.python-version`, `pyproject.toml requires-python>=3.11`). `.\.venv\Scripts\python.exe` 사용 (`python` 이나 `uv run` 이 PATH에 없을 수 있음)
