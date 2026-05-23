@@ -158,3 +158,9 @@ python -m packages.indexer.cli caption-posters   # VLM 포스터 캡션 → post
 #   --rebuild         이미 처리한 것도 다시
 #   -v                상세 로그
 ```
+
+> **관리자 화면의 일괄 버튼**(`증분 인덱싱` / `전체 재인덱싱`)은 위 전체 파이프라인(메타 + AI)을
+> **순서대로 각각 별도 서브프로세스로** 실행한다(단계 사이 모델 VRAM 자동 해제). 순서상 `caption-posters`
+> 가 `embed` 보다 먼저라 캡션이 videos `[장면]` 임베딩에 반영된다. `전체 재인덱싱` 은 AI 단계에
+> `--force`/`--rebuild` 를 붙여 전부 다시 처리(확인창). (CLI 의 `refresh`/`rebuild` 는 메타 전용 단축
+> 명령으로, 관리자 버튼과 범위가 다름.)

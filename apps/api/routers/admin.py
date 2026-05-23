@@ -43,14 +43,23 @@ ALLOWED_JOBS: set[str] = {
     "sync-payload",
 }
 
-# 일괄(파이프라인) 작업의 단계 정의 — 단계별 진행상황을 추적해 흐름도로 보여준다.
-# refresh/rebuild 는 동일 순서이며, rebuild 만 load 가 --rebuild(전체 재적재).
+# 일괄(파이프라인) 작업의 단계 정의 — 메타 + AI 전체 단계를 순서대로 실행하고 흐름도로 추적.
+# - refresh(증분): 각 단계 기본 동작 = 신규 건만 처리(이미 처리한 건 skip).
+# - rebuild(전체): load 재적재 + AI 단계 강제 재처리(--force/--rebuild). 프론트에서 확인창.
+# 순서 주의: caption-posters 는 embed 보다 먼저 — 캡션이 videos 임베딩 [장면] 블록에 반영되도록.
 PIPELINE_DEFS: dict[str, list[tuple[str, list[str]]]] = {
     "refresh": [
         ("load", []),
         ("scan", []),
         ("history", []),
         ("fts", []),
+        ("translate", []),
+        ("caption-posters", []),
+        ("embed", []),
+        ("embed-clip", []),
+        ("extract-faces", []),
+        ("cluster-faces", []),
+        ("ocr-posters", []),
         ("sync-payload", []),
     ],
     "rebuild": [
@@ -58,6 +67,13 @@ PIPELINE_DEFS: dict[str, list[tuple[str, list[str]]]] = {
         ("scan", []),
         ("history", []),
         ("fts", []),
+        ("translate", ["--force"]),
+        ("caption-posters", ["--force"]),
+        ("embed", []),
+        ("embed-clip", []),
+        ("extract-faces", ["--rebuild"]),
+        ("cluster-faces", []),
+        ("ocr-posters", ["--force"]),
         ("sync-payload", []),
     ],
 }

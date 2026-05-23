@@ -475,6 +475,15 @@ const PIPELINE: PipeStage[] = [
     secPerItem: 1.2,
   },
   {
+    job: "caption-posters",
+    label: "포스터 캡션",
+    group: "AI",
+    desc: "VLM(gemma-4)이 포스터 → 한국어 장면 설명/태그 → posters.caption + Qdrant poster_caption · GPU. embed 앞단계라 videos [장면]에도 반영",
+    completedKey: "caption_posters",
+    totalKey: "posters",
+    secPerItem: 3.5,
+  },
+  {
     job: "embed",
     label: "텍스트 임베딩",
     group: "AI",
@@ -518,15 +527,6 @@ const PIPELINE: PipeStage[] = [
     secPerItem: 1.4,
   },
   {
-    job: "caption-posters",
-    label: "포스터 캡션",
-    group: "AI",
-    desc: "VLM(gemma-4)이 포스터 → 한국어 장면 설명/태그 → posters.caption · GPU. 이후 embed 재실행 시 검색 반영",
-    completedKey: "caption_posters",
-    totalKey: "posters",
-    secPerItem: 3.5,
-  },
-  {
     job: "sync-payload",
     label: "페이로드 동기화",
     group: "메타",
@@ -566,6 +566,7 @@ function stageState(
 function JobButton({
   job,
   label,
+  sub,
   info,
   busy,
   onStart,
@@ -574,6 +575,7 @@ function JobButton({
 }: {
   job: string;
   label: string;
+  sub?: string;
   info?: JobInfo;
   busy: string | null;
   onStart: (job: string) => void;
@@ -591,7 +593,7 @@ function JobButton({
         disabled={!!busy || isRunning}
         onClick={() => onStart(job)}
         className={
-          "px-2 py-1 text-sm rounded border transition-colors whitespace-nowrap " +
+          "px-3 py-1.5 text-sm rounded border transition-colors text-left " +
           (isRunning
             ? "border-amber-500/40 bg-amber-500/10 text-amber-300 cursor-wait"
             : isDone
@@ -606,14 +608,19 @@ function JobButton({
             : "클릭하여 시작"
         }
       >
-        {busy === job || isRunning ? (
-          <span className="animate-pulse">↻ {label}</span>
-        ) : (
-          <>
-            {isDone && "✓ "}
-            {isFailed && "✗ "}
-            {label}
-          </>
+        <span className="block whitespace-nowrap font-medium">
+          {busy === job || isRunning ? (
+            <span className="animate-pulse">↻ {label}</span>
+          ) : (
+            <>
+              {isDone && "✓ "}
+              {isFailed && "✗ "}
+              {label}
+            </>
+          )}
+        </span>
+        {sub && (
+          <span className="block text-[10px] font-normal opacity-70 whitespace-nowrap">{sub}</span>
         )}
       </button>
       {hasLog && (
@@ -687,8 +694,8 @@ function IndexerSection({
     // 파괴적 작업은 실행 전 한 번 더 확인
     if (job === "rebuild") {
       const ok = window.confirm(
-        "전체 재구축: videos 를 처음부터 재적재합니다.\n" +
-          "번역(title_ko/desc_ko) 등 파생 데이터가 모두 초기화되어 다시 번역/임베딩해야 합니다.\n\n" +
+        "전체 재인덱싱: 메타데이터를 처음부터 재적재하고, 모든 AI 단계(번역·캡션·임베딩·OCR·얼굴)를 강제로 다시 처리합니다.\n" +
+          "시간이 매우 오래 걸립니다(최대 수십 시간). 백그라운드로 진행됩니다.\n\n" +
           "계속하시겠습니까?",
       );
       if (!ok) return;
@@ -716,11 +723,19 @@ function IndexerSection({
   }
 
   const { totals, completed } = data;
-  const totalPending = Object.values(data.pending).reduce((a, b) => a + b, 0);
-  // 전체 최대 소요시간 (AI 단계 대기 × 건당 소요시간 합산)
-  const totalEtaSec = PIPELINE.reduce(
+  // 증분(신규 건만) vs 전체(전부 재처리) 작업량·예상시간 추정 — 각 버튼에 표시.
+  const incrCount = Object.values(data.pending).reduce((a, b) => a + b, 0);
+  const incrEtaSec = PIPELINE.reduce(
     (sum, s) =>
       sum + (s.completedKey ? (data.pending[s.completedKey] ?? 0) * (s.secPerItem ?? 0) : 0),
+    0,
+  );
+  const fullCount = PIPELINE.reduce(
+    (sum, s) => sum + (s.completedKey && s.totalKey ? totals[s.totalKey] : 0),
+    0,
+  );
+  const fullEtaSec = PIPELINE.reduce(
+    (sum, s) => sum + (s.completedKey && s.totalKey ? totals[s.totalKey] * (s.secPerItem ?? 0) : 0),
     0,
   );
   // 메타 단계 대상 건수 (없으면 null)
@@ -758,15 +773,7 @@ function IndexerSection({
   ];
 
   return (
-    <SectionCard
-      title="인덱서"
-      badge={
-        totalPending > 0
-          ? `대기 ${fmtNum(totalPending)} · 최대 ~${fmtDuration(totalEtaSec)}`
-          : "모두 완료"
-      }
-      available
-    >
+    <SectionCard title="인덱서" available>
       {/* 집계 KPI 타일 (기본 수치 + 보조 지표) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
         {statTiles.map((item) => (
@@ -783,11 +790,12 @@ function IndexerSection({
         ))}
       </div>
 
-      {/* 일괄 작업 (메타 파이프라인 한 번에 실행) */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      {/* 일괄 작업 (메타 + AI 전체 파이프라인을 순서대로 실행) */}
+      <div className="mb-4 flex flex-wrap items-stretch gap-2">
         <JobButton
           job="refresh"
-          label="증분 갱신"
+          label="증분 인덱싱"
+          sub={`신규 ${fmtNum(incrCount)}건 · 최대 ~${fmtDuration(incrEtaSec)}`}
           info={jobs["refresh"]}
           busy={busy}
           onStart={(j) => void handleStart(j)}
@@ -796,7 +804,8 @@ function IndexerSection({
         />
         <JobButton
           job="rebuild"
-          label="⚠ 전체 재구축"
+          label="⚠ 전체 재인덱싱"
+          sub={`전체 ${fmtNum(fullCount)}건 · 최대 ~${fmtDuration(fullEtaSec)}`}
           info={jobs["rebuild"]}
           busy={busy}
           onStart={(j) => void handleStart(j)}
@@ -913,8 +922,8 @@ function IndexerSection({
       {/* 설명 (흐름도 아래로 이동) */}
       <div className="mt-4 pt-3 border-t border-neutral-800 space-y-1 text-xs text-neutral-500">
         <p>
-          증분 갱신 = load→scan→history→fts→sync-payload(메타·번역 보존). 전체 재구축은 load 부터
-          재적재(확인창).
+          증분 인덱싱 = 전체 파이프라인(메타+AI)을 신규 건만 처리. 전체 재인덱싱 = 처음부터 다시
+          (확인창). 각 단계 카드의 [실행] 으로 개별 실행도 가능.
         </p>
         <p>
           ⓘ 시간은 <span className="text-amber-400">최대(상한)</span> 추정 — 실제는 캐시·파일명
