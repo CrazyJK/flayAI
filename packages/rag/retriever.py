@@ -33,6 +33,8 @@ class Filters:
     min_rank: int | None = None  # rank >= N ("N 이상")
     rank: int | None = None  # rank == N (정확히 그 평점)
     min_likes: int | None = None  # like_count >= N ("좋아요 N 이상")
+    min_play: int | None = None  # play >= N ("재생 N 이상")
+    max_play: int | None = None  # play <= N ("재생 N 이하")
 
 
 @dataclass
@@ -74,6 +76,16 @@ def _build_qdrant_filter(f: Filters) -> qm.Filter | None:
         must.append(qm.FieldCondition(key="rank", match=qm.MatchValue(value=int(f.rank))))
     if f.min_likes is not None:
         must.append(qm.FieldCondition(key="like_count", range=qm.Range(gte=int(f.min_likes))))
+    if f.min_play is not None or f.max_play is not None:
+        must.append(
+            qm.FieldCondition(
+                key="play",
+                range=qm.Range(
+                    gte=int(f.min_play) if f.min_play is not None else None,
+                    lte=int(f.max_play) if f.max_play is not None else None,
+                ),
+            )
+        )
     return qm.Filter(must=must) if must else None
 
 
@@ -163,6 +175,12 @@ def fts_search(
     if f.min_likes is not None:
         where.append("v.like_count >= ?")
         params.append(int(f.min_likes))
+    if f.min_play is not None:
+        where.append("v.play >= ?")
+        params.append(int(f.min_play))
+    if f.max_play is not None:
+        where.append("v.play <= ?")
+        params.append(int(f.max_play))
     if f.actress_canonical:
         where.append(
             "EXISTS (SELECT 1 FROM video_actresses va "

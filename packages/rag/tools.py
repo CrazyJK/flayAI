@@ -71,6 +71,7 @@ def _video_to_hit(conn, opus: str, scored=None) -> dict | None:
         "rank": v["rank"],
         "play": v["play"],
         "like_count": v["like_count"],
+        "last_play": v["last_play"],
         "actresses": actrs,
         "poster_path": poster["path"] if poster else None,
         "video_path": poster["video_path"] if poster else None,
@@ -104,12 +105,17 @@ def search_videos(
     min_rank: int | None = None,
     rank: int | None = None,
     min_likes: int | None = None,
+    min_play: int | None = None,
+    max_play: int | None = None,
+    sort: str | None = None,
     limit: int = 10,
 ) -> list[dict]:
     """자연어 검색 + 메타 필터. query 비어있고 필터만 있어도 동작 (메타 only).
 
     min_rank: 평점 N 이상(rank >= N). rank: 정확히 평점 N(rank == N).
     min_likes: 좋아요 N 이상(like_count >= N).
+    min_play/max_play: 재생 횟수 N 이상/이하.
+    sort: "recent"(마지막 재생 최신순) / "oldest"(오래 본 순, 미시청 제외) / None(관련도순).
     """
     conn = connect()
     try:
@@ -131,24 +137,38 @@ def search_videos(
             min_rank=min_rank,
             rank=rank,
             min_likes=min_likes,
+            min_play=min_play,
+            max_play=max_play,
         )
         if query.strip():
-            top_k = max(limit * 3, 30)
+            # 정렬 지정 시 후보 풀을 넓혀(관련도 top-N 안에서 시간순 재정렬) 충분히 확보.
+            top_k = max(limit * 5, 50) if sort in ("recent", "oldest") else max(limit * 3, 30)
             cands = hybrid_search(query, top_k=top_k, filters=filt, conn=conn)
-            scored = rerank(cands)[:limit]
+            scored = rerank(cands)
+            take = scored if sort in ("recent", "oldest") else scored[:limit]
             hits: list[dict] = []
-            for s in scored:
+            for s in take:
                 h = _video_to_hit(conn, s.opus, scored=s)
                 if h:
                     hits.append(h)
-            return hits
+            return _apply_sort(hits, sort)[:limit]
         # 메타-only fallback: SQL 직접 정렬
-        return _meta_only_search(conn, filt, limit)
+        return _meta_only_search(conn, filt, limit, sort)
     finally:
         conn.close()
 
 
-def _meta_only_search(conn, f: Filters, limit: int) -> list[dict]:
+def _apply_sort(hits: list[dict], sort: str | None) -> list[dict]:
+    """last_play(ms epoch) 기준 재정렬. recent=최신순(미시청 뒤로), oldest=오래된순(미시청 제외)."""
+    if sort == "recent":
+        return sorted(hits, key=lambda h: (h.get("last_play") or -1), reverse=True)
+    if sort == "oldest":
+        watched = [h for h in hits if h.get("last_play")]
+        return sorted(watched, key=lambda h: h["last_play"])
+    return hits
+
+
+def _meta_only_search(conn, f: Filters, limit: int, sort: str | None = None) -> list[dict]:
     where: list[str] = []
     params: list[Any] = []
     if f.year is not None:
@@ -172,6 +192,12 @@ def _meta_only_search(conn, f: Filters, limit: int) -> list[dict]:
     if f.min_likes is not None:
         where.append("v.like_count >= ?")
         params.append(int(f.min_likes))
+    if f.min_play is not None:
+        where.append("v.play >= ?")
+        params.append(int(f.min_play))
+    if f.max_play is not None:
+        where.append("v.play <= ?")
+        params.append(int(f.max_play))
     if f.actress_canonical:
         where.append(
             "EXISTS (SELECT 1 FROM video_actresses va "
@@ -187,10 +213,18 @@ def _meta_only_search(conn, f: Filters, limit: int) -> list[dict]:
         where.append(
             "EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)"
         )
+    # 정렬: recent=마지막 재생 최신순, oldest=오래된순(미시청 제외), 기본=평점 후 최근 재생.
+    if sort == "recent":
+        order_sql = "ORDER BY v.last_play DESC NULLS LAST, v.rank DESC"
+    elif sort == "oldest":
+        where.append("v.last_play IS NOT NULL")
+        order_sql = "ORDER BY v.last_play ASC"
+    else:
+        order_sql = "ORDER BY v.rank DESC, v.last_play DESC NULLS LAST"
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     sql = f"""
         SELECT v.opus FROM videos v {where_sql}
-        ORDER BY v.rank DESC, v.last_play DESC NULLS LAST
+        {order_sql}
         LIMIT ?
     """
     rows = conn.execute(sql, [*params, int(limit)]).fetchall()
@@ -346,6 +380,13 @@ TOOL_SCHEMA: list[dict] = [
                     "min_rank": {"type": "integer", "description": "평점 N 이상(rank >= N)"},
                     "rank": {"type": "integer", "description": "정확히 평점 N(rank == N). '평점 5'처럼 '이상' 없이 특정 평점만."},
                     "min_likes": {"type": "integer", "description": "좋아요 N 이상(like_count >= N)"},
+                    "min_play": {"type": "integer", "description": "재생 횟수 N 이상(play >= N)"},
+                    "max_play": {"type": "integer", "description": "재생 횟수 N 이하(play <= N)"},
+                    "sort": {
+                        "type": "string",
+                        "enum": ["recent", "oldest"],
+                        "description": "정렬: recent=마지막 재생 최신순(최근 본 것), oldest=오래된순(오래 안 본 것).",
+                    },
                     "limit": {"type": "integer", "default": 10},
                 },
             },

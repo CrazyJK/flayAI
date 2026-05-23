@@ -89,10 +89,18 @@ _LIKES_RE = re.compile(r"(?:좋아요|하트|찜)\D{0,4}(\d{1,4})")
 # "지금 볼 수 있는"(instance) / "예전·보관"(archive) 키워드
 _INSTANCE_RE = re.compile(r"지금|바로|당장|볼\s*수\s*있는|재생\s*가능|플레이\s*가능")
 _ARCHIVE_RE = re.compile(r"예전|옛날|아카이브|보관|지난날")
+# 재생 횟수(play): "재생(횟수) N 이상/이하", "N번 이상/이하 본"
+_PLAY_MIN_RE = re.compile(r"(?:재생|플레이|시청)\D{0,5}(\d{1,4})\s*(?:회|번)?\s*이상")
+_PLAY_MIN_BON_RE = re.compile(r"(\d{1,4})\s*번\s*이상\s*본")
+_PLAY_MAX_RE = re.compile(r"(?:재생|플레이|시청)\D{0,5}(\d{1,4})\s*(?:회|번)?\s*이하")
+_PLAY_MAX_BON_RE = re.compile(r"(\d{1,4})\s*번\s*이하\s*본")
+# 마지막 재생(last_play) 정렬: 최근 본 → recent, 오래 안 본 → oldest
+_SORT_RECENT_RE = re.compile(r"(?:최근|마지막|방금|요즘|얼마\s*전).{0,4}(?:본|봤|재생)")
+_SORT_OLDEST_RE = re.compile(r"오래.{0,4}안.{0,3}(?:본|봤)|오랫동안.{0,4}안.{0,3}(?:본|봤)|본\s*지.{0,3}오래")
 
 
 def _extract_meta(query: str) -> dict:
-    """사용자 질문에서 메타 필터(year/month/min_rank/rank/min_likes/kind/playable)를 코드로 추출.
+    """질문에서 메타 필터(year/month/min_rank/rank/min_likes/min_play/max_play/sort/kind/playable) 추출.
 
     LLM 이 인자를 빠뜨리거나 tool_call 자체를 안 하는 경우(폴백)에 대비한 코드 레벨
     방어 장치. 이 값을 search_videos 인자에 주입해 LLM 품질과 무관하게 결과를 정확히 만든다.
@@ -118,6 +126,16 @@ def _extract_meta(query: str) -> dict:
     ml = _LIKES_RE.search(query)
     if ml:
         out["min_likes"] = int(ml.group(1))
+    pm = _PLAY_MIN_RE.search(query) or _PLAY_MIN_BON_RE.search(query)
+    if pm:
+        out["min_play"] = int(pm.group(1))
+    px = _PLAY_MAX_RE.search(query) or _PLAY_MAX_BON_RE.search(query)
+    if px:
+        out["max_play"] = int(px.group(1))
+    if _SORT_RECENT_RE.search(query):
+        out["sort"] = "recent"
+    elif _SORT_OLDEST_RE.search(query):
+        out["sort"] = "oldest"
     if _INSTANCE_RE.search(query):
         out["kind"] = "instance"
         out["playable"] = True
@@ -203,6 +221,14 @@ def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
             parts.append(f"평점 {a['rank']}")
         if a.get("min_likes"):
             parts.append(f"좋아요 {a['min_likes']}+")
+        if a.get("min_play") is not None:
+            parts.append(f"재생 {a['min_play']}+")
+        if a.get("max_play") is not None:
+            parts.append(f"재생 {a['max_play']}-")
+        if a.get("sort") == "recent":
+            parts.append("최근 본 순")
+        elif a.get("sort") == "oldest":
+            parts.append("오래된 순")
         if a.get("kind") in _KIND_LABEL:
             parts.append(_KIND_LABEL[a["kind"]])
         elif a.get("playable"):

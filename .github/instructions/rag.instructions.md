@@ -33,7 +33,7 @@ description: "RAG 검색 + LLM tool calling 라우팅 규칙"
 
 - tool 미호출 시 `search_videos(query=user_query)` 강제 폴백 (빈손 응답 금지).
 - 질문에 품번 패턴(`[A-Za-z]{2,7}-?\d{2,5}`)이 없으면 `get_video`/`similar_to` 호출을 `search_videos` 로 교체.
-- `_extract_meta()` 로 질문에서 year/month/min_rank/rank/min_likes/kind/playable 를 정규식으로 추출해 `search_videos` args 에 주입(LLM 누락·미호출 방어). 평점은 "N 이상"→`min_rank`(≥), "랭크 N"·"별점 N"(수식어 없이)→`rank`(정확히 N), "좋아요/하트/찜 N"→`min_likes`(≥, `videos.like_count`). studio/actress 는 query 로 semantic+FTS 매칭.
+- `_extract_meta()` 로 질문에서 year/month/min_rank/rank/min_likes/min_play/max_play/sort/kind/playable 를 정규식으로 추출해 `search_videos` args 에 주입(LLM 누락·미호출 방어). 평점은 "N 이상"→`min_rank`(≥), "랭크 N"·"별점 N"(수식어 없이)→`rank`(정확히 N), "좋아요/하트/찜 N"→`min_likes`(≥, `like_count`), "재생(횟수) N 이상/이하"→`min_play`/`max_play`(`play`), "최근/마지막에 본"→`sort=recent`·"오래 안 본"→`sort=oldest`(`last_play` 정렬). studio/actress 는 query 로 semantic+FTS 매칭.
 - `_extract_tag()` 로 DB `tags.name`(2자+, 10분 캐시 `_known_tags`)이 질문에 그대로 포함되면 최장 매칭 태그를 `tag` 로 주입(테마 질의 정확도↑). 한국어 어미·조사 변형은 부분문자열로 못 잡음('웃고 있는'≠태그 '웃는') → 그땐 의미검색 의존.
 - 결과 요약은 `_summarize_results()` 가 코드로 "건수+필터" 한 줄을 만들어 `token` 이벤트로 한 번 push.
 
