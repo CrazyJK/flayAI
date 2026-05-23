@@ -7,7 +7,10 @@ services:
       - "127.0.0.1:6333:6333"
       - "127.0.0.1:6334:6334"   # gRPC (선택)
     volumes:
-      - ./data/qdrant:/qdrant/storage
+      # Docker 네임드 볼륨 사용 — Windows 바인드마운트(grpcfuse)는 옵티마이저의 세그먼트
+      # 디렉토리 rename 을 못 해 "Permission denied"로 컬렉션이 red 가 됨. 네임드 볼륨은
+      # Docker VM 네이티브 FS 라 정상 동작. (이전 바인드마운트 데이터는 ./data/qdrant 에 백업)
+      - qdrant_storage:/qdrant/storage
     environment:
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
@@ -18,3 +21,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+volumes:
+  qdrant_storage:
+    name: flayai_qdrant_storage
+    # external — 이 볼륨은 Qdrant 의 실데이터 저장소다. Compose 가 생명주기를 관리하지
+    # 않게 하여 `docker compose down -v` 등으로 실수로 지워지는 것을 막는다.
+    # 새 PC 최초 설치 시 한 번만: `docker volume create flayai_qdrant_storage`
+    external: true
