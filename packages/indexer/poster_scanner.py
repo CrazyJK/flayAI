@@ -122,9 +122,9 @@ def run() -> ScanStats:
 
     stats = ScanStats()
 
-    # 기존 포스터/연결 wipe (full re-scan)
+    # video_actresses·videos 파생값은 매 스캔 재도출(전체 갱신).
+    # posters 는 아래에서 UPSERT 로 갱신(고비용 AI 결과 ocr_text·caption 은 보존 → OCR/캡션 증분).
     with conn:
-        conn.execute("DELETE FROM posters")
         conn.execute("DELETE FROM video_actresses")
         conn.execute(
             "UPDATE videos SET has_poster = 0, studio = NULL, "
@@ -188,13 +188,25 @@ def run() -> ScanStats:
                     va_rows.append((parsed.opus, canonical))
 
     with conn:
-        # posters: opus PK 충돌 시 (같은 opus 가 여러 폴더에 있는 경우) 마지막 우선
+        # posters UPSERT: 스캔 파생 컬럼만 갱신, ocr_text·caption 은 보존(증분).
+        # 같은 opus 가 여러 폴더에 있으면 마지막 행이 UPDATE 로 덮어씀(기존 동작 유지).
         conn.executemany(
-            """INSERT OR REPLACE INTO posters(
-                 opus, path, ext, size, mtime, kind, video_path
-               ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO posters(opus, path, ext, size, mtime, kind, video_path)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(opus) DO UPDATE SET
+                 path=excluded.path, ext=excluded.ext, size=excluded.size,
+                 mtime=excluded.mtime, kind=excluded.kind, video_path=excluded.video_path""",
             poster_rows,
         )
+        # 이번 스캔에 없는 포스터(파일 삭제·이동)는 제거 — 임시 테이블로 set 비교(NOT IN 파라미터 한계 회피)
+        conn.execute("DROP TABLE IF EXISTS _scanned_opus")
+        conn.execute("CREATE TEMP TABLE _scanned_opus(opus TEXT PRIMARY KEY)")
+        conn.executemany(
+            "INSERT OR IGNORE INTO _scanned_opus(opus) VALUES (?)",
+            [(r[0],) for r in poster_rows],
+        )
+        conn.execute("DELETE FROM posters WHERE opus NOT IN (SELECT opus FROM _scanned_opus)")
+        conn.execute("DROP TABLE _scanned_opus")
         if va_rows:
             conn.executemany(
                 "INSERT OR IGNORE INTO video_actresses(opus, canonical_name) VALUES (?, ?)",
