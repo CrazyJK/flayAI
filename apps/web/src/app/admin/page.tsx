@@ -301,20 +301,22 @@ function SqliteSection({ data }: { data: SqliteData }) {
       badge={`${data.tables.length}개 테이블 · 최근 24h 쿼리 ${fmtNum(data.recent_queries_24h)}건`}
       available
     >
-      {/* 각 카드는 내용(설명) 글자폭에 맞춰 크기 결정 — 말줄임표(…) 없이 전체 표시 */}
-      <div className="flex flex-wrap gap-2">
+      {/* 모든 박스 동일 너비(grid 1fr). 폭은 가장 긴 설명이 한 줄로 들어가도록 결정.
+          3줄 구성: 이름 / 건수 / 설명(말줄임 없이 한 줄) */}
+      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
         {data.tables.map((t) => (
-          <div key={t.name} className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2">
-            <div className="flex items-baseline justify-between gap-4">
-              <span className="font-mono text-sm text-neutral-200 whitespace-nowrap">
-                {t.name}
-                {t.note && <span className="ml-1 text-[10px] text-neutral-500">[{t.note}]</span>}
-              </span>
-              <span className="font-mono text-sm text-neutral-100 shrink-0">
-                {t.count >= 0 ? fmtNum(t.count) : "—"}
-              </span>
+          <div
+            key={t.name}
+            className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2.5"
+          >
+            <div className="font-mono text-sm text-neutral-200">
+              {t.name}
+              {t.note && <span className="ml-1 text-[10px] text-neutral-500">[{t.note}]</span>}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-0.5 whitespace-nowrap">
+            <div className="font-mono text-lg font-semibold text-neutral-100 mt-0.5 tabular-nums">
+              {t.count >= 0 ? fmtNum(t.count) : "—"}
+            </div>
+            <div className="text-[11px] text-neutral-500 mt-1 whitespace-nowrap">
               {SQLITE_DESC[t.name] ?? ""}
             </div>
           </div>
@@ -621,6 +623,35 @@ function LogBox({ info }: { info: JobInfo }) {
   );
 }
 
+// 단계 간 연결 화살표. 좁은 화면은 아래(▼), 넓은 화면(xl)은 오른쪽(→) 방향 SVG.
+function StageArrow() {
+  return (
+    <div
+      className="flex items-center justify-center text-neutral-600 py-1 xl:py-0 xl:px-1"
+      aria-hidden
+    >
+      <svg className="xl:hidden" width="16" height="20" viewBox="0 0 16 20" fill="none">
+        <path
+          d="M8 1V15M3 10l5 5 5-5"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <svg className="hidden xl:block" width="22" height="16" viewBox="0 0 22 16" fill="none">
+        <path
+          d="M1 8h14M11 3l5 5-5 5"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 function IndexerSection({
   data,
   jobs,
@@ -677,6 +708,36 @@ function IndexerSection({
   const metaCountOf = (s: PipeStage): number | null =>
     s.metaCount === "videos" ? totals.videos : s.metaCount === "posters" ? totals.posters : null;
 
+  // KPI 타일: 기본 수치 + 파생 보조 지표(커버리지%·라벨링·비율)
+  const pctOf = (done: number, total: number) => (total > 0 ? Math.round((done / total) * 100) : 0);
+  const statTiles: { label: string; value: number; sub?: string }[] = [
+    {
+      label: "영상",
+      value: totals.videos,
+      sub: `번역 ${pctOf(completed.translate ?? 0, totals.videos)}% · 임베딩 ${pctOf(completed.embed_text ?? 0, totals.videos)}%`,
+    },
+    {
+      label: "포스터",
+      value: totals.posters,
+      sub: `CLIP ${pctOf(completed.embed_clip ?? 0, totals.posters)}% · OCR ${pctOf(completed.ocr_posters ?? 0, totals.posters)}% · 얼굴 ${pctOf(completed.extract_faces ?? 0, totals.posters)}%`,
+    },
+    {
+      label: "배우",
+      value: totals.actresses,
+      sub: totals.actresses > 0 ? `영상 ${(totals.videos / totals.actresses).toFixed(1)}편/명` : undefined,
+    },
+    {
+      label: "얼굴 클러스터",
+      value: totals.face_clusters,
+      sub: `라벨 ${fmtNum(totals.labeled_clusters)} · ${pctOf(totals.labeled_clusters, totals.face_clusters)}%`,
+    },
+    {
+      label: "클러스터 라벨",
+      value: totals.labeled_clusters,
+      sub: `미라벨 ${fmtNum(Math.max(0, totals.face_clusters - totals.labeled_clusters))}`,
+    },
+  ];
+
   return (
     <SectionCard
       title="인덱서"
@@ -687,29 +748,24 @@ function IndexerSection({
       }
       available
     >
-      {/* 집계 수치 */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        {[
-          { label: "영상", value: totals.videos },
-          { label: "포스터", value: totals.posters },
-          { label: "배우", value: totals.actresses },
-          { label: "얼굴 클러스터", value: totals.face_clusters },
-          { label: "클러스터 라벨", value: totals.labeled_clusters },
-        ].map((item) => (
+      {/* 집계 KPI 타일 (기본 수치 + 보조 지표) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+        {statTiles.map((item) => (
           <div
             key={item.label}
-            className="bg-neutral-900 rounded px-3 py-1.5 text-center min-w-[72px]"
+            className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2.5"
           >
-            <div className="text-neutral-100 font-mono text-base font-semibold">
+            <div className="text-neutral-400 text-xs">{item.label}</div>
+            <div className="text-neutral-100 font-mono text-xl font-semibold mt-0.5 tabular-nums">
               {fmtNum(item.value)}
             </div>
-            <div className="text-neutral-400 text-xs mt-0.5">{item.label}</div>
+            {item.sub && <div className="text-[11px] text-neutral-500 mt-1">{item.sub}</div>}
           </div>
         ))}
       </div>
 
       {/* 일괄 작업 (메타 파이프라인 한 번에 실행) */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <JobButton
           job="refresh"
           label="증분 갱신"
@@ -728,15 +784,7 @@ function IndexerSection({
           onToggleLog={toggleLog}
           expanded={false}
         />
-        <span className="text-xs text-neutral-500">
-          증분 갱신 = load→scan→history→fts→sync-payload(메타·번역 보존). 전체 재구축은 load 부터
-          재적재(확인창).
-        </span>
       </div>
-      <p className="text-xs text-neutral-500 mb-3">
-        ⓘ 시간은 <span className="text-amber-400">최대(상한)</span> 추정 — 실제는 캐시·파일명 제목·GPU
-        배치로 보통 더 빠릅니다. 각 단계 버튼으로 개별 실행도 가능합니다.
-      </p>
 
       {/* 흐름도 — 좁은 화면은 세로(▼), 넓은 화면은 가로(→) */}
       <div className="flex flex-col xl:flex-row xl:flex-wrap xl:items-stretch gap-2">
@@ -837,18 +885,22 @@ function IndexerSection({
                 </div>
                 {expanded && stepInfo && hasLog && <LogBox info={stepInfo} />}
               </div>
-              {i < PIPELINE.length - 1 && (
-                <div
-                  className="flex items-center justify-center text-neutral-600 leading-none py-0.5 xl:px-1 xl:py-0"
-                  aria-hidden
-                >
-                  <span className="xl:hidden">▼</span>
-                  <span className="hidden xl:inline">→</span>
-                </div>
-              )}
+              {i < PIPELINE.length - 1 && <StageArrow />}
             </div>
           );
         })}
+      </div>
+
+      {/* 설명 (흐름도 아래로 이동) */}
+      <div className="mt-4 pt-3 border-t border-neutral-800 space-y-1 text-xs text-neutral-500">
+        <p>
+          증분 갱신 = load→scan→history→fts→sync-payload(메타·번역 보존). 전체 재구축은 load 부터
+          재적재(확인창).
+        </p>
+        <p>
+          ⓘ 시간은 <span className="text-amber-400">최대(상한)</span> 추정 — 실제는 캐시·파일명
+          제목·GPU 배치로 보통 더 빠릅니다. 각 단계 버튼으로 개별 실행도 가능합니다.
+        </p>
       </div>
     </SectionCard>
   );
@@ -879,7 +931,7 @@ function Gauge({ label, percent, sub }: { label: string; percent?: number; sub?:
   const p = percent == null ? null : Math.max(0, Math.min(100, percent));
   const color = p == null ? "bg-neutral-600" : p >= 85 ? "bg-red-500" : p >= 60 ? "bg-amber-500" : "bg-emerald-500";
   return (
-    <div className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2 flex-1 min-w-[150px]">
+    <div className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs text-neutral-400 truncate">{label}</span>
         <span className="font-mono text-sm text-neutral-100 shrink-0">{p == null ? "—" : `${p.toFixed(0)}%`}</span>
@@ -899,22 +951,35 @@ function SystemMonitor({ sys }: { sys?: SystemData }) {
   const vramPct =
     sys.vram_total_mib && sys.vram_used_mib != null ? (sys.vram_used_mib / sys.vram_total_mib) * 100 : undefined;
   return (
-    <div className="flex flex-wrap gap-2">
-      <Gauge label={`CPU${sys.cpu_count ? ` (${sys.cpu_count}코어)` : ""}`} percent={sys.cpu_percent} />
+    <div className="grid grid-cols-2 gap-2">
+      <Gauge label={`CPU${sys.cpu_count ? ` · ${sys.cpu_count}코어` : ""}`} percent={sys.cpu_percent} />
       <Gauge label="RAM" percent={sys.ram_percent} sub={`${gb(sys.ram_used)} / ${gb(sys.ram_total)}`} />
       {sys.gpu_available ? (
         <>
           <Gauge
-            label={`GPU${sys.gpu_name ? ` · ${sys.gpu_name.replace("NVIDIA GeForce ", "")}` : ""}`}
+            label="GPU"
             percent={sys.gpu_percent}
             sub={sys.gpu_temp != null ? `${sys.gpu_temp}°C` : undefined}
           />
           <Gauge label="VRAM" percent={vramPct} sub={`${mib(sys.vram_used_mib)} / ${mib(sys.vram_total_mib)}`} />
         </>
       ) : (
-        <div className="text-xs text-neutral-500 self-center px-2">GPU 정보 없음</div>
+        <div className="col-span-2 text-xs text-neutral-500 px-1">GPU 정보 없음</div>
       )}
     </div>
+  );
+}
+
+// CPU/RAM/GPU/VRAM 게이지를 Qdrant·Ollama 와 동일한 카드(SectionCard)로 묶는다.
+function SystemSection({ sys }: { sys?: SystemData }) {
+  return (
+    <SectionCard
+      title="시스템 리소스"
+      badge={sys?.gpu_name ? sys.gpu_name.replace("NVIDIA GeForce ", "") : undefined}
+      available={!!sys?.available}
+    >
+      <SystemMonitor sys={sys} />
+    </SectionCard>
   );
 }
 
@@ -1017,22 +1082,17 @@ export default function AdminPage() {
           <h2 className="text-lg font-semibold">
             모니터링 <span className="text-xs font-normal text-neutral-500">· 실시간 (3초)</span>
           </h2>
-          <SystemMonitor sys={monitor?.system} />
-          {/* Qdrant·Ollama: 내용 글자폭 기준 고정폭 — 넓으면 가로, 좁으면 세로(flex-wrap) */}
-          <div className="flex flex-wrap gap-3 items-start">
-            <div className="w-full md:w-[480px]">
-              <QdrantSection
-                data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
-              />
-            </div>
-            <div className="w-full md:w-[460px]">
-              <OllamaSection
-                data={
-                  monitor?.ollama ??
-                  data?.ollama ?? { available: false, models: [], running_count: 0 }
-                }
-              />
-            </div>
+          {/* 시스템·Qdrant·Ollama: 넓으면 3열로 가로 꽉 채움, 좁으면 세로 스택. 등높이 카드 */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
+            <SystemSection sys={monitor?.system} />
+            <QdrantSection
+              data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
+            />
+            <OllamaSection
+              data={
+                monitor?.ollama ?? data?.ollama ?? { available: false, models: [], running_count: 0 }
+              }
+            />
           </div>
         </section>
 
