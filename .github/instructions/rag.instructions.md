@@ -11,7 +11,7 @@ description: "RAG 검색 + LLM tool calling 라우팅 규칙"
 
 | 파일 | 책임 |
 |------|------|
-| `router.py` | Ollama tool calling 흐름. `SYSTEM_PROMPT`, 1차(tool 결정)→도구 실행→2차(스트리밍 응답) |
+| `router.py` | Ollama tool calling 흐름. `SYSTEM_PROMPT`, 1차(tool 결정)→코드 필터 보강→도구 실행→코드 요약(2차 LLM 없음) |
 | `tools.py` | LLM 이 호출하는 도구 5종 + `TOOL_SCHEMA`(JSON Schema) + `TOOL_DISPATCH` |
 | `retriever.py` | 하이브리드 검색: Qdrant semantic + SQLite FTS5 → RRF 결합 |
 | `ranker.py` | 가중치 재정렬 (`config.yaml.ranking`) |
@@ -24,20 +24,17 @@ description: "RAG 검색 + LLM tool calling 라우팅 규칙"
 
 ## LLM (Ollama)
 
-- 모델은 `config.yaml.models.llm` = `huihui_ai/qwen2.5-abliterate:**7b**` (코드/주석은 7B 가정). 모델명을 하드코딩하지 말고 `_llm_model()` 사용.
-- **7B 의 언어 관성**이 강해 한국어 응답이 중국어/일본어로 흘러가는 경향이 있다. `router.py` 에는 이를 막는 방어 로직이 다수 있음 — 함부로 제거하지 말 것:
-  - `SYSTEM_PROMPT` 의 "오직 한국어" 절대 규칙
-  - 도구 결과 직후 한국어 강제 user 지시 재주입
-  - 1차 응답 content 비우기 (잡담 언어 전이 차단)
-  - `options`: `temperature=0.2`, `repeat_penalty=1.25` (쉼표/줄바꿈 루프 방지)
-- `_compact_tool_result()` 로 핵심 필드만 LLM 에 전달 (score_breakdown 등 잡음 제거 → 환각 감소).
+- 모델은 `config.yaml.models.llm` = `huihui_ai/qwen2.5-abliterate:**7b**` (코드/주석은 7B 가정). 모델명을 하드코딩하지 말고 `_llm_model()` 사용. (12GB VRAM 에선 7B 가 100% GPU 로 들어가 적합 — 14B/멀티모달은 오프로드·thinking 으로 부적합. 검증 결과는 `docs/TODO.md` 참고.)
+- **LLM 은 1차 "도구 라우팅"에만 쓴다.** 도구 결과를 자연어로 설명하는 2차 호출은 **하지 않는다** — 사용자 목적은 opus 결과(카드)이고, 코드(`_summarize_results`)가 "건수+적용 필터" 한 줄을 만든다.
+- 그래서 과거의 한국어→중국어 드리프트 방어 로직(한자 컷 `_collect_korean_answer`, 3회 재시도, 도구 결과 후 한국어 강제 재주입, `_compact_tool_result`)은 **모두 제거됨**. 2차 LLM 답변을 다시 도입하지 않는 한 되살리지 말 것.
+- `options`: `temperature=0.2`, `repeat_penalty=1.25` (1차 tool_call 안정용).
 
 ## 라우팅 방어 (router.py)
 
 - tool 미호출 시 `search_videos(query=user_query)` 강제 폴백 (빈손 응답 금지).
 - 질문에 품번 패턴(`[A-Za-z]{2,7}-?\d{2,5}`)이 없으면 `get_video`/`similar_to` 호출을 `search_videos` 로 교체.
-- `_extract_meta()` 로 "2023년 7월" 등 연/월을 코드 레벨에서 추출해 args 에 주입.
-- SSE 응답이 hang 되지 않도록 스트리밍 generator 는 `finally` 에서 `await gen.aclose()`.
+- `_extract_meta()` 로 질문에서 year/month/min_rank/kind/playable 를 정규식으로 추출해 `search_videos` args 에 주입(LLM 누락·미호출 방어). studio/actress 는 query 로 semantic+FTS 매칭.
+- 결과 요약은 `_summarize_results()` 가 코드로 "건수+필터" 한 줄을 만들어 `token` 이벤트로 한 번 push.
 
 ## 검색 / 랭킹
 

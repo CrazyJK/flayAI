@@ -23,6 +23,10 @@ POST /api/chat
 
 JS 에서 GPT 함수 호출 써본 적 있다면 동일.
 
+> **flayAI 는 2차 호출(자연어 답변 생성)을 생략한다.** 사용자 목적은 검색 결과(opus 카드)이고
+> 설명 문장은 불필요하기 때문. 대신 코드로 "건수 + 적용 필터" 한 줄만 만든다(§1). 이렇게 하면
+> 7B 모델의 한국어→중국어 드리프트·재시도가 사라지고 응답이 빨라진다(워밍 후 1~2초).
+
 ### RAG 의 핵심 아이디어
 
 LLM 은 내 DB 를 모른다 → **검색해서 결과를 컨텍스트로 넣어준다** → 답.
@@ -63,16 +67,17 @@ LLM 응답:  { "tool_calls": [
    │  → [hit, hit, hit, ...]                   │
    └──────────────────────────────────────────┘
    │
+   ▼ 코드 필터 보강 (_extract_meta): 질문에서 year/month/kind/playable/min_rank 추출 → args 주입
+   │   (LLM 이 tool_call 을 빠뜨려도 폴백 + 이 보강으로 결과가 정확)
+   │
    ▼ SSE 로 클라이언트에 tool_call / tool_result 이벤트 즉시 push
    │
-   ▼ 2차 LLM 호출 (stream=true)
-   │   messages 에 도구 결과 JSON 을 role=tool 로 추가
+   ▼ 코드 요약 생성 (2차 LLM 호출 없음)
+   │   _summarize_results(): "5건을 찾았어요 · 조건: 2023년 · 7월" 같은 한 줄
    │
-LLM: "회사 배경 일상 영상 5건 추천드립니다 ..." (토큰 단위 스트리밍)
+   ▼ SSE event=token 으로 요약 한 줄 push → done
    │
-   ▼ SSE event=token 마다 push
-   │
-User 화면: 카드 + 자연어 응답
+User 화면: 카드(opus 결과) + 코드 요약 한 줄
 ```
 
 ## 2. SSE 이벤트 종류
@@ -83,7 +88,7 @@ User 화면: 카드 + 자연어 응답
 |------------|----------|------|
 | `tool_call` | `{name, args}` | LLM 이 도구를 호출했다 (UI 에서 "검색 중..." 표시) |
 | `tool_result` | `{name, result: {items: [...]}}` | 도구 실행 결과 (UI 가 결과 카드를 즉시 그릴 수 있음) |
-| `token` | `{text: "..."}` | LLM 응답 토큰 (자연어 응답 스트리밍) |
+| `token` | `{text: "..."}` | **코드 생성 요약 한 줄**(건수+적용 필터). LLM 자연어 생성이 아님 |
 | `done` / `error` | 종료 신호 | |
 
 JS 클라이언트 코드 형태:
@@ -127,8 +132,10 @@ for (;;) {
 
 ```
                 ┌─────────────────────────────┐
-                │ Filters: actress, year, ... │  ← LLM 이 채워 보냄
+                │ Filters: actress, year, ... │  ← LLM tool_call + 코드(_extract_meta)
                 └─────────────────────────────┘
+   ※ year/month/kind/playable/min_rank 는 _extract_meta 가 질문에서 정규식으로 추출해
+     search_videos 인자에 주입한다(LLM 누락 방어). studio/actress 는 query 로 semantic+FTS 매칭.
                               │
         ┌─────────────────────┴─────────────────────┐
         ▼                                           ▼

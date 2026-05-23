@@ -21,7 +21,7 @@ description: "LLM 이 호출할 수 있는 새 RAG 도구를 추가한다"
 
 4. **라우팅 규칙** — `packages/rag/router.py` 의 `SYSTEM_PROMPT` 에 호출 조건을 한 줄 명문화. 품번 의존 도구라면 router 의 품번 방어 로직(`get_video`/`similar_to` 교체)에 포함할지 검토.
 
-5. **결과 슬림화** — LLM 컨텍스트에 큰 payload 가 들어가면 7B 가 환각한다. 필요하면 `_compact_tool_result()` 에 새 도구의 핵심 필드 추출을 추가.
+5. **결과 표시** — 도구 결과는 LLM 에 다시 넣지 않는다(2차 호출 없음). 프론트(카드) + `_summarize_results()`(건수 집계)로만 쓰임. 리스트를 반환하면 자동으로 건수에 포함되고, 요약 한 줄에 필터를 노출하려면 `_summarize_results()` 에 추가.
 
 6. **검증** — `eval/golden.yaml` 에 케이스 추가, `python eval/run_eval.py` (수락 ≥ 85%). 단위 테스트는 `tests/test_rag_*`.
 

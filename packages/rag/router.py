@@ -69,20 +69,21 @@ def _llm_model() -> str:
     return load_config()["models"]["llm"]
 
 
-# 한자(중국어/일본어 kanji) 범위 — Qwen 7B 가 한국어 답변 중 중국어로 새는 것을 차단할 때 사용.
-# title_ko 는 한글이라 정상 답변엔 한자가 거의 없음 → 한자가 보이면 드리프트로 간주.
-_HANZI_RE = re.compile(r"[一-鿿]")
-
 _YEAR_RE = re.compile(r"(19|20)(\d{2})\s*년")
 _MONTH_RE = re.compile(r"(?<!\d)([1-9]|1[0-2])\s*월")
 _YEAR_ONLY_RE = re.compile(r"(?<!\d)(19|20)(\d{2})(?!\d)")
+# "평점/별점 4 이상" 같은 최소 평점 표현
+_RANK_RE = re.compile(r"(?:평점|별점|랭크|등급)\D{0,4}([1-5])\s*(?:점|개|성|등급)?\s*이상")
+# "지금 볼 수 있는"(instance) / "예전·보관"(archive) 키워드
+_INSTANCE_RE = re.compile(r"지금|바로|당장|볼\s*수\s*있는|재생\s*가능|플레이\s*가능")
+_ARCHIVE_RE = re.compile(r"예전|옛날|아카이브|보관|지난날")
 
 
 def _extract_meta(query: str) -> dict:
-    """사용자 질문에서 year/month 메타 필터를 추출.
+    """사용자 질문에서 메타 필터(year/month/min_rank/kind/playable)를 코드로 추출.
 
-    LLM 이 메타 인자를 빠뜨리는 경우(특히 query 가 깨져 들어가는 경우)에 대비한
-    코드 레벨 방어 장치. '2023년 7월', '2023년', '7월' 패턴 인식.
+    LLM 이 인자를 빠뜨리거나 tool_call 자체를 안 하는 경우(폴백)에 대비한 코드 레벨
+    방어 장치. 이 값을 search_videos 인자에 주입해 LLM 품질과 무관하게 결과를 정확히 만든다.
     """
     out: dict = {}
     m = _YEAR_RE.search(query)
@@ -95,32 +96,55 @@ def _extract_meta(query: str) -> dict:
     mm = _MONTH_RE.search(query)
     if mm:
         out["month"] = int(mm.group(1))
+    mr = _RANK_RE.search(query)
+    if mr:
+        out["min_rank"] = int(mr.group(1))
+    if _INSTANCE_RE.search(query):
+        out["kind"] = "instance"
+        out["playable"] = True
+    elif _ARCHIVE_RE.search(query):
+        out["kind"] = "archive"
     return out
 
 
-def _compact_tool_result(name: str, result: Any) -> Any:
-    """Qwen 이 도구 결과를 잘 따라가도록 핵심 필드만 추출.
+# 적용된 검색 필터를 한국어 한 줄로 (LLM 묘사 대체용)
+_KIND_LABEL = {"instance": "지금 볼 수 있는 것", "archive": "보관 영상"}
 
-    원본 결과(score_breakdown, 경로 등 잡음 포함)를 그대로 넣으면 7B 모델이
-    컨텍스트를 놓치고 환각을 일으킴. 검색/조회 계열은 핵심 필드만 남긴다.
-    """
 
-    def _slim(v: dict) -> dict:
-        return {
-            "opus": v.get("opus"),
-            "title": v.get("title_ko") or v.get("title") or v.get("title_jp"),
-            "studio": v.get("studio"),
-            "release_date": v.get("release_date"),
-            "actresses": v.get("actresses") or [],
-            "playable": v.get("playable"),
-            "rank": v.get("rank"),
-        }
-
-    if name in ("search_videos", "similar_to") and isinstance(result, list):
-        return [_slim(v) for v in result if isinstance(v, dict)]
-    if name == "get_video" and isinstance(result, dict):
-        return _slim(result)
-    return result
+def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
+    """opus 결과(카드)가 목적이므로 LLM 묘사 대신 코드로 '건수 + 적용 필터'만 요약."""
+    total = sum(len(r["result"]) for r in results if isinstance(r.get("result"), list))
+    parts: list[str] = []
+    for c in tool_calls:
+        fn = c.get("function") or {}
+        if fn.get("name") != "search_videos":
+            continue
+        a = fn.get("arguments") or {}
+        if isinstance(a, str):
+            try:
+                a = json.loads(a)
+            except json.JSONDecodeError:
+                a = {}
+        if a.get("year"):
+            parts.append(f"{a['year']}년")
+        if a.get("month"):
+            parts.append(f"{int(a['month'])}월")
+        if a.get("studio"):
+            parts.append(str(a["studio"]))
+        if a.get("actress"):
+            parts.append(str(a["actress"]))
+        if a.get("min_rank"):
+            parts.append(f"평점 {a['min_rank']}+")
+        if a.get("kind") in _KIND_LABEL:
+            parts.append(_KIND_LABEL[a["kind"]])
+        elif a.get("playable"):
+            parts.append(_KIND_LABEL["instance"])
+        break
+    parts = list(dict.fromkeys(parts))  # 중복 제거(순서 보존)
+    cond = f" · 조건: {' · '.join(parts)}" if parts else ""
+    if total <= 0:
+        return f"조건에 맞는 결과가 없어요.{cond}"
+    return f"{total}건을 찾았어요.{cond}"
 
 
 def _exec_tool(name: str, args: dict) -> Any:
@@ -174,33 +198,6 @@ async def _call_chat(
                     continue
 
     return gen()
-
-
-async def _collect_korean_answer(client: httpx.AsyncClient, messages: list[dict]) -> str:
-    """최종 답변을 스트리밍으로 받되, 한자(중국어/일본어)가 나오면 그 앞까지만 모아 반환.
-
-    Qwen 7B 가 한국어 답변 도중 중국어로 새는 현상 방어. 한자 등장 시 즉시 break +
-    aclose 로 서버 생성을 중단시켜 불필요한 토큰 생성을 막는다.
-    """
-    buf = ""
-    gen = await _call_chat(client, messages, tools=None, stream=True)
-    try:
-        async for chunk in gen:  # type: ignore[union-attr]
-            piece = (chunk.get("message") or {}).get("content") or ""
-            if piece:
-                m = _HANZI_RE.search(piece)
-                if m:
-                    buf += piece[: m.start()]
-                    break
-                buf += piece
-            if chunk.get("done"):
-                break
-    finally:
-        try:
-            await gen.aclose()  # type: ignore[union-attr]
-        except Exception:
-            pass
-    return buf.strip()
 
 
 async def route_chat(
@@ -328,65 +325,12 @@ async def route_chat(
             yield {"type": "tool_result", "name": name, "result": result}
             results_for_history.append({"name": name, "args": raw_args, "result": result})
 
-        # 도구 결과를 메시지로 추가 후 최종 답변 스트리밍
-        # NOTE: 1차 응답의 content 는 비우는 게 안전 — 거기 중국어/잡담이 섞이면
-        # 2차 스트리밍이 그 언어를 그대로 이어쓴다 (Qwen 의 강한 언어 관성).
-        if tool_calls:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": tool_calls,
-                }
-            )
-            for r in results_for_history:
-                messages.append(
-                    {
-                        "role": "tool",
-                        "name": r["name"],
-                        "content": json.dumps(
-                            _compact_tool_result(r["name"], r["result"]),
-                            ensure_ascii=False,
-                            default=str,
-                        ),
-                    }
-                )
-            # Qwen 의 중국어 관성 차단: 도구 결과 직후 한국어 강제 user 지시를 한 번 더 주입.
-            # 시스템 프롬프트만으로는 약하므로 가장 최근 user turn 으로 재확인시킴.
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "위 도구 결과(영상 목록)를 보고 한국어(한글)로만 짧게 설명해 주세요.\n"
-                        "규칙 1) 한글만 사용 — 한자·중국어·일본어 가나·영어 문장 절대 금지. "
-                        "한자가 떠오르면 순우리말/한글로 바꿔 쓰세요.\n"
-                        "규칙 2) opus·제목·제작사·배우를 한 줄씩 나열하지 마세요 (카드에 이미 있음).\n"
-                        "규칙 3) 뽑힌 영상들의 공통 소재·분위기와 질문에 왜 맞는지를 2~3문장으로만 간단히. "
-                        "2~3문장을 마치면 더 쓰지 말고 멈추세요."
-                    ),
-                }
-            )
-        else:
-            # tool 안 쓴 경우 첫 응답이 곧 답
-            text = msg.get("content") or ""
-            yield {"type": "token", "text": text}
-            yield {"type": "done", "message": text, "tool_calls": [], "results": []}
-            return
-
-        # 최종 답변: 스트림을 버퍼에 모으되 한자(중국어 드리프트)가 나오면 그 앞까지만 취함.
-        # 초반 드리프트로 너무 짧게 잘리면 재생성(temperature 0.2 라 매번 결과가 다름).
-        # 여러 번 시도해 가장 긴(=가장 덜 잘린) 한글 답변을 채택.
-        full = ""
-        for _ in range(3):
-            cand = await _collect_korean_answer(client, messages)
-            if len(cand) > len(full):
-                full = cand
-            if len(full) >= 30:
-                break
-        if full:
-            yield {"type": "token", "text": full}
+        # 설명문(LLM 2차 생성) 생략 — 사용자 목적은 opus 결과(카드)이고 묘사 문장은 불필요.
+        # 코드로 '건수 + 적용 필터' 한 줄만 만들어 중국어 드리프트·재시도·2차 LLM 호출을 모두 제거.
+        summary = _summarize_results(tool_calls, results_for_history)
+        yield {"type": "token", "text": summary}
         yield {
             "type": "done",
-            "message": full,
+            "message": summary,
             "tool_calls": [{"name": r["name"], "args": r["args"]} for r in results_for_history],
         }
