@@ -201,7 +201,10 @@ async def _call_chat(
 
 
 async def route_chat(
-    user_query: str, history: list[dict] | None = None, limit: int = 10
+    user_query: str,
+    history: list[dict] | None = None,
+    limit: int = 10,
+    kind: str | None = None,
 ) -> AsyncIterator[dict]:
     """async generator. event dict 시리즈를 yield.
 
@@ -295,7 +298,8 @@ async def route_chat(
                     fn["arguments"] = args
                     c["function"] = fn
 
-        # 프론트에서 지정한 limit 을 search_videos 에 강제 주입 (LLM 기본값 무시)
+        # 프론트에서 지정한 limit 을 search_videos 에 강제 주입 (LLM 기본값 무시).
+        # kind 가 instance/archive 면 사용자가 UI 에서 명시적으로 고른 것이므로 강제 주입(전체="" 면 미적용).
         for c in tool_calls:
             fn = c.get("function") or {}
             if fn.get("name") != "search_videos":
@@ -307,6 +311,8 @@ async def route_chat(
                 except json.JSONDecodeError:
                     args = {}
             args["limit"] = limit
+            if kind in ("instance", "archive"):
+                args["kind"] = kind
             fn["arguments"] = args
             c["function"] = fn
 

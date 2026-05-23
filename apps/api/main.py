@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="사용자 자연어 질의")
     history: list[dict] = Field(default_factory=list)
     limit: int = Field(10, ge=1, le=100, description="검색 결과 최대 개수")
+    kind: str | None = Field(None, description="instance/archive 필터 (None/빈값 = 전체)")
 
 
 class SearchVideosRequest(BaseModel):
@@ -139,7 +140,9 @@ def create_app() -> FastAPI:
     async def chat(req: ChatRequest):
         async def sse() -> AsyncGenerator[bytes, None]:
             try:
-                async for ev in route_chat(req.query, history=req.history, limit=req.limit):
+                async for ev in route_chat(
+                    req.query, history=req.history, limit=req.limit, kind=req.kind
+                ):
                     line = "data: " + json.dumps(ev, ensure_ascii=False, default=str) + "\n\n"
                     yield line.encode("utf-8")
             except Exception as e:

@@ -7,6 +7,13 @@ import examples from "./examples.json";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 const LIMIT_OPTIONS = [5, 10, 20, 30, 50];
 const LIMIT_STORAGE_KEY = "flayai-chat-limit";
+// instance(지금 볼 수 있는) / archive(보관) 필터. "" = 전체
+const KIND_OPTIONS = [
+  { value: "", label: "전체" },
+  { value: "instance", label: "instance" },
+  { value: "archive", label: "archive" },
+] as const;
+const KIND_STORAGE_KEY = "flayai-chat-kind";
 
 type VideoHit = {
   opus: string;
@@ -220,6 +227,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState(10);
+  const [kind, setKind] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -227,10 +235,12 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // limit 선택값을 localStorage 에서 복원 (마운트 후 — SSR 하이드레이션 불일치 방지)
+  // limit / kind 선택값을 localStorage 에서 복원 (마운트 후 — SSR 하이드레이션 불일치 방지)
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(LIMIT_STORAGE_KEY));
     if (LIMIT_OPTIONS.includes(saved)) setLimit(saved);
+    const savedKind = window.localStorage.getItem(KIND_STORAGE_KEY) ?? "";
+    if (KIND_OPTIONS.some((o) => o.value === savedKind)) setKind(savedKind);
   }, []);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
@@ -266,7 +276,7 @@ export default function ChatPage() {
         const r = await fetch(`${API_BASE}/api/chat`, {
           method: "POST",
           headers: { "content-type": "application/json", accept: "text/event-stream" },
-          body: JSON.stringify({ query, limit }),
+          body: JSON.stringify({ query, limit, kind: kind || undefined }),
           signal: ac.signal,
         });
         if (!r.ok || !r.body) {
@@ -352,7 +362,7 @@ export default function ChatPage() {
         setBusy(false);
       }
     },
-    [busy, limit, updateAssistant]
+    [busy, limit, kind, updateAssistant]
   );
 
   const abort = useCallback(() => {
@@ -423,6 +433,23 @@ export default function ChatPage() {
           {LIMIT_OPTIONS.map((n) => (
             <option key={n} value={n}>
               {n}개
+            </option>
+          ))}
+        </select>
+        <select
+          className="px-2 py-2 rounded-md bg-neutral-900 border border-neutral-700 text-sm text-neutral-300 outline-none focus:border-blue-500 shrink-0"
+          value={kind}
+          onChange={(e) => {
+            const v = e.target.value;
+            setKind(v);
+            window.localStorage.setItem(KIND_STORAGE_KEY, v);
+          }}
+          disabled={busy}
+          title="instance(지금 볼 수 있는) / archive(보관) 필터"
+        >
+          {KIND_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
