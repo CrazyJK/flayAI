@@ -30,7 +30,8 @@ class Filters:
     tag_id: int | None = None
     kind: str | None = None  # "instance" | "archive" | None
     playable: bool | None = None
-    min_rank: int | None = None
+    min_rank: int | None = None  # rank >= N ("N 이상")
+    rank: int | None = None  # rank == N (정확히 그 평점)
 
 
 @dataclass
@@ -68,6 +69,8 @@ def _build_qdrant_filter(f: Filters) -> qm.Filter | None:
         must.append(qm.FieldCondition(key="playable", match=qm.MatchValue(value=bool(f.playable))))
     if f.min_rank is not None:
         must.append(qm.FieldCondition(key="rank", range=qm.Range(gte=int(f.min_rank))))
+    if f.rank is not None:
+        must.append(qm.FieldCondition(key="rank", match=qm.MatchValue(value=int(f.rank))))
     return qm.Filter(must=must) if must else None
 
 
@@ -151,6 +154,9 @@ def fts_search(
     if f.min_rank is not None:
         where.append("v.rank >= ?")
         params.append(int(f.min_rank))
+    if f.rank is not None:
+        where.append("v.rank = ?")
+        params.append(int(f.rank))
     if f.actress_canonical:
         where.append(
             "EXISTS (SELECT 1 FROM video_actresses va "

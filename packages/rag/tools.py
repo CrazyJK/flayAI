@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from packages.indexer.actress_merge import normalize_actress
 from packages.indexer.db import connect
-from packages.rag.ranker import rank
+from packages.rag.ranker import rank as rerank
 from packages.rag.retriever import Filters, hybrid_search
 
 log = logging.getLogger(__name__)
@@ -102,9 +102,13 @@ def search_videos(
     kind: Literal["instance", "archive", "any"] = "any",
     playable: bool | None = None,
     min_rank: int | None = None,
+    rank: int | None = None,
     limit: int = 10,
 ) -> list[dict]:
-    """자연어 검색 + 메타 필터. query 비어있고 필터만 있어도 동작 (메타 only)."""
+    """자연어 검색 + 메타 필터. query 비어있고 필터만 있어도 동작 (메타 only).
+
+    min_rank: 평점 N 이상(rank >= N). rank: 정확히 평점 N(rank == N).
+    """
     conn = connect()
     try:
         actress_canon = _resolve_actress_alias(conn, actress)
@@ -118,11 +122,12 @@ def search_videos(
             kind=None if kind in (None, "any") else kind,
             playable=playable,
             min_rank=min_rank,
+            rank=rank,
         )
         if query.strip():
             top_k = max(limit * 3, 30)
             cands = hybrid_search(query, top_k=top_k, filters=filt, conn=conn)
-            scored = rank(cands)[:limit]
+            scored = rerank(cands)[:limit]
             hits: list[dict] = []
             for s in scored:
                 h = _video_to_hit(conn, s.opus, scored=s)
@@ -153,6 +158,9 @@ def _meta_only_search(conn, f: Filters, limit: int) -> list[dict]:
     if f.min_rank is not None:
         where.append("v.rank >= ?")
         params.append(int(f.min_rank))
+    if f.rank is not None:
+        where.append("v.rank = ?")
+        params.append(int(f.rank))
     if f.actress_canonical:
         where.append(
             "EXISTS (SELECT 1 FROM video_actresses va "
@@ -324,7 +332,8 @@ TOOL_SCHEMA: list[dict] = [
                         "type": "boolean",
                         "description": "true 면 video_path 보유한 것만",
                     },
-                    "min_rank": {"type": "integer"},
+                    "min_rank": {"type": "integer", "description": "평점 N 이상(rank >= N)"},
+                    "rank": {"type": "integer", "description": "정확히 평점 N(rank == N). '평점 5'처럼 '이상' 없이 특정 평점만."},
                     "limit": {"type": "integer", "default": 10},
                 },
             },

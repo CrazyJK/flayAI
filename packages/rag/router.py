@@ -72,8 +72,10 @@ def _llm_model() -> str:
 _YEAR_RE = re.compile(r"(19|20)(\d{2})\s*년")
 _MONTH_RE = re.compile(r"(?<!\d)([1-9]|1[0-2])\s*월")
 _YEAR_ONLY_RE = re.compile(r"(?<!\d)(19|20)(\d{2})(?!\d)")
-# "평점/별점 4 이상" 같은 최소 평점 표현
-_RANK_RE = re.compile(r"(?:평점|별점|랭크|등급)\D{0,4}([1-5])\s*(?:점|개|성|등급)?\s*이상")
+# "평점/별점/랭크 4 이상" → 최소 평점(min_rank, rank >= N)
+_RANK_MIN_RE = re.compile(r"(?:평점|별점|랭크|등급)\D{0,4}([1-5])\s*(?:점|개|성|등급)?\s*이상")
+# "평점/별점/랭크 5"(이상/이하 수식 없이) → 정확히 그 평점(rank == N). '랭크 5이고'·'별점 5' 등.
+_RANK_EXACT_RE = re.compile(r"(?:평점|별점|랭크|등급)\D{0,4}([1-5])(?!\s*(?:이상|이하|미만|초과|\d))")
 # "지금 볼 수 있는"(instance) / "예전·보관"(archive) 키워드
 _INSTANCE_RE = re.compile(r"지금|바로|당장|볼\s*수\s*있는|재생\s*가능|플레이\s*가능")
 _ARCHIVE_RE = re.compile(r"예전|옛날|아카이브|보관|지난날")
@@ -96,9 +98,13 @@ def _extract_meta(query: str) -> dict:
     mm = _MONTH_RE.search(query)
     if mm:
         out["month"] = int(mm.group(1))
-    mr = _RANK_RE.search(query)
+    mr = _RANK_MIN_RE.search(query)
     if mr:
         out["min_rank"] = int(mr.group(1))
+    else:
+        me = _RANK_EXACT_RE.search(query)
+        if me:
+            out["rank"] = int(me.group(1))
     if _INSTANCE_RE.search(query):
         out["kind"] = "instance"
         out["playable"] = True
@@ -135,6 +141,8 @@ def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
             parts.append(str(a["actress"]))
         if a.get("min_rank"):
             parts.append(f"평점 {a['min_rank']}+")
+        if a.get("rank"):
+            parts.append(f"평점 {a['rank']}")
         if a.get("kind") in _KIND_LABEL:
             parts.append(_KIND_LABEL[a["kind"]])
         elif a.get("playable"):

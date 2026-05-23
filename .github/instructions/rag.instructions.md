@@ -33,7 +33,7 @@ description: "RAG 검색 + LLM tool calling 라우팅 규칙"
 
 - tool 미호출 시 `search_videos(query=user_query)` 강제 폴백 (빈손 응답 금지).
 - 질문에 품번 패턴(`[A-Za-z]{2,7}-?\d{2,5}`)이 없으면 `get_video`/`similar_to` 호출을 `search_videos` 로 교체.
-- `_extract_meta()` 로 질문에서 year/month/min_rank/kind/playable 를 정규식으로 추출해 `search_videos` args 에 주입(LLM 누락·미호출 방어). studio/actress 는 query 로 semantic+FTS 매칭.
+- `_extract_meta()` 로 질문에서 year/month/min_rank/rank/kind/playable 를 정규식으로 추출해 `search_videos` args 에 주입(LLM 누락·미호출 방어). 평점은 "N 이상"→`min_rank`(≥), "랭크 N"·"별점 N"(수식어 없이)→`rank`(정확히 N). studio/actress 는 query 로 semantic+FTS 매칭.
 - 결과 요약은 `_summarize_results()` 가 코드로 "건수+필터" 한 줄을 만들어 `token` 이벤트로 한 번 push.
 
 ## 검색 / 랭킹

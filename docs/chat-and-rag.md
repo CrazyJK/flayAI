@@ -67,7 +67,7 @@ LLM 응답:  { "tool_calls": [
    │  → [hit, hit, hit, ...]                   │
    └──────────────────────────────────────────┘
    │
-   ▼ 코드 필터 보강 (_extract_meta): 질문에서 year/month/kind/playable/min_rank 추출 → args 주입
+   ▼ 코드 필터 보강 (_extract_meta): 질문에서 year/month/kind/playable/min_rank/rank 추출 → args 주입
    │   (LLM 이 tool_call 을 빠뜨려도 폴백 + 이 보강으로 결과가 정확)
    │
    ▼ SSE 로 클라이언트에 tool_call / tool_result 이벤트 즉시 push
@@ -117,7 +117,7 @@ for (;;) {
 
 | 도구 | 시그니처 (요약) | 언제 호출되도록 시켰는가 |
 |------|----------------|------------------------|
-| `search_videos` | `query?, actress?, studio?, year?, month?, kind?, tag?, min_rank?, playable?, limit=10` | 자연어 검색의 기본. 거의 대부분이 여기. |
+| `search_videos` | `query?, actress?, studio?, year?, month?, kind?, tag?, min_rank?, rank?, playable?, limit=10` | 자연어 검색의 기본. 거의 대부분이 여기. `min_rank`=평점 N 이상(≥), `rank`=정확히 평점 N. |
 | `similar_to` | `opus, exclude_watched=true, limit=10` | 품번이 명시되어 있을 때 유사 영상 |
 | `get_video` | `opus` | 품번 단일 조회 |
 | `get_actress` | `name` | 배우 메타 + 대표작 |
@@ -134,8 +134,9 @@ for (;;) {
                 ┌─────────────────────────────┐
                 │ Filters: actress, year, ... │  ← LLM tool_call + 코드(_extract_meta)
                 └─────────────────────────────┘
-   ※ year/month/kind/playable/min_rank 는 _extract_meta 가 질문에서 정규식으로 추출해
-     search_videos 인자에 주입한다(LLM 누락 방어). studio/actress 는 query 로 semantic+FTS 매칭.
+   ※ year/month/kind/playable/min_rank/rank 는 _extract_meta 가 질문에서 정규식으로 추출해
+     search_videos 인자에 주입한다(LLM 누락 방어). "평점 N 이상"→min_rank(≥), "랭크 N"·"별점 N"(수식어
+     없이)→rank(정확히 N). studio/actress 는 query 로 semantic+FTS 매칭.
                               │
         ┌─────────────────────┴─────────────────────┐
         ▼                                           ▼
