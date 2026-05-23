@@ -873,6 +873,12 @@ export default function AdminPage() {
     }
   }, []);
 
+  // 진입 시 자동으로 한 번 로드 (새로고침 버튼을 누르지 않아도 데이터 표시)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
   // 작업 실행 중에는 1.5초마다 자동 폴링해 단계 진행상황을 갱신 (평소엔 수동 새로고침)
   useEffect(() => {
     const running = data && Object.values(data.jobs).some((j) => j.status === "running");
