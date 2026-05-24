@@ -163,9 +163,9 @@ function elapsed(startTs: number): string {
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  // 진행률 임계 색상(황/파/초)은 번역처럼 완료율 낮은 단계가 '경고'처럼 보여 혼란 → 통일.
-  // 진행 중 = 파랑, 완료(100%) = 초록.
-  const color = pct >= 100 ? "bg-emerald-500" : "bg-blue-500";
+  // 모든 단계 막대 색을 통일(초록). 진행률에 따라 색을 바꾸면 번역(미완료)만 다른 색으로 튐.
+  // 완료/진행 구분은 채움 너비 + 카드 상태아이콘(✓/●/○)이 표시하므로 색은 고정.
+  const color = "bg-emerald-500";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-neutral-700 rounded-full overflow-hidden">
