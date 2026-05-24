@@ -568,7 +568,7 @@ def _indexer_stats() -> dict[str, Any]:
 
             # 메타 단계 처리 건수(라이브) + 얼굴 추출 완료(포스터 단위).
             # state.json 은 마지막 런의 증분 건수만 담아(예: 19/20343) 누적 진행률이 왜곡됨 →
-            # poster_faces 의 DISTINCT opus(얼굴이 1개+ 검출된 포스터)를 라이브로 사용한다.
+            # poster_faces 의 DISTINCT poster_opus(얼굴이 1개+ 검출된 포스터)를 라이브로 사용한다.
             def _count(sql: str) -> int:
                 try:
                     return int(conn.execute(sql).fetchone()[0])
@@ -577,7 +577,7 @@ def _indexer_stats() -> dict[str, Any]:
 
             history_count = _count("SELECT COUNT(*) FROM history")
             fts_count = _count("SELECT COUNT(*) FROM videos_fts")
-            faces_extracted = _count("SELECT COUNT(DISTINCT opus) FROM poster_faces")
+            faces_extracted = _count("SELECT COUNT(DISTINCT poster_opus) FROM poster_faces")
 
         finally:
             conn.close()
