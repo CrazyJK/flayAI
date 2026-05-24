@@ -108,11 +108,12 @@ bin\reindex.bat full       # 야간 풀 인덱싱 (이미지/얼굴/OCR)
 프로세스**로 실행한다. 그래야 stdout 로그가 에이전트에게 실시간 스트리밍되어 즉시
 진단할 수 있다. 사용자가 "서버 띄워줘 / 재시작해줘" 류로 요청하면 이 방식을 쓴다.
 
-- API: `.venv\Scripts\python.exe -m uvicorn apps.api.main:app --host ai.kamoru.jk --port 8000 --ssl-keyfile .cert/kamoru.jk.key --ssl-certfile .cert/kamoru.jk.pem --reload --reload-dir apps --reload-dir packages`
+- API: `.venv\Scripts\python.exe -m uvicorn apps.api.main:app --host ai.kamoru.jk --port 8000 --ssl-keyfile .cert/kamoru.jk.key --ssl-certfile .cert/kamoru.jk.pem`
 - Web: `apps/web` 에서 `npm run dev`
 - 사전 의존성 qdrant(6333)·ollama(11434)는 먼저 떠 있어야 한다 — 없으면 `bin\qdrant.bat`/`ollama` 로 기동 후 진행.
-- **API 자동 reload(`--reload`)**: `apps/`·`packages/` 의 `*.py` 변경은 워커만 자동 재기동되어 즉시 반영된다 → **수동 종료·재시작 불필요**. `--reload-dir` 로 소스만 감시하므로 인덱싱 중 `data/`·`logs/` 쓰기에는 반응하지 않는다. **수동 재시작이 필요한 경우만**: `config.yaml`/의존성(`pyproject`)/`.env`/cert 변경 등 reload 감시 밖. 잦은 수동 재시작(특히 `taskkill /F`)은 인앱 백그라운드 작업을 매번 'exit 1 실패'로 남기므로 피한다 — `--reload` 가 그 사이클 자체를 없앤다.
-- 인덱싱 실행 중에는 `apps/`·`packages/` 소스를 편집하지 않는다(리로드가 워커를 재기동하면 `_running_jobs`(메모리) 진행 추적이 초기화됨). 인덱싱은 별도 서브프로세스라 죽지는 않지만 진행 표시가 끊긴다.
+- **API 재시작은 수동**: FastAPI 자동 reload 없음 → 코드 변경 시 인앱 백그라운드 프로세스를 종료(8000 포트 PID `taskkill /F`) 후 다시 띄운다(별도 창 안 뜸). **`uvicorn --reload` 는 쓰지 말 것** — torch 등 무거운 import 로 reload 가 멈추고, WatchFiles 가 편집을 놓치며, multiprocessing 워커 고아 소켓으로 포트 정리가 꼬인다(검증됨, 부적합). 대신 **여러 백엔드 변경을 모아 재시작 1회로** 최소화한다.
+- **참고(정상 동작)**: 인앱 백그라운드 API 를 `taskkill /F` 로 종료하면 그 백그라운드 작업이 'exit code 1 실패'로 표시된다 — 시작 실패가 아니라 강제 종료의 흔적이다. 재시작을 줄이면 이 알림도 준다.
+- 포트 정리 시: `Get-NetTCPConnection -LocalPort 8000` 의 OwningProcess 가 죽은 PID 로 보이면 자식(워커)이 소켓을 상속한 것 — `Win32_Process` 로 자식 python(PPID=그 PID)을 찾아 `taskkill /F` 한다.
 - **한계**: 이 프로세스들은 에이전트 세션의 자식이라 클로드 앱이 종료/업데이트되면 함께 죽는다. 앱과 독립적으로 유지하려면 `bin\*.bat`(별도 창) 또는 운영용 `bin\prod.bat` 를 쓴다.
 - **운영(`bin\prod.bat`)은 변경 없음** — 단일 터미널 백그라운드 + `logs\*.log` 그대로 유지.
 
