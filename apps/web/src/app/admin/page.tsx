@@ -79,7 +79,7 @@ type IndexerData = {
 
 type StepInfo = {
   step: string;
-  status: "pending" | "running" | "done" | "failed" | "error";
+  status: "pending" | "running" | "done" | "failed" | "error" | "paused";
   started_at?: number;
   finished_at?: number;
   returncode?: number;
@@ -88,7 +88,7 @@ type StepInfo = {
 };
 
 type JobInfo = {
-  status: "running" | "done" | "failed" | "error";
+  status: "running" | "done" | "failed" | "error" | "paused";
   pid?: number;
   started_at?: number;
   finished_at?: number;
@@ -97,6 +97,7 @@ type JobInfo = {
   stderr?: string;
   error?: string;
   current?: number;
+  paused_step?: number | null;
   steps?: StepInfo[];
 };
 
@@ -559,7 +560,7 @@ const PIPELINE: PipeStage[] = [
 ];
 
 // 한 단계의 현재 상태를 jobs(파이프라인 steps + 개별 작업)에서 해석.
-type StageStatus = "idle" | "running" | "done" | "failed";
+type StageStatus = "idle" | "running" | "done" | "failed" | "paused";
 function stageState(
   job: string,
   jobs: Record<string, JobInfo>,
@@ -708,14 +709,46 @@ function StageArrow() {
   );
 }
 
+// 파이프라인 일시정지/재개 버튼 (실행 중 → 일시정지, 일시정지 → 재개)
+function PipeCtlButton({
+  kind,
+  label,
+  onClick,
+}: {
+  kind: "pause" | "resume";
+  label?: string;
+  onClick: () => void;
+}) {
+  const isPause = kind === "pause";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "px-3 py-1.5 text-sm rounded border transition-colors whitespace-nowrap " +
+        (isPause
+          ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+          : "border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20")
+      }
+      title={isPause ? "현재 단계를 멈추고 일시정지(데이터 보존, 재개 시 이어서)" : "멈춘 단계부터 재개"}
+    >
+      {label ?? (isPause ? "⏸ 일시정지" : "▶ 재개")}
+    </button>
+  );
+}
+
 function IndexerSection({
   data,
   jobs,
   onStartJob,
+  onPauseJob,
+  onResumeJob,
 }: {
   data: IndexerData;
   jobs: Record<string, JobInfo>;
   onStartJob: (job: string) => Promise<void>;
+  onPauseJob: (job: string) => Promise<void>;
+  onResumeJob: (job: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
@@ -801,6 +834,21 @@ function IndexerSection({
     }
   }
 
+  async function handlePause(job: string) {
+    try {
+      await onPauseJob(job);
+    } catch (e) {
+      alert(`일시정지 실패: ${(e as Error).message}`);
+    }
+  }
+  async function handleResume(job: string) {
+    try {
+      await onResumeJob(job);
+    } catch (e) {
+      alert(`재개 실패: ${(e as Error).message}`);
+    }
+  }
+
   function toggleLog(job: string) {
     setExpandedJob((prev) => (prev === job ? null : job));
   }
@@ -825,6 +873,13 @@ function IndexerSection({
   // 증분 ↔ 전체 상호 배타: 한쪽 실행 중이면 다른쪽 버튼 비활성화
   const refreshRunning = jobs["refresh"]?.status === "running";
   const rebuildRunning = jobs["rebuild"]?.status === "running";
+  const refreshPaused = jobs["refresh"]?.status === "paused";
+  const rebuildPaused = jobs["rebuild"]?.status === "paused";
+  // 일시정지된 단계 번호(1-base, 표시용)
+  const pausedStepLabel = (job: string): string => {
+    const s = jobs[job]?.paused_step;
+    return s != null ? ` · ${s + 1}/${PIPELINE.length}단계` : "";
+  };
   // 메타 단계 처리 건수 (라이브 DB 카운트, 없으면 null)
   const metaCountOf = (s: PipeStage): number | null => {
     switch (s.metaCount) {
@@ -890,32 +945,53 @@ function IndexerSection({
       </div>
 
       {/* 일괄 작업 (메타 + AI 전체 파이프라인을 순서대로 실행).
-          증분 ↔ 전체 는 동시 실행 불가 — 한쪽이 돌면 다른쪽 버튼 비활성화. */}
+          증분 ↔ 전체 는 동시 실행 불가 — 한쪽이 돌면 다른쪽 버튼 비활성화.
+          실행 중에는 [일시정지], 일시정지 상태에는 [재개] 버튼이 옆에 나타난다. */}
       <div className="mb-4 flex flex-wrap items-stretch gap-2">
-        <JobButton
-          job="refresh"
-          label="증분 인덱싱"
-          sub={`신규 ${fmtNum(incrCount)}건${refreshTime ? ` · ${refreshTime}` : ""}`}
-          info={jobs["refresh"]}
-          busy={busy}
-          blocked={rebuildRunning}
-          blockedReason="전체 재인덱싱 실행 중"
-          onStart={(j) => void handleStart(j)}
-          onToggleLog={toggleLog}
-          expanded={false}
-        />
-        <JobButton
-          job="rebuild"
-          label="⚠ 전체 재인덱싱"
-          sub={`전체 ${fmtNum(fullCount)}건${rebuildTime ? ` · ${rebuildTime}` : ""}`}
-          info={jobs["rebuild"]}
-          busy={busy}
-          blocked={refreshRunning}
-          blockedReason="증분 인덱싱 실행 중"
-          onStart={(j) => void handleStart(j)}
-          onToggleLog={toggleLog}
-          expanded={false}
-        />
+        <div className="flex items-stretch gap-1">
+          <JobButton
+            job="refresh"
+            label="증분 인덱싱"
+            sub={`신규 ${fmtNum(incrCount)}건${refreshTime ? ` · ${refreshTime}` : ""}`}
+            info={jobs["refresh"]}
+            busy={busy}
+            blocked={rebuildRunning}
+            blockedReason="전체 재인덱싱 실행 중"
+            onStart={(j) => void handleStart(j)}
+            onToggleLog={toggleLog}
+            expanded={false}
+          />
+          {refreshRunning && <PipeCtlButton kind="pause" onClick={() => void handlePause("refresh")} />}
+          {refreshPaused && (
+            <PipeCtlButton
+              kind="resume"
+              label={`▶ 재개${pausedStepLabel("refresh")}`}
+              onClick={() => void handleResume("refresh")}
+            />
+          )}
+        </div>
+        <div className="flex items-stretch gap-1">
+          <JobButton
+            job="rebuild"
+            label="⚠ 전체 재인덱싱"
+            sub={`전체 ${fmtNum(fullCount)}건${rebuildTime ? ` · ${rebuildTime}` : ""}`}
+            info={jobs["rebuild"]}
+            busy={busy}
+            blocked={refreshRunning}
+            blockedReason="증분 인덱싱 실행 중"
+            onStart={(j) => void handleStart(j)}
+            onToggleLog={toggleLog}
+            expanded={false}
+          />
+          {rebuildRunning && <PipeCtlButton kind="pause" onClick={() => void handlePause("rebuild")} />}
+          {rebuildPaused && (
+            <PipeCtlButton
+              kind="resume"
+              label={`▶ 재개${pausedStepLabel("rebuild")}`}
+              onClick={() => void handleResume("rebuild")}
+            />
+          )}
+        </div>
       </div>
 
       {/* 흐름도 — 좁은 화면은 세로(▼), 넓은 화면은 가로(→) */}
@@ -938,7 +1014,9 @@ function IndexerSection({
                 ? "border-emerald-500/40 bg-neutral-900/40"
                 : status === "failed"
                   ? "border-red-500/50 bg-red-500/5"
-                  : "border-neutral-700/50 bg-neutral-900/40";
+                  : status === "paused"
+                    ? "border-sky-500/50 bg-sky-500/5"
+                    : "border-neutral-700/50 bg-neutral-900/40";
           return (
             <div key={s.job} className="flex flex-col lg:flex-row lg:items-stretch">
               <div
@@ -955,6 +1033,8 @@ function IndexerSection({
                       <span className="text-emerald-400">✓</span>
                     ) : status === "failed" ? (
                       <span className="text-red-400">✗</span>
+                    ) : status === "paused" ? (
+                      <span className="text-sky-400">⏸</span>
                     ) : (
                       <span className="text-neutral-600">○</span>
                     )}
@@ -1308,17 +1388,21 @@ export default function AdminPage() {
     };
   }, [loadServices, jobRunning]);
 
-  async function startJob(job: string) {
-    const r = await fetch(`${API_BASE}/api/admin/jobs/${encodeURIComponent(job)}`, {
+  // 인덱서 작업 POST 공통 (start / pause / resume). action 빈 문자열이면 시작.
+  async function postJob(job: string, action: "" | "/pause" | "/resume") {
+    const r = await fetch(`${API_BASE}/api/admin/jobs/${encodeURIComponent(job)}${action}`, {
       method: "POST",
     });
     if (!r.ok) {
       const body = (await r.json().catch(() => ({}))) as { detail?: string };
       throw new Error(body.detail ?? `HTTP ${r.status}`);
     }
-    // 곧바로 서비스 폴링을 한 번 돌려 실행 상태를 띄우면 위 폴링(2초)이 이어받음
+    // 곧바로 서비스 폴링을 한 번 돌려 상태를 띄우면 위 폴링이 이어받음
     setTimeout(() => void loadServices(), 600);
   }
+  const startJob = (job: string) => postJob(job, "");
+  const pauseJob = (job: string) => postJob(job, "/pause");
+  const resumeJob = (job: string) => postJob(job, "/resume");
 
   return (
     <main className="flex-1 flex flex-col w-full min-h-0">
@@ -1374,7 +1458,13 @@ export default function AdminPage() {
           {data ? (
             <>
               <SqliteSection data={data.sqlite} />
-              <IndexerSection data={data.indexer} jobs={data.jobs} onStartJob={startJob} />
+              <IndexerSection
+                data={data.indexer}
+                jobs={data.jobs}
+                onStartJob={startJob}
+                onPauseJob={pauseJob}
+                onResumeJob={resumeJob}
+              />
             </>
           ) : (
             <div className="text-base text-neutral-400 animate-pulse">데이터 로딩 중…</div>

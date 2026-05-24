@@ -81,6 +81,9 @@ PIPELINE_DEFS: dict[str, list[tuple[str, list[str]]]] = {
 # 실행 중·완료 작업 상태 (메모리 전용 — 재시작 시 초기화)
 _running_jobs: dict[str, dict[str, Any]] = {}
 
+# 파이프라인별 현재 실행 중인 단계 서브프로세스 (일시정지 시 terminate 용 — JSON 직렬화 대상 아님)
+_pipeline_procs: dict[str, subprocess.Popen] = {}
+
 
 def _localhost_only(request: Request) -> None:
     client_host = request.client.host if request.client else ""
@@ -192,9 +195,11 @@ async def start_job(job: str, request: Request) -> dict[str, Any]:
             "status": "running",
             "started_at": time.time(),
             "current": 0,
+            "pause_requested": False,
+            "paused_step": None,
             "steps": [{"step": s, "args": a, "status": "pending"} for s, a in PIPELINE_DEFS[job]],
         }
-        asyncio.get_event_loop().run_in_executor(None, _run_pipeline_sync, job, venv_python)
+        asyncio.get_event_loop().run_in_executor(None, _run_pipeline_sync, job, venv_python, 0)
         return {"status": "started", "job": job, "pipeline": True}
 
     # 단일 작업
@@ -215,6 +220,53 @@ async def start_job(job: str, request: Request) -> dict[str, Any]:
     return {"status": "started", "job": job, "pid": proc.pid}
 
 
+@router.post("/jobs/{job}/pause")
+async def pause_job(job: str, request: Request) -> dict[str, Any]:
+    """실행 중인 파이프라인을 일시정지한다.
+
+    현재 단계 서브프로세스를 terminate 하고 paused 상태로 둔다. WAL + 단계별 증분(완료분
+    commit) 덕에 데이터는 손상 없이 보존되고, 재개 시 멈춘 단계부터 재실행하며 완료분은 skip.
+    """
+    _localhost_only(request)
+    if job not in PIPELINE_DEFS:
+        raise HTTPException(400, "일시정지는 파이프라인(증분/전체)만 지원합니다.")
+    info = _running_jobs.get(job)
+    if not info or info.get("status") != "running":
+        raise HTTPException(409, "실행 중인 파이프라인이 아닙니다.")
+    info["pause_requested"] = True
+    proc = _pipeline_procs.get(job)
+    if proc and proc.poll() is None:
+        try:
+            proc.terminate()  # Windows: TerminateProcess. 미커밋분만 롤백(WAL) → 안전.
+        except Exception as e:
+            log.warning("pause terminate failed: %s", e)
+    return {"status": "pausing", "job": job}
+
+
+@router.post("/jobs/{job}/resume")
+async def resume_job(job: str, request: Request) -> dict[str, Any]:
+    """일시정지된 파이프라인을 멈춘 단계부터 재개한다(증분이라 완료분은 건너뜀)."""
+    _localhost_only(request)
+    if job not in PIPELINE_DEFS:
+        raise HTTPException(400, "재개는 파이프라인(증분/전체)만 지원합니다.")
+    info = _running_jobs.get(job)
+    if not info or info.get("status") != "paused":
+        raise HTTPException(409, "일시정지 상태가 아닙니다.")
+    # 다른 파이프라인이 실행 중이면 거부(동시 실행 방지)
+    for pj in PIPELINE_DEFS:
+        pinfo = _running_jobs.get(pj)
+        if pj != job and pinfo and pinfo.get("status") == "running":
+            raise HTTPException(409, f"이미 '{pj}' 파이프라인이 실행 중입니다.")
+    start = int(info.get("paused_step") or 0)
+    info["status"] = "running"
+    info["pause_requested"] = False
+    for st in info["steps"][start:]:
+        st["status"] = "pending"
+    venv_python = str(REPO_ROOT / ".venv" / "Scripts" / "python.exe")
+    asyncio.get_event_loop().run_in_executor(None, _run_pipeline_sync, job, venv_python, start)
+    return {"status": "resumed", "job": job, "from_step": start}
+
+
 def _wait_job_sync(job: str, proc: subprocess.Popen) -> None:
     """서브프로세스 완료를 동기적으로 기다리고 결과를 _running_jobs에 기록한다."""
     try:
@@ -232,18 +284,43 @@ def _wait_job_sync(job: str, proc: subprocess.Popen) -> None:
         _running_jobs[job].update({"status": "error", "error": str(e)})
 
 
-def _run_pipeline_sync(job: str, venv_python: str) -> None:
-    """파이프라인 단계를 순차 실행하며 _running_jobs[job]['steps'] 진행상황을 갱신한다.
+def _mark_paused(job: str, step_idx: int) -> None:
+    """파이프라인을 일시정지 상태로 표시. 재개 시 step_idx 부터 재실행(증분).
 
-    각 단계는 별도 서브프로세스(`cli <step>`)로 실행하고, 단계 상태를
-    pending -> running -> done/failed 로 갱신한다. 한 단계가 실패하면 중단.
+    데이터 유효성: 각 단계가 WAL + 증분(완료분 commit)이라, 단계를 중단해도 손상 없이
+    이미 처리된 항목은 보존되고 재개 시 skip 된다. step_idx 단계는 멱등이라 재실행 안전.
+    """
+    info = _running_jobs.get(job)
+    if not info:
+        return
+    info["status"] = "paused"
+    info["paused_step"] = step_idx
+    info["pause_requested"] = False
+    info["paused_at"] = time.time()
+    _pipeline_procs.pop(job, None)
+
+
+def _run_pipeline_sync(job: str, venv_python: str, start_step: int = 0) -> None:
+    """파이프라인 단계를 start_step 부터 순차 실행하며 진행상황을 갱신한다.
+
+    각 단계는 별도 서브프로세스(`cli <step>`)로 실행. 상태: pending -> running ->
+    done/failed. 실패 시 중단. 일시정지 요청(pause_requested) 시:
+      - 단계 시작 전이면 그 단계를 안 띄우고 paused (재개 시 그 단계부터).
+      - 단계 실행 중이면 서브프로세스를 terminate() 하고(외부 pause 엔드포인트), 종료 후
+        해당 단계를 paused 로 두어 재개 시 재실행(증분이라 중복 처리 없음).
     """
     info = _running_jobs[job]
     steps = info["steps"]
-    for i, st in enumerate(steps):
+    for i in range(start_step, len(steps)):
+        st = steps[i]
+        # 단계 시작 전 일시정지 확인 (직전 단계 사이의 깨끗한 체크포인트)
+        if info.get("pause_requested"):
+            _mark_paused(job, i)
+            return
         info["current"] = i
         st["status"] = "running"
         st["started_at"] = time.time()
+        st.pop("finished_at", None)
         try:
             proc = subprocess.Popen(
                 [venv_python, "-m", "packages.indexer.cli", st["step"], *st["args"]],
@@ -251,10 +328,17 @@ def _run_pipeline_sync(job: str, venv_python: str) -> None:
                 stderr=subprocess.PIPE,
                 cwd=str(REPO_ROOT),
             )
+            _pipeline_procs[job] = proc
             out, err = proc.communicate()
+            _pipeline_procs.pop(job, None)
             st["finished_at"] = time.time()
             st["returncode"] = proc.returncode
             st["stdout"] = out.decode("utf-8", errors="replace")[-2000:]
+            # 일시정지 요청으로 terminate 되어 빠져나온 경우 → 이 단계를 paused 로, 재개 시 재실행
+            if info.get("pause_requested"):
+                st["status"] = "paused"
+                _mark_paused(job, i)
+                return
             if proc.returncode == 0:
                 st["status"] = "done"
             else:
@@ -264,12 +348,14 @@ def _run_pipeline_sync(job: str, venv_python: str) -> None:
                 info["finished_at"] = time.time()
                 return
         except Exception as e:
+            _pipeline_procs.pop(job, None)
             st["status"] = "error"
             info["status"] = "error"
             info["error"] = str(e)
             info["finished_at"] = time.time()
             return
     info["status"] = "done"
+    info["paused_step"] = None
     info["finished_at"] = time.time()
 
 
