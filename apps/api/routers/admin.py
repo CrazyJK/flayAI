@@ -114,17 +114,34 @@ async def dashboard(request: Request) -> dict[str, Any]:
 
 @router.get("/monitor")
 async def monitor(request: Request) -> dict[str, Any]:
-    """실시간 모니터링용 경량 엔드포인트 — system(CPU/RAM/GPU) + qdrant + ollama.
+    """초당 폴링용 — 시스템 지표(CPU/RAM/GPU/VRAM)만. 전부 로컬이라 매우 가볍다.
 
-    무거운 SQLite COUNT(*)·인덱서 집계는 제외해 자주(수초 간격) 폴링해도 부하가 적다.
+    Qdrant/Ollama 처럼 느리게 변하는(그리고 매초 찌르면 아까운) 항목은 /services 로
+    분리해 저빈도 폴링한다. 무거운 SQLite 전체 집계는 /dashboard(수동·초기) 전용.
     """
     _localhost_only(request)
-    system_data, qdrant_data, ollama_data = await asyncio.gather(
-        asyncio.to_thread(_system_stats),
+    return {"system": await asyncio.to_thread(_system_stats)}
+
+
+@router.get("/services")
+async def services(request: Request) -> dict[str, Any]:
+    """저빈도 폴링용(평소 5초·작업중 2초) — Qdrant·Ollama 카드 + 인덱서 진행 + 작업 상태.
+
+    Ollama/Qdrant 를 1초 폴링(system)과 분리해, 모델 서버/벡터 DB 를 매초 찌르지 않는다.
+    인덱서 집계(SQLite COUNT 6개 + Qdrant points)는 가벼워 이 주기에 포함해도 부담 적다.
+    """
+    _localhost_only(request)
+    qdrant_data, ollama_data, indexer_data = await asyncio.gather(
         asyncio.to_thread(_qdrant_stats),
         _ollama_stats(),
+        asyncio.to_thread(_indexer_stats),
     )
-    return {"system": system_data, "qdrant": qdrant_data, "ollama": ollama_data}
+    return {
+        "qdrant": qdrant_data,
+        "ollama": ollama_data,
+        "indexer": indexer_data,
+        "jobs": dict(_running_jobs),
+    }
 
 
 # ---------------------------------------------------------------------------

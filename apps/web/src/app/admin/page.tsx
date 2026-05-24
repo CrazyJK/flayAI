@@ -1024,7 +1024,8 @@ type SystemData = {
   gpu_name?: string;
 };
 
-type MonitorData = { system: SystemData; qdrant: QdrantData; ollama: OllamaData };
+// /monitor 는 system 만, /services 는 qdrant/ollama 만 채운다 — 둘을 합쳐 보관(부분 갱신).
+type MonitorData = { system?: SystemData; qdrant?: QdrantData; ollama?: OllamaData };
 
 // 실시간 차트용 롤링 버퍼 (각 지표 최근 N초 %값)
 type MetricHistory = { cpu: number[]; ram: number[]; gpu: number[]; vram: number[] };
@@ -1158,7 +1159,9 @@ function SystemSection({ sys, history }: { sys?: SystemData; history: MetricHist
 // 메인 페이지
 // ---------------------------------------------------------------------------
 
-const MONITOR_POLL_MS = 1000; // 모니터 폴링 간격 (psutil 비차단 + nvidia-smi ~50ms 라 1초도 부하 적음)
+const MONITOR_POLL_MS = 1000; // system 지표(로컬) — 1초 (차트용)
+const SERVICES_POLL_MS = 5000; // Qdrant/Ollama/인덱서 — 평소 5초 (느리게 변함)
+const SERVICES_POLL_BUSY_MS = 2000; // 작업 실행 중에는 2초 (진행률 갱신)
 const MAX_HISTORY = 60; // 차트 롤링 버퍼 길이 (1초 × 60 = 최근 약 1분)
 
 export default function AdminPage() {
@@ -1185,14 +1188,14 @@ export default function AdminPage() {
     }
   }, []);
 
+  // /monitor: 시스템 지표(CPU/RAM/GPU/VRAM)만 — 1초. 차트 버퍼에 누적.
   const loadMonitor = useCallback(async () => {
     try {
       const r = await fetch(`${API_BASE}/api/admin/monitor`);
       if (!r.ok) return;
-      const m = (await r.json()) as MonitorData;
-      setMonitor(m);
-      // 차트 롤링 버퍼에 현재 %값 누적 (최근 MAX_HISTORY개 유지)
+      const m = (await r.json()) as { system?: SystemData };
       const s = m.system ?? ({} as SystemData);
+      setMonitor((prev) => ({ ...prev, system: s }));
       const vramPct =
         s.vram_total_mib && s.vram_used_mib != null
           ? (s.vram_used_mib / s.vram_total_mib) * 100
@@ -1209,27 +1212,69 @@ export default function AdminPage() {
     }
   }, []);
 
+  // /services: Qdrant·Ollama 카드 + 인덱서 진행 + 작업 상태 — 평소 5초/작업중 2초.
+  const loadServices = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/services`);
+      if (!r.ok) return;
+      const sv = (await r.json()) as {
+        qdrant?: QdrantData;
+        ollama?: OllamaData;
+        indexer?: IndexerData;
+        jobs?: Record<string, JobInfo>;
+      };
+      setMonitor((prev) => ({ ...prev, qdrant: sv.qdrant, ollama: sv.ollama }));
+      setData((prev) =>
+        prev
+          ? { ...prev, indexer: sv.indexer ?? prev.indexer, jobs: sv.jobs ?? prev.jobs }
+          : prev,
+      );
+    } catch {
+      /* 무시 */
+    }
+  }, []);
+
   // 진입 시 자동으로 한 번 로드 (새로고침 버튼을 누르지 않아도 데이터 표시)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
-  // 실시간 모니터링: /monitor(경량) 를 3초 간격으로 폴링 (CPU/GPU/Qdrant/Ollama)
+  // 시스템 지표: 1초 폴링. 탭이 안 보이면(document.hidden) 네트워크 호출 생략(가시성 게이팅).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadMonitor();
-    const t = setInterval(() => void loadMonitor(), MONITOR_POLL_MS);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (!document.hidden) void loadMonitor();
+    }, MONITOR_POLL_MS);
+    const onVis = () => {
+      if (!document.hidden) void loadMonitor();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [loadMonitor]);
 
-  // 작업 실행 중에는 1.5초마다 자동 폴링해 단계 진행상황을 갱신 (평소엔 수동 새로고침)
+  // 작업 실행 중이면 서비스 폴링을 2초로(진행률), 평소엔 5초. 안 보이면 생략.
+  const jobRunning = !!data && Object.values(data.jobs).some((j) => j.status === "running");
   useEffect(() => {
-    const running = data && Object.values(data.jobs).some((j) => j.status === "running");
-    if (!running) return;
-    const t = setInterval(() => void load(), 1500);
-    return () => clearInterval(t);
-  }, [data, load]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadServices();
+    const ms = jobRunning ? SERVICES_POLL_BUSY_MS : SERVICES_POLL_MS;
+    const t = setInterval(() => {
+      if (!document.hidden) void loadServices();
+    }, ms);
+    const onVis = () => {
+      if (!document.hidden) void loadServices();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadServices, jobRunning]);
 
   async function startJob(job: string) {
     const r = await fetch(`${API_BASE}/api/admin/jobs/${encodeURIComponent(job)}`, {
@@ -1239,8 +1284,8 @@ export default function AdminPage() {
       const body = (await r.json().catch(() => ({}))) as { detail?: string };
       throw new Error(body.detail ?? `HTTP ${r.status}`);
     }
-    // 곧바로 한 번 로드해 실행 상태를 띄우면 위 폴링이 이어받음
-    setTimeout(() => void load(), 600);
+    // 곧바로 서비스 폴링을 한 번 돌려 실행 상태를 띄우면 위 폴링(2초)이 이어받음
+    setTimeout(() => void loadServices(), 600);
   }
 
   return (
