@@ -65,6 +65,8 @@ type IndexerTotals = {
   actresses: number;
   face_clusters: number;
   labeled_clusters: number;
+  history: number;
+  videos_fts: number;
 };
 
 type IndexerData = {
@@ -161,7 +163,9 @@ function elapsed(startTs: number): string {
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  const color = pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-500" : "bg-amber-500";
+  // 진행률 임계 색상(황/파/초)은 번역처럼 완료율 낮은 단계가 '경고'처럼 보여 혼란 → 통일.
+  // 진행 중 = 파랑, 완료(100%) = 초록.
+  const color = pct >= 100 ? "bg-emerald-500" : "bg-blue-500";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-neutral-700 rounded-full overflow-hidden">
@@ -445,8 +449,8 @@ type PipeStage = {
   completedKey?: string;
   totalKey?: "videos" | "posters";
   secPerItem?: number; // 건당 최악 소요시간(초)
-  // 메타 단계: 대상 건수/예상시간 표시용
-  metaCount?: "videos" | "posters" | "all";
+  // 메타 단계: 처리 건수 표시용 (라이브 DB 카운트)
+  metaCount?: "videos" | "posters" | "history" | "fts" | "all";
   estText?: string;
 };
 
@@ -472,7 +476,7 @@ const PIPELINE: PipeStage[] = [
     label: "히스토리",
     group: "메타",
     desc: "재생·접근 히스토리를 DB에 적재",
-    metaCount: "all",
+    metaCount: "history",
     estText: "~1초",
   },
   {
@@ -480,7 +484,7 @@ const PIPELINE: PipeStage[] = [
     label: "FTS 색인",
     group: "메타",
     desc: "제목·설명 전문 검색 인덱스를 생성",
-    metaCount: "videos",
+    metaCount: "fts",
     estText: "~1초",
   },
   {
@@ -587,6 +591,8 @@ function JobButton({
   sub,
   info,
   busy,
+  blocked,
+  blockedReason,
   onStart,
   onToggleLog,
   expanded,
@@ -596,6 +602,8 @@ function JobButton({
   sub?: string;
   info?: JobInfo;
   busy: string | null;
+  blocked?: boolean;
+  blockedReason?: string;
   onStart: (job: string) => void;
   onToggleLog: (job: string) => void;
   expanded: boolean;
@@ -604,11 +612,12 @@ function JobButton({
   const isDone = info?.status === "done";
   const isFailed = info?.status === "failed" || info?.status === "error";
   const hasLog = !!(info?.stdout || info?.stderr);
+  const disabled = !!busy || isRunning || !!blocked;
   return (
     <div className="flex items-center gap-1">
       <button
         type="button"
-        disabled={!!busy || isRunning}
+        disabled={disabled}
         onClick={() => onStart(job)}
         className={
           "px-3 py-1.5 text-sm rounded border transition-colors text-left " +
@@ -618,12 +627,15 @@ function JobButton({
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
               : isFailed
                 ? "border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
-                : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700")
+                : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700") +
+          (blocked && !isRunning ? " opacity-40 cursor-not-allowed" : "")
         }
         title={
-          info?.started_at
-            ? `${isRunning ? "실행 중" : isDone ? "완료" : "실패"} · ${elapsed(info.started_at)}`
-            : "클릭하여 시작"
+          blocked && !isRunning
+            ? (blockedReason ?? "다른 작업 실행 중")
+            : info?.started_at
+              ? `${isRunning ? "실행 중" : isDone ? "완료" : "실패"} · ${elapsed(info.started_at)}`
+              : "클릭하여 시작"
         }
       >
         <span className="block whitespace-nowrap font-medium">
@@ -810,9 +822,24 @@ function IndexerSection({
   );
   const refreshTime = timeLabel(jobs["refresh"], durations["refresh"], nowMs);
   const rebuildTime = timeLabel(jobs["rebuild"], durations["rebuild"], nowMs);
-  // 메타 단계 대상 건수 (없으면 null)
-  const metaCountOf = (s: PipeStage): number | null =>
-    s.metaCount === "videos" ? totals.videos : s.metaCount === "posters" ? totals.posters : null;
+  // 증분 ↔ 전체 상호 배타: 한쪽 실행 중이면 다른쪽 버튼 비활성화
+  const refreshRunning = jobs["refresh"]?.status === "running";
+  const rebuildRunning = jobs["rebuild"]?.status === "running";
+  // 메타 단계 처리 건수 (라이브 DB 카운트, 없으면 null)
+  const metaCountOf = (s: PipeStage): number | null => {
+    switch (s.metaCount) {
+      case "videos":
+        return totals.videos;
+      case "posters":
+        return totals.posters;
+      case "history":
+        return totals.history;
+      case "fts":
+        return totals.videos_fts;
+      default:
+        return null;
+    }
+  };
 
   // KPI 타일: 기본 수치 + 파생 보조 지표(커버리지%·라벨링·비율)
   const pctOf = (done: number, total: number) => (total > 0 ? Math.round((done / total) * 100) : 0);
@@ -862,7 +889,8 @@ function IndexerSection({
         ))}
       </div>
 
-      {/* 일괄 작업 (메타 + AI 전체 파이프라인을 순서대로 실행) */}
+      {/* 일괄 작업 (메타 + AI 전체 파이프라인을 순서대로 실행).
+          증분 ↔ 전체 는 동시 실행 불가 — 한쪽이 돌면 다른쪽 버튼 비활성화. */}
       <div className="mb-4 flex flex-wrap items-stretch gap-2">
         <JobButton
           job="refresh"
@@ -870,6 +898,8 @@ function IndexerSection({
           sub={`신규 ${fmtNum(incrCount)}건${refreshTime ? ` · ${refreshTime}` : ""}`}
           info={jobs["refresh"]}
           busy={busy}
+          blocked={rebuildRunning}
+          blockedReason="전체 재인덱싱 실행 중"
           onStart={(j) => void handleStart(j)}
           onToggleLog={toggleLog}
           expanded={false}
@@ -880,6 +910,8 @@ function IndexerSection({
           sub={`전체 ${fmtNum(fullCount)}건${rebuildTime ? ` · ${rebuildTime}` : ""}`}
           info={jobs["rebuild"]}
           busy={busy}
+          blocked={refreshRunning}
+          blockedReason="증분 인덱싱 실행 중"
           onStart={(j) => void handleStart(j)}
           onToggleLog={toggleLog}
           expanded={false}
@@ -976,7 +1008,7 @@ function IndexerSection({
                     </>
                   ) : (
                     mc != null && (
-                      <div className="text-xs font-mono text-neutral-400">대상 ~{fmtNum(mc)}건</div>
+                      <div className="text-xs font-mono text-neutral-400">처리 {fmtNum(mc)}건</div>
                     )
                   )}
                   {/* 수행시간: 실행중=실시간, 완료=측정, 미실행=저장값 */}

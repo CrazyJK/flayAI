@@ -173,6 +173,16 @@ async def start_job(job: str, request: Request) -> dict[str, Any]:
     if info and info.get("status") == "running":
         return {"status": "already_running", "job": job, "pid": info.get("pid")}
 
+    # 파이프라인(증분/전체)은 한 번에 하나만 — 동시 실행 시 OCR 등 단계가 중복 서브프로세스로
+    # 떠 자원 충돌·중복 처리가 나므로, 다른 파이프라인이 실행 중이면 거부한다(프론트 버튼 비활성화의 백엔드 보강).
+    if job in PIPELINE_DEFS:
+        for pj in PIPELINE_DEFS:
+            pinfo = _running_jobs.get(pj)
+            if pinfo and pinfo.get("status") == "running":
+                raise HTTPException(
+                    409, f"이미 '{pj}' 파이프라인이 실행 중입니다. 완료 후 다시 시도하세요."
+                )
+
     # sys.executable은 디버거/uv 환경에선 프로젝트 venv가 아닐 수 있으므로 명시적으로 지정
     venv_python = str(REPO_ROOT / ".venv" / "Scripts" / "python.exe")
 
@@ -556,6 +566,19 @@ def _indexer_stats() -> dict[str, Any]:
                 "SELECT COUNT(*) FROM posters WHERE caption IS NOT NULL AND caption != ''"
             ).fetchone()[0]
 
+            # 메타 단계 처리 건수(라이브) + 얼굴 추출 완료(포스터 단위).
+            # state.json 은 마지막 런의 증분 건수만 담아(예: 19/20343) 누적 진행률이 왜곡됨 →
+            # poster_faces 의 DISTINCT opus(얼굴이 1개+ 검출된 포스터)를 라이브로 사용한다.
+            def _count(sql: str) -> int:
+                try:
+                    return int(conn.execute(sql).fetchone()[0])
+                except Exception:
+                    return 0
+
+            history_count = _count("SELECT COUNT(*) FROM history")
+            fts_count = _count("SELECT COUNT(*) FROM videos_fts")
+            faces_extracted = _count("SELECT COUNT(DISTINCT opus) FROM poster_faces")
+
         finally:
             conn.close()
 
@@ -564,7 +587,7 @@ def _indexer_stats() -> dict[str, Any]:
         embed_done = qdrant_counts.get("videos", 0)
         embed_clip_done = qdrant_counts.get("posters_clip", 0)
         ocr_done = qdrant_counts.get("poster_ocr", 0)
-        faces_done = state.get("stages", {}).get("extract_faces", {}).get("completed", 0)
+        faces_done = faces_extracted
 
         pending = {
             "translate": max(0, total_videos - translated),
@@ -584,6 +607,8 @@ def _indexer_stats() -> dict[str, Any]:
                 "actresses": total_actresses,
                 "face_clusters": face_clusters,
                 "labeled_clusters": labeled_clusters,
+                "history": history_count,
+                "videos_fts": fts_count,
             },
             "completed": {
                 "translate": translated,
