@@ -34,7 +34,7 @@ function PosterCard({ h }: { h: Hit }) {
         <div className="flex items-center justify-between">
           <span className="font-mono text-foreground">{h.opus}</span>
           {typeof h.score === "number" && (
-            <span className="text-emerald-400 tabular-nums">{h.score.toFixed(3)}</span>
+            <span className="text-success tabular-nums">{h.score.toFixed(3)}</span>
           )}
         </div>
         {h.title && <div className="mt-1 line-clamp-2 text-foreground">{h.title}</div>}
@@ -42,7 +42,7 @@ function PosterCard({ h }: { h: Hit }) {
           {h.studio && <span>{h.studio}</span>}
           {h.year && <span>{h.year}</span>}
           {h.kind && (
-            <span className={h.kind === "instance" ? "text-emerald-400" : "text-muted-foreground"}>
+            <span className={h.kind === "instance" ? "text-success" : "text-muted-foreground"}>
               {h.kind}
             </span>
           )}
@@ -126,13 +126,13 @@ export default function ImageSearchPage() {
       <div className="px-4 py-3 border-b border-border space-y-3">
         <div className="flex gap-2 text-sm">
           <button
-            className={`px-3 py-1 rounded ${tab === "text" ? "bg-emerald-600" : "bg-muted"}`}
+            className={`px-3 py-1 rounded ${tab === "text" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             onClick={() => setTab("text")}
           >
             텍스트 → 포스터
           </button>
           <button
-            className={`px-3 py-1 rounded ${tab === "image" ? "bg-emerald-600" : "bg-muted"}`}
+            className={`px-3 py-1 rounded ${tab === "image" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             onClick={() => setTab("image")}
           >
             이미지 → 포스터
@@ -165,7 +165,7 @@ export default function ImageSearchPage() {
             <button
               type="submit"
               disabled={busy || !query.trim()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
+              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
             >
               검색
             </button>
@@ -185,7 +185,7 @@ export default function ImageSearchPage() {
             <button
               onClick={searchImage}
               disabled={busy || !file}
-              className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
+              className="ml-auto px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
             >
               유사 포스터 검색
             </button>
@@ -199,7 +199,7 @@ export default function ImageSearchPage() {
               {items.length}건 · {elapsed} ms
             </span>
           )}
-          {err && <span className="text-red-400 ml-3">{err}</span>}
+          {err && <span className="text-destructive ml-3">{err}</span>}
         </div>
       </div>
 

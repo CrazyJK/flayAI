@@ -119,7 +119,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
     }
   }
 
-  if (!d && error) return <div className="text-sm text-red-400 p-4">⚠ {error}</div>;
+  if (!d && error) return <div className="text-sm text-destructive p-4">⚠ {error}</div>;
   if (!d) return <div className="text-sm text-muted-foreground p-4">로딩…</div>;
 
   return (
@@ -129,7 +129,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
           cluster #{d.cluster.cluster_id} · {d.cluster.sample_count}장
         </h2>
         {d.cluster.canonical_name && (
-          <span className="px-2 py-0.5 text-xs bg-emerald-600/30 text-emerald-300 rounded">
+          <span className="px-2 py-0.5 text-xs bg-success/15 text-success rounded">
             {d.cluster.canonical_name}
             {d.cluster.confidence != null && (
               <span className="ml-1 text-muted-foreground">({d.cluster.confidence.toFixed(2)})</span>
@@ -139,7 +139,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
       </div>
 
       {error && (
-        <div className="px-3 py-2 text-xs rounded bg-red-900/40 border border-red-700/60 text-red-300">
+        <div className="px-3 py-2 text-xs rounded bg-destructive/10 border border-destructive/30 text-destructive">
           ⚠ {error}
         </div>
       )}
@@ -154,7 +154,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
         <button
           disabled={busy}
           onClick={() => save(false)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
+          className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
         >
           저장
         </button>
@@ -320,7 +320,7 @@ export default function LabelsPage() {
                     <span className="text-muted-foreground tabular-nums">{c.sample_count}</span>
                   </div>
                   <div
-                    className={c.canonical_name ? "text-emerald-300" : "text-muted-foreground italic"}
+                    className={c.canonical_name ? "text-success" : "text-muted-foreground italic"}
                   >
                     {c.canonical_name ?? "(unlabeled)"}
                   </div>

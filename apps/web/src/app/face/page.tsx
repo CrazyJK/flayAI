@@ -75,7 +75,7 @@ export default function FaceSearchPage() {
         <button
           onClick={go}
           disabled={busy || !file}
-          className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
+          className="ml-auto px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
         >
           배우 추정
         </button>
@@ -83,7 +83,7 @@ export default function FaceSearchPage() {
 
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
         {busy && <div className="text-sm text-muted-foreground">분석 중…</div>}
-        {err && <div className="text-sm text-red-400">{err}</div>}
+        {err && <div className="text-sm text-destructive">{err}</div>}
 
         {res && (
           <>
@@ -103,7 +103,7 @@ export default function FaceSearchPage() {
                       <span className="w-6 tabular-nums text-muted-foreground">{i + 1}.</span>
                       <span className="flex-1">{a.name}</span>
                       <span className="text-muted-foreground tabular-nums">{a.votes}표</span>
-                      <span className="text-emerald-400 tabular-nums w-16 text-right">
+                      <span className="text-success tabular-nums w-16 text-right">
                         {a.best_score.toFixed(3)}
                       </span>
                     </li>
@@ -134,7 +134,7 @@ export default function FaceSearchPage() {
                       <div className="font-mono">{n.opus}</div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>c{n.cluster_id ?? "-"}</span>
-                        <span className="text-emerald-400">{n.score.toFixed(3)}</span>
+                        <span className="text-success">{n.score.toFixed(3)}</span>
                       </div>
                       <div className="text-muted-foreground line-clamp-2 leading-snug">
                         {n.actresses?.join(", ")}
