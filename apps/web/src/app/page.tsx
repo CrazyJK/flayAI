@@ -93,7 +93,7 @@ function VideoCard({ hit }: { hit: VideoHit }) {
   const posterUrl = `${API_BASE}/static/posters/${encodeURIComponent(hit.opus)}`;
   return (
     <div
-      className="relative aspect-[400/269] rounded-md overflow-hidden border border-neutral-800 cursor-pointer"
+      className="relative aspect-[400/269] rounded-md overflow-hidden border border-neutral-300 dark:border-neutral-800 cursor-pointer"
       onClick={() => openFlayPopup(hit.opus)}
       title={`팝업으로 열기: ${hit.opus}`}
     >
@@ -153,15 +153,15 @@ function ToolCallChip({ ev }: { ev: ToolEvent }) {
   const truncatable = argsStr.length > 80;
   const displayed = truncatable && !expanded ? argsStr.slice(0, 80) + "…" : argsStr;
   return (
-    <div className="text-xs font-mono text-neutral-400 flex items-start gap-1 flex-wrap justify-center">
-      <span className="text-cyan-300 shrink-0">⚙ {ev.name}</span>
-      <span className="text-neutral-600 break-all">
+    <div className="text-xs font-mono text-neutral-500 dark:text-neutral-400 flex items-start gap-1 flex-wrap justify-center">
+      <span className="text-cyan-600 dark:text-cyan-300 shrink-0">⚙ {ev.name}</span>
+      <span className="text-neutral-500 dark:text-neutral-600 break-all">
         {argsStr.length > 0 ? `(${displayed})` : "()"}
       </span>
       {truncatable && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="shrink-0 text-neutral-500 hover:text-neutral-300 leading-none"
+          className="shrink-0 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 leading-none"
           title={expanded ? "접기" : "펼치기"}
         >
           {expanded ? "▲" : "▼"}
@@ -206,7 +206,7 @@ function AssistantBlock({ msg }: { msg: Message }) {
         </div>
       )}
       {msg.text && (
-        <div className="whitespace-pre-wrap text-neutral-100 leading-relaxed text-center">
+        <div className="whitespace-pre-wrap text-neutral-900 dark:text-neutral-100 leading-relaxed text-center">
           {msg.text}
         </div>
       )}
@@ -214,10 +214,10 @@ function AssistantBlock({ msg }: { msg: Message }) {
         <div className="text-xs text-neutral-500 animate-pulse text-center">생성 중…</div>
       )}
       {msg.status === "aborted" && (
-        <div className="text-xs text-amber-400 text-center">⏹ 중단됨</div>
+        <div className="text-xs text-amber-600 dark:text-amber-400 text-center">⏹ 중단됨</div>
       )}
       {msg.status === "error" && (
-        <div className="text-xs text-red-400 text-center">⚠ {msg.error}</div>
+        <div className="text-xs text-red-600 dark:text-red-400 text-center">⚠ {msg.error}</div>
       )}
     </div>
   );
@@ -423,8 +423,8 @@ export default function ChatPage() {
         className={
           "flex flex-col gap-2 rounded-2xl transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 " +
           (hero
-            ? "border border-neutral-600 bg-neutral-800 px-4 pt-3.5 pb-2 shadow-lg shadow-black/40"
-            : "border border-neutral-700 bg-neutral-900 px-3 pt-3 pb-1.5")
+            ? "border border-neutral-300 bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 px-4 pt-3.5 pb-2 shadow-lg shadow-black/10 dark:shadow-black/40"
+            : "border border-neutral-300 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 px-3 pt-3 pb-1.5")
         }
       >
         {/* 상단: 입력 (Enter 전송 / Shift+Enter 줄바꿈, 내용에 따라 높이 자동 확장) */}
@@ -432,7 +432,7 @@ export default function ChatPage() {
           ref={taRef}
           rows={1}
           className={
-            "w-full bg-transparent outline-none resize-none placeholder:text-neutral-400 text-neutral-100 " +
+            "w-full bg-transparent outline-none resize-none text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-500 dark:placeholder:text-neutral-400 " +
             (hero ? "text-lg" : "text-sm")
           }
           style={{ maxHeight: 200 }}
@@ -466,7 +466,7 @@ export default function ChatPage() {
                 setOpenOpt((o) => (o === "limit" ? null : "limit"));
               }}
               title="결과 개수"
-              className="rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-200 hover:border-neutral-600"
+              className="rounded-full border px-2.5 py-1 text-xs border-neutral-300 bg-neutral-200/60 text-neutral-700 hover:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-950/60 dark:text-neutral-200 dark:hover:border-neutral-600"
             >
               {limit}
             </button>
@@ -478,8 +478,8 @@ export default function ChatPage() {
                   className="fixed inset-0 z-10 cursor-default"
                   onClick={() => setOpenOpt(null)}
                 />
-                <div className="absolute bottom-full left-0 mb-2 z-20 w-48 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 shadow-xl space-y-2">
-                  <div className="text-xs font-semibold text-neutral-400">개수</div>
+                <div className="absolute bottom-full left-0 mb-2 z-20 w-48 rounded-lg border border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900 p-2.5 shadow-xl space-y-2">
+                  <div className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">개수</div>
                   <div className="flex flex-wrap gap-1">
                     {LIMIT_OPTIONS.map((n) => (
                       <button
@@ -493,8 +493,8 @@ export default function ChatPage() {
                         className={
                           "px-2 py-1 text-xs rounded-md border " +
                           (n === limit
-                            ? "border-blue-500 bg-blue-500/20 text-blue-200"
-                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-800")
+                            ? "border-blue-500 bg-blue-500/20 text-blue-700 dark:text-blue-200"
+                            : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800")
                         }
                       >
                         {n}
@@ -519,7 +519,7 @@ export default function ChatPage() {
                         }
                       }}
                       placeholder="직접 입력"
-                      className="w-20 px-2 py-1 text-xs rounded-md bg-neutral-950 border border-neutral-700 outline-none focus:border-blue-500 text-neutral-200"
+                      className="w-20 px-2 py-1 text-xs rounded-md bg-white border border-neutral-300 dark:bg-neutral-950 dark:border-neutral-700 outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-200"
                     />
                     <button
                       type="button"
@@ -531,7 +531,7 @@ export default function ChatPage() {
                         }
                         setOpenOpt(null);
                       }}
-                      className="px-2 py-1 text-xs rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                      className="px-2 py-1 text-xs rounded-md bg-neutral-200 hover:bg-neutral-300 text-neutral-800 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-200"
                     >
                       적용
                     </button>
@@ -547,7 +547,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => setOpenOpt((o) => (o === "kind" ? null : "kind"))}
               title="종류"
-              className="rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-200 hover:border-neutral-600"
+              className="rounded-full border px-2.5 py-1 text-xs border-neutral-300 bg-neutral-200/60 text-neutral-700 hover:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-950/60 dark:text-neutral-200 dark:hover:border-neutral-600"
             >
               {kindLabel(kind)}
             </button>
@@ -559,8 +559,8 @@ export default function ChatPage() {
                   className="fixed inset-0 z-10 cursor-default"
                   onClick={() => setOpenOpt(null)}
                 />
-                <div className="absolute bottom-full left-0 mb-2 z-20 w-36 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 shadow-xl space-y-2">
-                  <div className="text-xs font-semibold text-neutral-400">종류</div>
+                <div className="absolute bottom-full left-0 mb-2 z-20 w-36 rounded-lg border border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900 p-2.5 shadow-xl space-y-2">
+                  <div className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">종류</div>
                   <div className="flex flex-col gap-1">
                     {KIND_OPTIONS.map((o) => (
                       <button
@@ -574,8 +574,8 @@ export default function ChatPage() {
                         className={
                           "px-2 py-1 text-xs rounded-md text-left border " +
                           (o.value === kind
-                            ? "border-blue-500 bg-blue-500/20 text-blue-200"
-                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-800")
+                            ? "border-blue-500 bg-blue-500/20 text-blue-700 dark:text-blue-200"
+                            : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800")
                         }
                       >
                         {kindLabel(o.value)}
@@ -593,7 +593,7 @@ export default function ChatPage() {
               onClick={abort}
               title="중단"
               aria-label="중단"
-              className="ml-auto shrink-0 flex items-center justify-center text-red-400 hover:text-red-300"
+              className="ml-auto shrink-0 flex items-center justify-center text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
             >
               <svg
                 width={hero ? 22 : 18}
@@ -610,7 +610,7 @@ export default function ChatPage() {
               title="전송"
               aria-label="전송"
               disabled={!input.trim()}
-              className="ml-auto shrink-0 flex items-center justify-center text-neutral-300 hover:text-blue-400 disabled:opacity-30 disabled:hover:text-neutral-300"
+              className="ml-auto shrink-0 flex items-center justify-center text-neutral-600 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-neutral-600 dark:text-neutral-300 dark:hover:text-blue-400 dark:disabled:hover:text-neutral-300"
             >
               {/* 엔터(↵) 모양 — corner-down-left */}
               <svg
@@ -640,7 +640,7 @@ export default function ChatPage() {
       {empty ? (
         // 첫 로딩: 구글처럼 입력창을 화면 중앙에 크고 밝게 배치
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-7 px-4 pb-16">
-          <h2 className="text-3xl sm:text-4xl font-semibold text-neutral-100">무엇을 찾을까요?</h2>
+          <h2 className="text-3xl sm:text-4xl font-semibold text-neutral-900 dark:text-neutral-100">무엇을 찾을까요?</h2>
           {renderForm(true)}
           <div className="flex flex-wrap gap-2 justify-center max-w-[760px]">
             {suggestions.map((q) => (
@@ -648,7 +648,7 @@ export default function ChatPage() {
                 key={q}
                 type="button"
                 onClick={() => send(q)}
-                className="px-3 py-1.5 text-sm rounded-full border border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                className="px-3 py-1.5 text-sm rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
               >
                 {q}
               </button>
@@ -662,7 +662,7 @@ export default function ChatPage() {
             {messages.map((m) =>
               m.role === "user" ? (
                 <div key={m.id} className="flex justify-end">
-                  <div className="rounded-lg bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%]">
+                  <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%]">
                     {m.text}
                   </div>
                 </div>

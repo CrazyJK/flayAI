@@ -18,14 +18,25 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
 };
 
+// 첫 페인트 전에 테마를 적용해 깜빡임(FOUC) 방지.
+// localStorage 의 flayai-theme(system|light|dark) + 시스템 설정을 읽어 <html> 에 .dark 부착.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('flayai-theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="h-full flex flex-col bg-neutral-950 text-neutral-100">{children}</body>
+    <html
+      lang="ko"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="h-full flex flex-col bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {children}
+      </body>
     </html>
   );
 }

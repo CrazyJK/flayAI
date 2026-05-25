@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ThemeToggle from "./ThemeToggle";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
@@ -28,7 +29,7 @@ export default function AppHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-4 border-b border-neutral-800 flex items-baseline gap-2">
+    <header className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-baseline gap-2">
       <h1 className="text-lg font-semibold">flayAI</h1>
       <span className="text-xs text-neutral-500 font-mono">{API_BASE}</span>
       {actions}
@@ -38,12 +39,15 @@ export default function AppHeader({
             key={n.key}
             href={n.href}
             className={
-              n.key === active ? "text-neutral-200" : "text-neutral-400 hover:text-neutral-200"
+              n.key === active
+                ? "text-neutral-900 dark:text-neutral-100"
+                : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
             }
           >
             {n.label}
           </Link>
         ))}
+        <ThemeToggle />
       </nav>
     </header>
   );
