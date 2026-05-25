@@ -93,7 +93,7 @@ function VideoCard({ hit }: { hit: VideoHit }) {
   const posterUrl = `${API_BASE}/static/posters/${encodeURIComponent(hit.opus)}`;
   return (
     <div
-      className="relative aspect-[400/269] rounded-md overflow-hidden border border-border cursor-pointer"
+      className="relative aspect-[400/269] rounded-md overflow-hidden border border-border shadow-sm cursor-pointer"
       onClick={() => openFlayPopup(hit.opus)}
       title={`팝업으로 열기: ${hit.opus}`}
     >
@@ -102,7 +102,7 @@ function VideoCard({ hit }: { hit: VideoHit }) {
       <img
         src={posterUrl}
         alt={hit.opus}
-        className="absolute inset-0 w-full h-full object-cover bg-neutral-900"
+        className="absolute inset-0 w-full h-full object-cover bg-muted"
       />
 
       {/* 상단 오버레이: opus, 배지, 스코어 */}
