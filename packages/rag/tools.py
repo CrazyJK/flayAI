@@ -99,6 +99,7 @@ def search_videos(
     month: int | None = None,
     actress: str | None = None,
     tag: str | None = None,
+    tags: list[str] | None = None,
     studio: str | None = None,
     kind: Literal["instance", "archive", "any"] = "any",
     playable: bool | None = None,
@@ -125,13 +126,17 @@ def search_videos(
         if actress and actress_canon is None:
             query = f"{query} {actress}".strip()
             log.info("search_videos: unresolved actress %r -> query 로 흡수", actress)
-        tag_id = _resolve_tag_id(conn, tag)
+        # 단일 tag(LLM 호환) + 복수 tags 를 합쳐 모두 적용(AND). 미해석 태그는 조용히 무시.
+        tag_names: list[str] = [t for t in (tags or []) if t]
+        if tag and tag not in tag_names:
+            tag_names.insert(0, tag)
+        tag_ids = [tid for n in tag_names if (tid := _resolve_tag_id(conn, n)) is not None]
         filt = Filters(
             year=year,
             month=month,
             studio=studio,
             actress_canonical=actress_canon,
-            tag_id=tag_id,
+            tag_ids=tag_ids or None,
             kind=None if kind in (None, "any") else kind,
             playable=playable,
             min_rank=min_rank,
@@ -204,11 +209,12 @@ def _meta_only_search(conn, f: Filters, limit: int, sort: str | None = None) -> 
             "WHERE va.opus = v.opus AND va.canonical_name = ?)"
         )
         params.append(f.actress_canonical)
-    if f.tag_id is not None:
-        where.append(
-            "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
-        )
-        params.append(int(f.tag_id))
+    if f.tag_ids:
+        for tid in f.tag_ids:
+            where.append(
+                "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
+            )
+            params.append(int(tid))
     if f.playable is True:
         where.append(
             "EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)"
@@ -371,6 +377,11 @@ TOOL_SCHEMA: list[dict] = [
                     "month": {"type": "integer"},
                     "actress": {"type": "string", "description": "배우 이름 (별칭 자동 정규화)"},
                     "tag": {"type": "string"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "복수 태그. 모두 포함하는 영상만(AND). 테마가 여러 개면 사용.",
+                    },
                     "studio": {"type": "string"},
                     "kind": {"type": "string", "enum": ["instance", "archive", "any"]},
                     "playable": {

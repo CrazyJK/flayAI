@@ -67,7 +67,7 @@ LLM 응답:  { "tool_calls": [
    │  → [hit, hit, hit, ...]                   │
    └──────────────────────────────────────────┘
    │
-   ▼ 코드 필터 보강 (_extract_meta + _extract_tag): year/month/kind/playable/min_rank/rank/min_likes/min_play/max_play/sort + DB 태그명 추출 → args 주입
+   ▼ 코드 필터 보강 (_extract_meta + _extract_tags): year/month/kind/playable/min_rank/rank/min_likes/min_play/max_play/sort + DB 태그명 복수 추출(AND) → args 주입
    │   (LLM 이 tool_call 을 빠뜨려도 폴백 + 이 보강으로 결과가 정확)
    │
    ▼ SSE 로 클라이언트에 tool_call / tool_result 이벤트 즉시 push
@@ -139,8 +139,9 @@ for (;;) {
      "랭크 N"·"별점 N"(수식어 없이)→rank(정확히 N), "좋아요/하트/찜 N"→min_likes(≥), "재생(횟수) N 이상/이하"·
      "N번 이상/이하 본"→min_play/max_play, "최근/마지막에 본"→sort=recent·"오래 안 본"→sort=oldest(last_play
      정렬). studio/actress 는 query 로 semantic+FTS 매칭.
-   ※ _extract_tag: DB tags.name(2자+, 10분 캐시)이 질문에 그대로 들어 있으면 가장 긴 것을 tag 로 주입
-     (테마 질의 정확도↑, 예: "며느리 찾아"→tag=며느리). 한국어 어미·조사 변형('웃고 있는' vs 태그 '웃는')은
+   ※ _extract_tags: DB tags.name(2자+, 10분 캐시)이 질문에 그대로 들어 있으면 겹치지 않는 매칭을 최장 우선·
+     최대 4개까지 tags 로 주입(복수 태그는 AND=모두 포함). 예: "온천 며느리"→tags=[온천,며느리].
+     한국어 어미·조사 변형('웃고 있는' vs 태그 '웃는')은
      부분문자열로 못 잡으므로 그땐 의미검색에 의존.
                               │
         ┌─────────────────────┴─────────────────────┐

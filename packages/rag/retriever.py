@@ -27,7 +27,7 @@ class Filters:
     month: int | None = None
     studio: str | None = None
     actress_canonical: str | None = None
-    tag_id: int | None = None
+    tag_ids: list[int] | None = None  # 복수 태그(AND): 모두 가진 영상만
     kind: str | None = None  # "instance" | "archive" | None
     playable: bool | None = None
     min_rank: int | None = None  # rank >= N ("N 이상")
@@ -64,8 +64,10 @@ def _build_qdrant_filter(f: Filters) -> qm.Filter | None:
                 match=qm.MatchValue(value=f.actress_canonical),
             )
         )
-    if f.tag_id is not None:
-        must.append(qm.FieldCondition(key="tag_ids", match=qm.MatchValue(value=int(f.tag_id))))
+    if f.tag_ids:
+        # 복수 태그는 각각 must 조건 → 모두 포함하는 영상만(AND)
+        for tid in f.tag_ids:
+            must.append(qm.FieldCondition(key="tag_ids", match=qm.MatchValue(value=int(tid))))
     if f.kind:
         must.append(qm.FieldCondition(key="kind", match=qm.MatchValue(value=f.kind)))
     if f.playable is not None:
@@ -187,11 +189,12 @@ def fts_search(
             "WHERE va.opus = v.opus AND va.canonical_name = ?)"
         )
         params.append(f.actress_canonical)
-    if f.tag_id is not None:
-        where.append(
-            "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
-        )
-        params.append(int(f.tag_id))
+    if f.tag_ids:
+        for tid in f.tag_ids:
+            where.append(
+                "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
+            )
+            params.append(int(tid))
     if f.playable is True:
         where.append(
             "EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)"

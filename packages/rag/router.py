@@ -174,17 +174,34 @@ def _known_tags() -> list[str]:
     return _TAG_CACHE
 
 
-def _extract_tag(query: str) -> str | None:
-    """질문에 DB 태그명이 그대로 포함되면 가장 긴 것을 반환(정확 tag 필터용).
+def _extract_tags(query: str, max_tags: int = 4) -> list[str]:
+    """질문에 DB 태그명이 그대로 포함되면 (겹치지 않는) 모든 매칭을 최장 우선으로 반환.
 
-    한국어는 어미·조사로 변형되지만 테마 명사(며느리·간호사·교복 등)는 보통 원형이
-    그대로 등장하므로 부분문자열 매칭이 실용적. 최장 매칭 우선으로 가장 구체적인 태그 선택.
+    테마 명사(온천·며느리·간호사 등)는 보통 원형 그대로 등장하므로 부분문자열 매칭이
+    실용적. 최장 매칭 우선 + 이미 매칭된 글자 구간은 재사용하지 않아 '온천' 매칭 시
+    부분 태그('천')가 중복 추가되는 것을 막는다. 복수 태그는 search_videos 에서 AND
+    (모두 포함하는 영상만)로 적용. max_tags 로 과도한 필터링 방지.
     """
     q = query or ""
-    for name in _known_tags():
-        if name in q:
-            return name
-    return None
+    if not q:
+        return []
+    claimed = [False] * len(q)
+    out: list[str] = []
+    for name in _known_tags():  # 길이 내림차순
+        start = 0
+        while True:
+            idx = q.find(name, start)
+            if idx < 0:
+                break
+            if not any(claimed[idx : idx + len(name)]):
+                for i in range(idx, idx + len(name)):
+                    claimed[i] = True
+                out.append(name)
+                break
+            start = idx + 1
+        if len(out) >= max_tags:
+            break
+    return out
 
 
 # 적용된 검색 필터를 한국어 한 줄로 (LLM 묘사 대체용)
@@ -215,6 +232,8 @@ def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
             parts.append(str(a["actress"]))
         if a.get("tag"):
             parts.append(f"#{a['tag']}")
+        if a.get("tags"):
+            parts.extend(f"#{t}" for t in a["tags"])
         if a.get("min_rank"):
             parts.append(f"평점 {a['min_rank']}+")
         if a.get("rank"):
@@ -371,10 +390,10 @@ async def route_chat(
         # 메타 필터 보강: 질문에서 year/month 가 명확히 추출되면 search_videos args 에 강제 주입
         # (LLM 이 메타 인자를 빠뜨리거나 query 만 보내는 경우 방어)
         meta = _extract_meta(user_query)
-        # 태그명 사전 매칭: 질문에 DB 태그명이 그대로 있으면 tag 필터로 주입(테마 질의 정확도↑).
-        tag_name = _extract_tag(user_query)
-        if tag_name:
-            meta.setdefault("tag", tag_name)
+        # 태그명 사전 매칭: 질문에 DB 태그명이 그대로 있으면 (복수) tags 필터로 주입(테마 질의 정확도↑).
+        tags = _extract_tags(user_query)
+        if tags:
+            meta.setdefault("tags", tags)
         if meta:
             for c in tool_calls:
                 fn = c.get("function") or {}
