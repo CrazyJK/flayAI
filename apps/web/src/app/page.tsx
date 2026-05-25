@@ -14,6 +14,13 @@ const KIND_OPTIONS = [
   { value: "archive", label: "archive" },
 ] as const;
 const KIND_STORAGE_KEY = "flayai-chat-kind";
+const RECENT_STORAGE_KEY = "flayai-chat-recent";
+// 첫 화면 제안: examples.json + 최근 질의를 합쳐 최대 9개 (json 우선)
+const MAX_SUGGESTIONS = 9;
+
+// 종류 표시 라벨 — 닫힘 상태에선 대문자로 시작하는 값만 노출 (All/Instance/Archive)
+const KIND_LABELS: Record<string, string> = { "": "All", instance: "Instance", archive: "Archive" };
+const kindLabel = (k: string) => KIND_LABELS[k] ?? "All";
 
 type VideoHit = {
   opus: string;
@@ -222,6 +229,11 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState(10);
   const [kind, setKind] = useState<string>("");
+  const [recent, setRecent] = useState<string[]>([]);
+  // 열려있는 옵션 팝오버 (개수/종류) — 동시에 하나만
+  const [openOpt, setOpenOpt] = useState<null | "limit" | "kind">(null);
+  // 개수 직접 입력 임시값
+  const [customLimit, setCustomLimit] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -233,18 +245,37 @@ export default function ChatPage() {
   // limit / kind 선택값을 localStorage 에서 복원 (마운트 후 — SSR 하이드레이션 불일치 방지)
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(LIMIT_STORAGE_KEY));
-    if (LIMIT_OPTIONS.includes(saved)) setLimit(saved);
+    if (Number.isFinite(saved) && saved > 0) setLimit(saved);
     const savedKind = window.localStorage.getItem(KIND_STORAGE_KEY) ?? "";
     if (KIND_OPTIONS.some((o) => o.value === savedKind)) setKind(savedKind);
+    try {
+      const raw = window.localStorage.getItem(RECENT_STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(arr)) setRecent(arr.filter((x): x is string => typeof x === "string"));
+    } catch {
+      // 손상된 저장값 무시
+    }
   }, []);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? patch(m) : m)));
   }, []);
 
+  // 최근 질의 기록 — 중복 제거 후 맨 앞에 추가, localStorage 보존
+  const pushRecent = useCallback((q: string) => {
+    const query = q.trim();
+    if (!query) return;
+    setRecent((prev) => {
+      const next = [query, ...prev.filter((x) => x !== query)].slice(0, MAX_SUGGESTIONS);
+      window.localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const send = useCallback(
     async (query: string) => {
       if (!query.trim() || busy) return;
+      pushRecent(query);
       const userMsg: Message = {
         id: `u-${Date.now()}`,
         role: "user",
@@ -357,7 +388,7 @@ export default function ChatPage() {
         setBusy(false);
       }
     },
-    [busy, limit, kind, updateAssistant]
+    [busy, limit, kind, updateAssistant, pushRecent]
   );
 
   const abort = useCallback(() => {
@@ -366,6 +397,12 @@ export default function ChatPage() {
 
   // 아직 대화가 없는 첫 로딩 상태 — 입력창을 화면 중앙에 크고 밝게 배치
   const empty = messages.length === 0;
+
+  // 첫 화면 제안: examples.json 먼저, 나머지를 최근 질의로 채워 최대 9개
+  const suggestions = [...examples, ...recent.filter((q) => !examples.includes(q))].slice(
+    0,
+    MAX_SUGGESTIONS
+  );
 
   // 입력 폼: 질의 영역 전체를 하나의 박스로 감싸고, 박스 하단에 옵션(개수·종류)과
   // 전송 버튼을 배치(코파일럿/클로드/제미나이 스타일). hero(첫 로딩·중앙·크게) /
@@ -420,43 +457,135 @@ export default function ChatPage() {
 
         {/* 하단: 좌측 검색 옵션(개수·종류) / 우측 전송·중단 */}
         <div className="flex items-center gap-2">
-          <label className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-600">
-            <span className="text-neutral-500">개수</span>
-            <select
-              className="bg-transparent outline-none cursor-pointer text-neutral-200"
-              value={limit}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                setLimit(n);
-                window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+          {/* 개수 — 닫힘: 숫자만 / 열림: '개수' 라벨 + 프리셋 + 직접 입력 */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setCustomLimit(String(limit));
+                setOpenOpt((o) => (o === "limit" ? null : "limit"));
               }}
+              title="결과 개수"
+              className="rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-200 hover:border-neutral-600"
             >
-              {LIMIT_OPTIONS.map((n) => (
-                <option key={n} value={n} className="bg-neutral-900">
-                  {n}개
-                </option>
-              ))}
-            </select>
-          </label>
+              {limit}
+            </button>
+            {openOpt === "limit" && (
+              <>
+                <button
+                  type="button"
+                  aria-label="닫기"
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={() => setOpenOpt(null)}
+                />
+                <div className="absolute bottom-full left-0 mb-2 z-20 w-48 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 shadow-xl space-y-2">
+                  <div className="text-xs font-semibold text-neutral-400">개수</div>
+                  <div className="flex flex-wrap gap-1">
+                    {LIMIT_OPTIONS.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          setLimit(n);
+                          window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+                          setOpenOpt(null);
+                        }}
+                        className={
+                          "px-2 py-1 text-xs rounded-md border " +
+                          (n === limit
+                            ? "border-blue-500 bg-blue-500/20 text-blue-200"
+                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-800")
+                        }
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={1}
+                      value={customLimit}
+                      onChange={(e) => setCustomLimit(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const n = parseInt(customLimit, 10);
+                          if (Number.isFinite(n) && n > 0) {
+                            setLimit(n);
+                            window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+                          }
+                          setOpenOpt(null);
+                        }
+                      }}
+                      placeholder="직접 입력"
+                      className="w-20 px-2 py-1 text-xs rounded-md bg-neutral-950 border border-neutral-700 outline-none focus:border-blue-500 text-neutral-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const n = parseInt(customLimit, 10);
+                        if (Number.isFinite(n) && n > 0) {
+                          setLimit(n);
+                          window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+                        }
+                        setOpenOpt(null);
+                      }}
+                      className="px-2 py-1 text-xs rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                    >
+                      적용
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
-          <label className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-600">
-            <span className="text-neutral-500">종류</span>
-            <select
-              className="bg-transparent outline-none cursor-pointer text-neutral-200"
-              value={kind}
-              onChange={(e) => {
-                const v = e.target.value;
-                setKind(v);
-                window.localStorage.setItem(KIND_STORAGE_KEY, v);
-              }}
+          {/* 종류 — 닫힘: 값만(All/Instance/Archive) / 열림: '종류' 라벨 + 선택 */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setOpenOpt((o) => (o === "kind" ? null : "kind"))}
+              title="종류"
+              className="rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-200 hover:border-neutral-600"
             >
-              {KIND_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value} className="bg-neutral-900">
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              {kindLabel(kind)}
+            </button>
+            {openOpt === "kind" && (
+              <>
+                <button
+                  type="button"
+                  aria-label="닫기"
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={() => setOpenOpt(null)}
+                />
+                <div className="absolute bottom-full left-0 mb-2 z-20 w-36 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 shadow-xl space-y-2">
+                  <div className="text-xs font-semibold text-neutral-400">종류</div>
+                  <div className="flex flex-col gap-1">
+                    {KIND_OPTIONS.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => {
+                          setKind(o.value);
+                          window.localStorage.setItem(KIND_STORAGE_KEY, o.value);
+                          setOpenOpt(null);
+                        }}
+                        className={
+                          "px-2 py-1 text-xs rounded-md text-left border " +
+                          (o.value === kind
+                            ? "border-blue-500 bg-blue-500/20 text-blue-200"
+                            : "border-neutral-700 text-neutral-300 hover:bg-neutral-800")
+                        }
+                      >
+                        {kindLabel(o.value)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {busy ? (
             <button
@@ -514,7 +643,7 @@ export default function ChatPage() {
           <h2 className="text-3xl sm:text-4xl font-semibold text-neutral-100">무엇을 찾을까요?</h2>
           {renderForm(true)}
           <div className="flex flex-wrap gap-2 justify-center max-w-[760px]">
-            {examples.map((q) => (
+            {suggestions.map((q) => (
               <button
                 key={q}
                 type="button"
