@@ -27,7 +27,7 @@
 }
 
 .dark {
-  --background: #0a0a0a; /* neutral-950 */
+  --background: #0d1117; /* GitHub dark dimmed 톤 */
   --foreground: #f5f5f5; /* neutral-100 */
   --card: #171717; /* neutral-900 */
   --card-foreground: #f5f5f5;
