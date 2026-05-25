@@ -222,9 +222,9 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [limit, setLimit] = useState(10);
   const [kind, setKind] = useState<string>("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -367,139 +367,145 @@ export default function ChatPage() {
   // 아직 대화가 없는 첫 로딩 상태 — 입력창을 화면 중앙에 크고 밝게 배치
   const empty = messages.length === 0;
 
-  // 입력 폼: hero(첫 로딩·중앙·크게) / docked(질의 후·하단 고정) 두 변형으로 재사용
+  // 입력 폼: 질의 영역 전체를 하나의 박스로 감싸고, 박스 하단에 옵션(개수·종류)과
+  // 전송 버튼을 배치(코파일럿/클로드/제미나이 스타일). hero(첫 로딩·중앙·크게) /
+  // docked(질의 후·하단 고정) 두 변형으로 크기만 분기.
   const renderForm = (hero: boolean) => (
     <form
-      className={
-        hero
-          ? "w-full max-w-[760px] flex gap-2"
-          : "shrink-0 mx-auto w-full max-w-[900px] px-4 py-3 border-t border-neutral-800 flex gap-2"
-      }
+      className={hero ? "w-full max-w-[760px]" : "shrink-0 w-full max-w-[900px] mx-auto px-4 py-3"}
       onSubmit={(e) => {
         e.preventDefault();
         const q = input;
         setInput("");
+        if (taRef.current) taRef.current.style.height = "auto";
         void send(q);
       }}
     >
-      <input
+      {/* 질의 영역 전체를 감싸는 박스 */}
+      <div
         className={
-          hero
-            ? "flex-1 px-5 py-4 rounded-2xl bg-neutral-800 border border-neutral-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 text-lg text-neutral-100 placeholder:text-neutral-400 shadow-lg shadow-black/40"
-            : "flex-1 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 outline-none focus:border-blue-500 text-sm"
+          "flex flex-col gap-2.5 rounded-2xl transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 " +
+          (hero
+            ? "border border-neutral-600 bg-neutral-800 px-4 py-3 shadow-lg shadow-black/40"
+            : "border border-neutral-700 bg-neutral-900 px-3 py-2.5")
         }
-        placeholder="무엇을 찾을까요?"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        disabled={busy}
-        autoFocus={hero}
-      />
-      {/* 검색 설정(개수·종류) — 톱니바퀴 버튼 → 팝오버 */}
-      <div className="relative shrink-0">
-        <button
-          type="button"
-          onClick={() => setSettingsOpen((v) => !v)}
+      >
+        {/* 상단: 입력 (Enter 전송 / Shift+Enter 줄바꿈, 내용에 따라 높이 자동 확장) */}
+        <textarea
+          ref={taRef}
+          rows={1}
           className={
-            "relative text-neutral-300 " +
-            (hero
-              ? "px-4 py-4 rounded-2xl bg-neutral-800 border border-neutral-600 hover:bg-neutral-700"
-              : "px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 hover:bg-neutral-800")
+            "w-full bg-transparent outline-none resize-none placeholder:text-neutral-400 text-neutral-100 " +
+            (hero ? "text-lg" : "text-sm")
           }
-          title="검색 설정 (개수·종류)"
-          aria-label="검색 설정"
-        >
-          <svg
-            width={hero ? 22 : 18}
-            height={hero ? 22 : 18}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-          {/* 비-기본 필터 적용 시 표시 점 (kind 가 설정됨) */}
-          {kind && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 border border-neutral-900" />
-          )}
-        </button>
-        {settingsOpen && (
-          <>
-            {/* 바깥 클릭 시 닫기 */}
+          style={{ maxHeight: 200 }}
+          placeholder="무엇을 찾을까요?  (Shift+Enter 줄바꿈)"
+          value={input}
+          disabled={busy}
+          autoFocus={hero}
+          onChange={(e) => setInput(e.target.value)}
+          onInput={(e) => {
+            const ta = e.currentTarget;
+            ta.style.height = "auto";
+            ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+          }}
+          onKeyDown={(e) => {
+            // IME(한글) 조합 중이 아니고 Shift 없이 Enter → 전송
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+
+        {/* 하단: 좌측 검색 옵션(개수·종류) / 우측 전송·중단 */}
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-600">
+            <span className="text-neutral-500">개수</span>
+            <select
+              className="bg-transparent outline-none cursor-pointer text-neutral-200"
+              value={limit}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setLimit(n);
+                window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
+              }}
+            >
+              {LIMIT_OPTIONS.map((n) => (
+                <option key={n} value={n} className="bg-neutral-900">
+                  {n}개
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-950/60 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-600">
+            <span className="text-neutral-500">종류</span>
+            <select
+              className="bg-transparent outline-none cursor-pointer text-neutral-200"
+              value={kind}
+              onChange={(e) => {
+                const v = e.target.value;
+                setKind(v);
+                window.localStorage.setItem(KIND_STORAGE_KEY, v);
+              }}
+            >
+              {KIND_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value} className="bg-neutral-900">
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {busy ? (
             <button
               type="button"
-              aria-label="설정 닫기"
-              className="fixed inset-0 z-10 cursor-default"
-              onClick={() => setSettingsOpen(false)}
-            />
-            <div className="absolute bottom-full right-0 mb-2 z-20 w-56 rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl space-y-3">
-              <div className="text-xs font-semibold text-neutral-300">검색 설정</div>
-              <label className="block space-y-1">
-                <span className="text-xs text-neutral-400">결과 개수</span>
-                <select
-                  className="w-full px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-700 text-sm text-neutral-200 outline-none focus:border-blue-500"
-                  value={limit}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    setLimit(n);
-                    window.localStorage.setItem(LIMIT_STORAGE_KEY, String(n));
-                  }}
-                >
-                  {LIMIT_OPTIONS.map((n) => (
-                    <option key={n} value={n}>
-                      {n}개
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-neutral-400">종류 (instance/archive)</span>
-                <select
-                  className="w-full px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-700 text-sm text-neutral-200 outline-none focus:border-blue-500"
-                  value={kind}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setKind(v);
-                    window.localStorage.setItem(KIND_STORAGE_KEY, v);
-                  }}
-                >
-                  {KIND_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </>
-        )}
+              onClick={abort}
+              title="중단"
+              aria-label="중단"
+              className={
+                "ml-auto shrink-0 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-500 text-white " +
+                (hero ? "w-10 h-10" : "w-8 h-8")
+              }
+            >
+              <svg
+                width={hero ? 18 : 16}
+                height={hero ? 18 : 16}
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              title="전송"
+              aria-label="전송"
+              disabled={!input.trim()}
+              className={
+                "ml-auto shrink-0 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white " +
+                (hero ? "w-10 h-10" : "w-8 h-8")
+              }
+            >
+              <svg
+                width={hero ? 20 : 18}
+                height={hero ? 20 : 18}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="19" x2="12" y2="6" />
+                <polyline points="6 12 12 6 18 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
-      {busy ? (
-        <button
-          type="button"
-          onClick={abort}
-          className={
-            "bg-red-600 hover:bg-red-500 " +
-            (hero ? "px-6 py-4 text-base rounded-2xl" : "px-4 py-2 text-sm rounded-md")
-          }
-        >
-          중단
-        </button>
-      ) : (
-        <button
-          type="submit"
-          className={
-            "bg-blue-600 hover:bg-blue-500 disabled:opacity-50 " +
-            (hero ? "px-6 py-4 text-base rounded-2xl" : "px-4 py-2 text-sm rounded-md")
-          }
-          disabled={!input.trim()}
-        >
-          전송
-        </button>
-      )}
     </form>
   );
 
