@@ -43,8 +43,8 @@ const LABEL: Record<Theme, string> = { system: "시스템", light: "라이트", 
 
 function ThemeIcon({ theme }: { theme: Theme }) {
   const common = {
-    width: 14,
-    height: 14,
+    width: 16,
+    height: 16,
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
@@ -101,10 +101,9 @@ export default function ThemeToggle() {
       onClick={cycle}
       title={`테마: ${LABEL[theme]} (클릭하여 전환)`}
       aria-label={`테마: ${LABEL[theme]}`}
-      className="flex items-center gap-1 rounded-md border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+      className="flex items-center text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
     >
       <ThemeIcon theme={theme} />
-      <span>{LABEL[theme]}</span>
     </button>
   );
 }

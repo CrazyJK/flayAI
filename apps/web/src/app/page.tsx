@@ -423,8 +423,8 @@ export default function ChatPage() {
         className={
           "flex flex-col gap-2 rounded-2xl transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 " +
           (hero
-            ? "border border-neutral-300 bg-neutral-100 dark:border-neutral-600 dark:bg-neutral-800 px-4 pt-3.5 pb-2 shadow-lg shadow-black/10 dark:shadow-black/40"
-            : "border border-neutral-300 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 px-3 pt-3 pb-1.5")
+            ? "border border-neutral-200 bg-white dark:border-neutral-600 dark:bg-neutral-800 px-4 pt-3.5 pb-2 shadow-lg shadow-black/5 dark:shadow-black/40"
+            : "border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900 px-3 pt-3 pb-1.5 shadow-sm dark:shadow-none")
         }
       >
         {/* 상단: 입력 (Enter 전송 / Shift+Enter 줄바꿈, 내용에 따라 높이 자동 확장) */}
@@ -648,7 +648,7 @@ export default function ChatPage() {
                 key={q}
                 type="button"
                 onClick={() => send(q)}
-                className="px-3 py-1.5 text-sm rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+                className="px-3 py-1.5 text-sm rounded-full border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 dark:bg-transparent dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
               >
                 {q}
               </button>
