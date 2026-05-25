@@ -120,7 +120,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
   }
 
   if (!d && error) return <div className="text-sm text-red-400 p-4">⚠ {error}</div>;
-  if (!d) return <div className="text-sm text-neutral-500 p-4">로딩…</div>;
+  if (!d) return <div className="text-sm text-muted-foreground p-4">로딩…</div>;
 
   return (
     <div className="p-4 space-y-3">
@@ -132,7 +132,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
           <span className="px-2 py-0.5 text-xs bg-emerald-600/30 text-emerald-300 rounded">
             {d.cluster.canonical_name}
             {d.cluster.confidence != null && (
-              <span className="ml-1 text-neutral-400">({d.cluster.confidence.toFixed(2)})</span>
+              <span className="ml-1 text-muted-foreground">({d.cluster.confidence.toFixed(2)})</span>
             )}
           </span>
         )}
@@ -149,19 +149,19 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="배우 canonical_name (예: mikami yua)"
-          className="flex-1 px-3 py-2 bg-neutral-900 border border-neutral-800 rounded text-sm"
+          className="flex-1 px-3 py-2 bg-card border border-border rounded text-sm"
         />
         <button
           disabled={busy}
           onClick={() => save(false)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded text-sm"
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
         >
           저장
         </button>
         <button
           disabled={busy}
           onClick={() => save(true)}
-          className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm"
+          className="px-3 py-2 bg-muted hover:bg-accent rounded text-sm"
         >
           해제
         </button>
@@ -171,7 +171,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
         {d.samples.map((s) => (
           <div
             key={`${s.poster_opus}-${s.face_idx}`}
-            className="relative rounded border border-neutral-800 overflow-hidden bg-neutral-900"
+            className="relative rounded border border-border overflow-hidden bg-card"
           >
             {/* 포스터 이미지 — 클릭 시 새 탭 */}
             <a
@@ -185,12 +185,12 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
                 src={`${API_BASE}/static/posters/${encodeURIComponent(s.poster_opus)}`}
                 alt={s.poster_opus}
                 loading="lazy"
-                className="w-full aspect-[400/269] object-cover bg-neutral-800"
+                className="w-full aspect-[400/269] object-cover bg-muted"
               />
             </a>
             <div className="p-1.5 text-xs">
               <div className="font-mono">{s.poster_opus}</div>
-              <div className="text-neutral-400 truncate">{s.actresses?.join(", ")}</div>
+              <div className="text-muted-foreground truncate">{s.actresses?.join(", ")}</div>
             </div>
             {/* 제외 버튼 */}
             <button
@@ -198,7 +198,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
               onClick={() => exclude(s)}
               title="이 포스터를 클러스터에서 제외"
               className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center
-                         rounded-full bg-black/60 text-neutral-300 hover:bg-red-600 hover:text-white
+                         rounded-full bg-black/60 text-white/80 hover:bg-red-600 hover:text-white
                          text-[11px] leading-none disabled:opacity-40"
             >
               ×
@@ -248,7 +248,7 @@ export default function LabelsPage() {
     <div className="h-screen flex flex-col">
       <AppHeader active="labels" />
 
-      <div className="px-4 py-2 border-b border-neutral-800 flex items-center gap-3 text-xs">
+      <div className="px-4 py-2 border-b border-border flex items-center gap-3 text-xs">
         <label className="flex items-center gap-1">
           <input
             type="checkbox"
@@ -281,24 +281,24 @@ export default function LabelsPage() {
               setOffset(0);
               setMinSize(parseInt(e.target.value) || 1);
             }}
-            className="w-16 px-2 py-0.5 bg-neutral-900 border border-neutral-800 rounded"
+            className="w-16 px-2 py-0.5 bg-card border border-border rounded"
           />
         </label>
         <div className="ml-auto flex gap-2">
           <button
             disabled={busy || offset === 0}
             onClick={() => setOffset(Math.max(0, offset - limit))}
-            className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 rounded"
+            className="px-2 py-0.5 bg-muted hover:bg-accent disabled:opacity-30 rounded"
           >
             ←
           </button>
-          <span className="tabular-nums text-neutral-500">
+          <span className="tabular-nums text-muted-foreground">
             {offset + 1}-{Math.min(offset + limit, total)} / {total}
           </span>
           <button
             disabled={busy || offset + limit >= total}
             onClick={() => setOffset(offset + limit)}
-            className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 rounded"
+            className="px-2 py-0.5 bg-muted hover:bg-accent disabled:opacity-30 rounded"
           >
             →
           </button>
@@ -306,21 +306,21 @@ export default function LabelsPage() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-64 border-r border-neutral-800 overflow-y-auto">
+        <aside className="w-64 border-r border-border overflow-y-auto">
           <ul className="text-sm">
             {items.map((c) => (
               <li key={c.cluster_id}>
                 <button
                   onClick={() => setSelected(c.cluster_id)}
-                  className={`w-full text-left px-3 py-2 hover:bg-neutral-900 border-b border-neutral-900
-                    ${selected === c.cluster_id ? "bg-neutral-900" : ""}`}
+                  className={`w-full text-left px-3 py-2 hover:bg-accent border-b border-border
+                    ${selected === c.cluster_id ? "bg-card" : ""}`}
                 >
                   <div className="flex justify-between">
-                    <span className="font-mono text-neutral-400">#{c.cluster_id}</span>
-                    <span className="text-neutral-500 tabular-nums">{c.sample_count}</span>
+                    <span className="font-mono text-muted-foreground">#{c.cluster_id}</span>
+                    <span className="text-muted-foreground tabular-nums">{c.sample_count}</span>
                   </div>
                   <div
-                    className={c.canonical_name ? "text-emerald-300" : "text-neutral-500 italic"}
+                    className={c.canonical_name ? "text-emerald-300" : "text-muted-foreground italic"}
                   >
                     {c.canonical_name ?? "(unlabeled)"}
                   </div>
@@ -333,7 +333,7 @@ export default function LabelsPage() {
           {selected ? (
             <ClusterDetail id={selected} onLabeled={load} />
           ) : (
-            <div className="p-6 text-sm text-neutral-500">왼쪽에서 클러스터를 선택하세요.</div>
+            <div className="p-6 text-sm text-muted-foreground">왼쪽에서 클러스터를 선택하세요.</div>
           )}
         </section>
       </div>

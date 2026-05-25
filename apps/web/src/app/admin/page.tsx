@@ -169,10 +169,10 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
   const color = "bg-emerald-500";
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="font-mono text-neutral-400 shrink-0 w-8 text-right text-xs">{pct}%</span>
+      <span className="font-mono text-muted-foreground shrink-0 w-8 text-right text-xs">{pct}%</span>
     </div>
   );
 }
@@ -189,10 +189,10 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-neutral-800 rounded-lg overflow-hidden flex flex-col">
-      <div className="px-4 py-2.5 bg-neutral-900 flex items-center gap-2 border-b border-neutral-800">
+    <div className="border border-border rounded-lg overflow-hidden flex flex-col">
+      <div className="px-4 py-2.5 bg-card flex items-center gap-2 border-b border-border">
         <span className="font-semibold text-base">{title}</span>
-        {badge && <span className="text-sm font-mono text-neutral-400 ml-1">{badge}</span>}
+        {badge && <span className="text-sm font-mono text-muted-foreground ml-1">{badge}</span>}
         <span
           className={
             "ml-auto text-xs px-1.5 py-0.5 rounded font-mono " +
@@ -235,13 +235,13 @@ function QdrantSection({ data }: { data: QdrantData }) {
         {data.collections.map((col) => (
           <div
             key={col.name}
-            className="rounded border border-neutral-700/60 bg-neutral-900/50 px-3 py-2"
+            className="rounded border border-border/60 bg-card/50 px-3 py-2"
           >
             {col.error ? (
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono text-base text-neutral-200">{col.name}</p>
-                  <p className="text-sm text-neutral-400 mt-0.5">
+                  <p className="font-mono text-base text-foreground">{col.name}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
                     {QDRANT_DESC[col.name] ?? "벡터 컬렉션"}
                   </p>
                 </div>
@@ -250,20 +250,20 @@ function QdrantSection({ data }: { data: QdrantData }) {
             ) : (
               <div className="flex items-center gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-mono text-base text-neutral-200">{col.name}</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">
+                  <p className="font-mono text-base text-foreground">{col.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {QDRANT_DESC[col.name] ?? "벡터 컬렉션"}
                   </p>
                 </div>
                 <div className="flex gap-4 text-sm text-right shrink-0">
                   <div>
-                    <div className="font-mono text-neutral-100">{fmtNum(col.points_count)}</div>
-                    <div className="text-neutral-400 text-xs">포인트</div>
+                    <div className="font-mono text-foreground">{fmtNum(col.points_count)}</div>
+                    <div className="text-muted-foreground text-xs">포인트</div>
                   </div>
                   {col.dim && (
                     <div>
-                      <div className="font-mono text-neutral-300">{col.dim}d</div>
-                      <div className="text-neutral-400 text-xs">차원</div>
+                      <div className="font-mono text-foreground">{col.dim}d</div>
+                      <div className="text-muted-foreground text-xs">차원</div>
                     </div>
                   )}
                   <div>
@@ -283,7 +283,7 @@ function QdrantSection({ data }: { data: QdrantData }) {
             )}
           </div>
         ))}
-        {data.collections.length === 0 && <p className="text-sm text-neutral-400">컬렉션 없음</p>}
+        {data.collections.length === 0 && <p className="text-sm text-muted-foreground">컬렉션 없음</p>}
       </div>
     </SectionCard>
   );
@@ -332,16 +332,16 @@ function SqliteSection({ data }: { data: SqliteData }) {
         {data.tables.map((t) => (
           <div
             key={t.name}
-            className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2.5"
+            className="bg-card rounded-lg border border-border px-3 py-2.5"
           >
-            <div className="font-mono text-sm text-neutral-200">
+            <div className="font-mono text-sm text-foreground">
               {t.name}
-              {t.note && <span className="ml-1 text-[10px] text-neutral-500">[{t.note}]</span>}
+              {t.note && <span className="ml-1 text-[10px] text-muted-foreground">[{t.note}]</span>}
             </div>
-            <div className="font-mono text-lg font-semibold text-neutral-100 mt-0.5 tabular-nums">
+            <div className="font-mono text-lg font-semibold text-foreground mt-0.5 tabular-nums">
               {t.count >= 0 ? fmtNum(t.count) : "—"}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 whitespace-nowrap">
+            <div className="text-[11px] text-muted-foreground mt-1 whitespace-nowrap">
               {SQLITE_DESC[t.name] ?? ""}
             </div>
           </div>
@@ -379,7 +379,7 @@ function OllamaSection({ data }: { data: OllamaData }) {
               "rounded border px-3 py-2 flex flex-col gap-1 " +
               (m.loaded
                 ? "border-emerald-500/40 bg-emerald-500/5"
-                : "border-neutral-700/60 bg-neutral-900/50")
+                : "border-border/60 bg-card/50")
             }
           >
             {/* 1줄: 이름 */}
@@ -387,14 +387,14 @@ function OllamaSection({ data }: { data: OllamaData }) {
               <span
                 className={
                   "w-2 h-2 rounded-full shrink-0 " +
-                  (m.loaded ? "bg-emerald-400 animate-pulse" : "bg-neutral-700")
+                  (m.loaded ? "bg-emerald-400 animate-pulse" : "bg-muted")
                 }
                 title={m.loaded ? "VRAM 로드 중" : "미로드"}
               />
-              <span className="font-mono text-sm text-neutral-100 truncate">{m.name}</span>
+              <span className="font-mono text-sm text-foreground truncate">{m.name}</span>
             </div>
             {/* 2줄: 메타 */}
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-400">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               {m.parameter_size && <span>파라미터 {m.parameter_size}</span>}
               {m.quantization && <span>양자화 {m.quantization}</span>}
               {m.family && <span>패밀리 {m.family}</span>}
@@ -405,7 +405,7 @@ function OllamaSection({ data }: { data: OllamaData }) {
               {(m.capabilities ?? []).map((c) => (
                 <span
                   key={c}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700/40 text-neutral-300 font-mono"
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-foreground font-mono"
                 >
                   {c}
                 </span>
@@ -417,18 +417,18 @@ function OllamaSection({ data }: { data: OllamaData }) {
                 <span className="text-emerald-400">
                   로드 중 · VRAM {fmtBytes(m.size_vram)}
                   {m.expires_at && (
-                    <span className="text-neutral-400">
+                    <span className="text-muted-foreground">
                       {" · "}만료 {new Date(m.expires_at).toLocaleTimeString("ko-KR")}
                     </span>
                   )}
                 </span>
               ) : (
-                <span className="text-neutral-600">미로드</span>
+                <span className="text-muted-foreground">미로드</span>
               )}
             </div>
           </div>
         ))}
-        {data.models.length === 0 && <p className="text-sm text-neutral-400">설치된 모델 없음</p>}
+        {data.models.length === 0 && <p className="text-sm text-muted-foreground">설치된 모델 없음</p>}
       </div>
     </SectionCard>
   );
@@ -628,7 +628,7 @@ function JobButton({
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
               : isFailed
                 ? "border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
-                : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700") +
+                : "border-border bg-muted text-foreground hover:bg-accent") +
           (blocked && !isRunning ? " opacity-40 cursor-not-allowed" : "")
         }
         title={
@@ -658,7 +658,7 @@ function JobButton({
         <button
           type="button"
           onClick={() => onToggleLog(job)}
-          className="px-1 py-1 text-xs text-neutral-400 hover:text-neutral-300"
+          className="px-1 py-1 text-xs text-muted-foreground hover:text-foreground"
           title="로그 보기"
         >
           {expanded ? "▲" : "▼"}
@@ -670,12 +670,12 @@ function JobButton({
 
 function LogBox({ info }: { info: JobInfo }) {
   return (
-    <div className="mt-2 rounded border border-neutral-700 bg-neutral-950 p-2 text-sm font-mono max-h-40 overflow-y-auto">
-      <div className="text-neutral-400 mb-1">
+    <div className="mt-2 rounded border border-border bg-background p-2 text-sm font-mono max-h-40 overflow-y-auto">
+      <div className="text-muted-foreground mb-1">
         rc={info.returncode ?? "—"} · {info.finished_at ? elapsed(info.finished_at) : "실행 중"}
       </div>
       {info.stderr && <pre className="text-amber-300/80 whitespace-pre-wrap">{info.stderr}</pre>}
-      {info.stdout && <pre className="text-neutral-300 whitespace-pre-wrap">{info.stdout}</pre>}
+      {info.stdout && <pre className="text-foreground whitespace-pre-wrap">{info.stdout}</pre>}
     </div>
   );
 }
@@ -684,7 +684,7 @@ function LogBox({ info }: { info: JobInfo }) {
 function StageArrow() {
   return (
     <div
-      className="flex items-center justify-center text-neutral-600 py-1 lg:py-0 lg:px-1"
+      className="flex items-center justify-center text-muted-foreground py-1 lg:py-0 lg:px-1"
       aria-hidden
     >
       <svg className="lg:hidden" width="16" height="20" viewBox="0 0 16 20" fill="none">
@@ -933,13 +933,13 @@ function IndexerSection({
         {statTiles.map((item) => (
           <div
             key={item.label}
-            className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2.5"
+            className="bg-card rounded-lg border border-border px-3 py-2.5"
           >
-            <div className="text-neutral-400 text-xs">{item.label}</div>
-            <div className="text-neutral-100 font-mono text-xl font-semibold mt-0.5 tabular-nums">
+            <div className="text-muted-foreground text-xs">{item.label}</div>
+            <div className="text-foreground font-mono text-xl font-semibold mt-0.5 tabular-nums">
               {fmtNum(item.value)}
             </div>
-            {item.sub && <div className="text-[11px] text-neutral-500 mt-1">{item.sub}</div>}
+            {item.sub && <div className="text-[11px] text-muted-foreground mt-1">{item.sub}</div>}
           </div>
         ))}
       </div>
@@ -1011,12 +1011,12 @@ function IndexerSection({
             status === "running"
               ? "border-amber-500/60 bg-amber-500/5"
               : status === "done"
-                ? "border-emerald-500/40 bg-neutral-900/40"
+                ? "border-emerald-500/40 bg-card/40"
                 : status === "failed"
                   ? "border-red-500/50 bg-red-500/5"
                   : status === "paused"
                     ? "border-sky-500/50 bg-sky-500/5"
-                    : "border-neutral-700/50 bg-neutral-900/40";
+                    : "border-border/50 bg-card/40";
           return (
             <div key={s.job} className="flex flex-col lg:flex-row lg:items-stretch">
               <div
@@ -1036,14 +1036,14 @@ function IndexerSection({
                     ) : status === "paused" ? (
                       <span className="text-sky-400">⏸</span>
                     ) : (
-                      <span className="text-neutral-600">○</span>
+                      <span className="text-muted-foreground">○</span>
                     )}
                   </span>
-                  <span className="text-sm font-semibold text-neutral-100">{s.label}</span>
+                  <span className="text-sm font-semibold text-foreground">{s.label}</span>
                   <span
                     className={
                       "text-[10px] px-1.5 py-0.5 rounded font-mono " +
-                      (isAI ? "bg-blue-500/15 text-blue-300" : "bg-neutral-600/30 text-neutral-300")
+                      (isAI ? "bg-blue-500/15 text-blue-300" : "bg-muted/30 text-foreground")
                     }
                   >
                     {s.group}
@@ -1053,7 +1053,7 @@ function IndexerSection({
                       <button
                         type="button"
                         onClick={() => toggleLog(s.job)}
-                        className="px-1 text-xs text-neutral-400 hover:text-neutral-200"
+                        className="px-1 text-xs text-muted-foreground hover:text-foreground"
                         title="로그"
                       >
                         {expanded ? "▲" : "▼"}
@@ -1067,19 +1067,19 @@ function IndexerSection({
                         "px-2 py-0.5 text-xs rounded border whitespace-nowrap " +
                         (status === "running"
                           ? "border-amber-500/40 bg-amber-500/10 text-amber-300 cursor-wait"
-                          : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700")
+                          : "border-border bg-muted text-foreground hover:bg-accent")
                       }
                     >
                       {status === "running" ? "↻ 실행 중" : "실행"}
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-neutral-400 mt-1 ml-6">{s.desc}</p>
+                <p className="text-xs text-muted-foreground mt-1 ml-6">{s.desc}</p>
                 <div className="mt-1.5 ml-6 space-y-1">
                   {isAI && s.completedKey ? (
                     <>
                       <ProgressBar done={done} total={total} />
-                      <div className="text-xs font-mono text-neutral-400">
+                      <div className="text-xs font-mono text-muted-foreground">
                         {fmtNum(done)}/{fmtNum(total)}
                         {pending > 0 && (
                           <span className="ml-1 text-amber-400">+{fmtNum(pending)}</span>
@@ -1088,11 +1088,11 @@ function IndexerSection({
                     </>
                   ) : (
                     mc != null && (
-                      <div className="text-xs font-mono text-neutral-400">처리 {fmtNum(mc)}건</div>
+                      <div className="text-xs font-mono text-muted-foreground">처리 {fmtNum(mc)}건</div>
                     )
                   )}
                   {/* 수행시간: 실행중=실시간, 완료=측정, 미실행=저장값 */}
-                  {tl && <div className="text-[11px] font-mono text-neutral-500">{tl}</div>}
+                  {tl && <div className="text-[11px] font-mono text-muted-foreground">{tl}</div>}
                 </div>
                 {expanded && stepInfo && hasLog && <LogBox info={stepInfo} />}
               </div>
@@ -1103,7 +1103,7 @@ function IndexerSection({
       </div>
 
       {/* 설명 (흐름도 아래로 이동) */}
-      <div className="mt-4 pt-3 border-t border-neutral-800 space-y-1 text-xs text-neutral-500">
+      <div className="mt-4 pt-3 border-t border-border space-y-1 text-xs text-muted-foreground">
         <p>
           증분 인덱싱 = 전체 파이프라인(메타+AI)을 신규 건만 처리. 전체 재인덱싱 = 처음부터 다시
           (확인창). 각 단계 카드의 [실행] 으로 개별 실행도 가능.
@@ -1170,10 +1170,10 @@ function MetricChart({
   const area = pts.length >= 2 ? `${line} L100 100 L0 100 Z` : "";
 
   return (
-    <div className="bg-neutral-900 rounded-lg border border-neutral-800 px-3 py-2 flex flex-col min-h-0">
+    <div className="bg-card rounded-lg border border-border px-3 py-2 flex flex-col min-h-0">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs text-neutral-400 truncate">{label}</span>
-        <span className="font-mono text-sm text-neutral-100 shrink-0">
+        <span className="text-xs text-muted-foreground truncate">{label}</span>
+        <span className="font-mono text-sm text-foreground shrink-0">
           {p == null ? "—" : `${p.toFixed(0)}%`}
         </span>
       </div>
@@ -1204,13 +1204,13 @@ function MetricChart({
           )}
         </svg>
       </div>
-      {sub && <div className="mt-1 text-[11px] text-neutral-500 font-mono shrink-0">{sub}</div>}
+      {sub && <div className="mt-1 text-[11px] text-muted-foreground font-mono shrink-0">{sub}</div>}
     </div>
   );
 }
 
 function SystemMonitor({ sys, history }: { sys?: SystemData; history: MetricHistory }) {
-  if (!sys) return <div className="text-sm text-neutral-500 animate-pulse">시스템 정보 로딩…</div>;
+  if (!sys) return <div className="text-sm text-muted-foreground animate-pulse">시스템 정보 로딩…</div>;
   // 2진 GiB 로 표시 (작업관리자·VRAM 표기와 단위 일치; 라벨은 관례상 GB)
   const gb = (b?: number) => (b == null ? "—" : `${(b / 1024 ** 3).toFixed(1)}GB`);
   const mib = (m?: number) => (m == null ? "—" : `${(m / 1024).toFixed(1)}GB`);
@@ -1248,7 +1248,7 @@ function SystemMonitor({ sys, history }: { sys?: SystemData; history: MetricHist
           />
         </>
       ) : (
-        <div className="col-span-2 text-xs text-neutral-500 px-1">GPU 정보 없음</div>
+        <div className="col-span-2 text-xs text-muted-foreground px-1">GPU 정보 없음</div>
       )}
     </div>
   );
@@ -1414,7 +1414,7 @@ export default function AdminPage() {
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="ml-1 px-2.5 py-1 text-xs rounded border border-neutral-700 hover:bg-neutral-800 disabled:opacity-50"
+            className="ml-1 px-2.5 py-1 text-xs rounded border border-border hover:bg-accent disabled:opacity-50"
           >
             {loading ? "로딩…" : "↻ 새로고침"}
           </button>
@@ -1431,7 +1431,7 @@ export default function AdminPage() {
         {/* 모니터링 — 실시간(3초) */}
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">
-            모니터링 <span className="text-xs font-normal text-neutral-500">· 실시간 (1초)</span>
+            모니터링 <span className="text-xs font-normal text-muted-foreground">· 실시간 (1초)</span>
           </h2>
           {/* 시스템·Qdrant·Ollama: 넓으면 3열로 가로 꽉 채움, 좁으면 세로 스택. 등높이 카드 */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
@@ -1451,7 +1451,7 @@ export default function AdminPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">
             인덱싱 작업{" "}
-            <span className="text-xs font-normal text-neutral-500">
+            <span className="text-xs font-normal text-muted-foreground">
               {lastRefresh ? `· 갱신 ${lastRefresh.toLocaleTimeString("ko-KR")}` : ""}
             </span>
           </h2>
@@ -1467,7 +1467,7 @@ export default function AdminPage() {
               />
             </>
           ) : (
-            <div className="text-base text-neutral-400 animate-pulse">데이터 로딩 중…</div>
+            <div className="text-base text-muted-foreground animate-pulse">데이터 로딩 중…</div>
           )}
         </section>
       </div>

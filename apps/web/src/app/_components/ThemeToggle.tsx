@@ -101,7 +101,7 @@ export default function ThemeToggle() {
       onClick={cycle}
       title={`테마: ${LABEL[theme]} (클릭하여 전환)`}
       aria-label={`테마: ${LABEL[theme]}`}
-      className="flex items-center text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+      className="flex items-center text-muted-foreground hover:text-foreground"
     >
       <ThemeIcon theme={theme} />
     </button>

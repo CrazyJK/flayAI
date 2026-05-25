@@ -27,7 +27,7 @@ export default function AppHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-baseline gap-2">
+    <header className="shrink-0 mx-auto w-full max-w-[900px] px-4 py-4 border-b border-border flex items-baseline gap-2">
       <h1 className="text-lg font-semibold">flayAI</h1>
       {actions}
       <nav className="ml-auto flex items-center gap-3 text-xs">
@@ -37,8 +37,8 @@ export default function AppHeader({
             href={n.href}
             className={
               n.key === active
-                ? "text-neutral-900 dark:text-neutral-100"
-                : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }
           >
             {n.label}

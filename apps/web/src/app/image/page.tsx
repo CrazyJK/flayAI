@@ -19,36 +19,36 @@ type Hit = {
 function PosterCard({ h }: { h: Hit }) {
   const poster = `${API_BASE}/static/posters/${encodeURIComponent(h.opus)}`;
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={poster}
         alt={h.opus}
         loading="lazy"
-        className="w-full aspect-[400/269] object-cover bg-neutral-800"
+        className="w-full aspect-[400/269] object-cover bg-muted"
         onError={(e) => {
           (e.currentTarget as HTMLImageElement).style.display = "none";
         }}
       />
       <div className="p-2 text-xs">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-neutral-300">{h.opus}</span>
+          <span className="font-mono text-foreground">{h.opus}</span>
           {typeof h.score === "number" && (
             <span className="text-emerald-400 tabular-nums">{h.score.toFixed(3)}</span>
           )}
         </div>
-        {h.title && <div className="mt-1 line-clamp-2 text-neutral-200">{h.title}</div>}
-        <div className="mt-1 text-neutral-500 flex gap-2 flex-wrap">
+        {h.title && <div className="mt-1 line-clamp-2 text-foreground">{h.title}</div>}
+        <div className="mt-1 text-muted-foreground flex gap-2 flex-wrap">
           {h.studio && <span>{h.studio}</span>}
           {h.year && <span>{h.year}</span>}
           {h.kind && (
-            <span className={h.kind === "instance" ? "text-emerald-400" : "text-neutral-400"}>
+            <span className={h.kind === "instance" ? "text-emerald-400" : "text-muted-foreground"}>
               {h.kind}
             </span>
           )}
         </div>
         {h.canonical_actresses && h.canonical_actresses.length > 0 && (
-          <div className="mt-1 text-neutral-400">{h.canonical_actresses.join(", ")}</div>
+          <div className="mt-1 text-muted-foreground">{h.canonical_actresses.join(", ")}</div>
         )}
       </div>
     </div>
@@ -123,16 +123,16 @@ export default function ImageSearchPage() {
     <div className="flex-1 flex flex-col">
       <AppHeader active="image" />
 
-      <div className="px-4 py-3 border-b border-neutral-800 space-y-3">
+      <div className="px-4 py-3 border-b border-border space-y-3">
         <div className="flex gap-2 text-sm">
           <button
-            className={`px-3 py-1 rounded ${tab === "text" ? "bg-emerald-600" : "bg-neutral-800"}`}
+            className={`px-3 py-1 rounded ${tab === "text" ? "bg-emerald-600" : "bg-muted"}`}
             onClick={() => setTab("text")}
           >
             텍스트 → 포스터
           </button>
           <button
-            className={`px-3 py-1 rounded ${tab === "image" ? "bg-emerald-600" : "bg-neutral-800"}`}
+            className={`px-3 py-1 rounded ${tab === "image" ? "bg-emerald-600" : "bg-muted"}`}
             onClick={() => setTab("image")}
           >
             이미지 → 포스터
@@ -140,7 +140,7 @@ export default function ImageSearchPage() {
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as "" | "instance" | "archive")}
-            className="ml-auto px-2 py-1 bg-neutral-800 rounded text-xs"
+            className="ml-auto px-2 py-1 bg-muted rounded text-xs"
           >
             <option value="">전체</option>
             <option value="instance">instance</option>
@@ -160,12 +160,12 @@ export default function ImageSearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder='e.g. "school uniform on beach", "검은 드레스의 여자"'
-              className="flex-1 px-3 py-2 bg-neutral-900 border border-neutral-800 rounded text-sm"
+              className="flex-1 px-3 py-2 bg-card border border-border rounded text-sm"
             />
             <button
               type="submit"
               disabled={busy || !query.trim()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded text-sm"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
             >
               검색
             </button>
@@ -180,19 +180,19 @@ export default function ImageSearchPage() {
             />
             {preview && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="preview" className="h-24 rounded border border-neutral-800" />
+              <img src={preview} alt="preview" className="h-24 rounded border border-border" />
             )}
             <button
               onClick={searchImage}
               disabled={busy || !file}
-              className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 rounded text-sm"
+              className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-muted rounded text-sm"
             >
               유사 포스터 검색
             </button>
           </div>
         )}
 
-        <div className="text-xs text-neutral-500">
+        <div className="text-xs text-muted-foreground">
           {busy && <span>검색 중…</span>}
           {!busy && elapsed !== null && (
             <span>
