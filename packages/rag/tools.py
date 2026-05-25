@@ -100,6 +100,7 @@ def search_videos(
     actress: str | None = None,
     tag: str | None = None,
     tags: list[str] | None = None,
+    tag_any: list[str] | None = None,
     studio: str | None = None,
     kind: Literal["instance", "archive", "any"] = "any",
     playable: bool | None = None,
@@ -126,17 +127,26 @@ def search_videos(
         if actress and actress_canon is None:
             query = f"{query} {actress}".strip()
             log.info("search_videos: unresolved actress %r -> query 로 흡수", actress)
-        # 단일 tag(LLM 호환) + 복수 tags 를 합쳐 모두 적용(AND). 미해석 태그는 조용히 무시.
-        tag_names: list[str] = [t for t in (tags or []) if t]
-        if tag and tag not in tag_names:
-            tag_names.insert(0, tag)
-        tag_ids = [tid for n in tag_names if (tid := _resolve_tag_id(conn, n)) is not None]
+        # tag/tags = AND(각각 반드시 포함, 단일 그룹들), tag_any = OR 한 그룹(하나라도 포함).
+        # 미해석 태그명은 조용히 무시.
+        tag_groups: list[list[int]] = []
+        and_names: list[str] = [t for t in (tags or []) if t]
+        if tag and tag not in and_names:
+            and_names.insert(0, tag)
+        for n in and_names:
+            tid = _resolve_tag_id(conn, n)
+            if tid is not None:
+                tag_groups.append([tid])
+        if tag_any:
+            any_ids = [tid for n in tag_any if (tid := _resolve_tag_id(conn, n)) is not None]
+            if any_ids:
+                tag_groups.append(any_ids)
         filt = Filters(
             year=year,
             month=month,
             studio=studio,
             actress_canonical=actress_canon,
-            tag_ids=tag_ids or None,
+            tag_groups=tag_groups or None,
             kind=None if kind in (None, "any") else kind,
             playable=playable,
             min_rank=min_rank,
@@ -209,12 +219,14 @@ def _meta_only_search(conn, f: Filters, limit: int, sort: str | None = None) -> 
             "WHERE va.opus = v.opus AND va.canonical_name = ?)"
         )
         params.append(f.actress_canonical)
-    if f.tag_ids:
-        for tid in f.tag_ids:
-            where.append(
-                "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
-            )
-            params.append(int(tid))
+    for group in f.tag_groups or []:
+        if not group:
+            continue
+        ph = ",".join("?" * len(group))
+        where.append(
+            f"EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id IN ({ph}))"
+        )
+        params.extend(int(t) for t in group)
     if f.playable is True:
         where.append(
             "EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)"
@@ -381,6 +393,11 @@ TOOL_SCHEMA: list[dict] = [
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "복수 태그. 모두 포함하는 영상만(AND). 테마가 여러 개면 사용.",
+                    },
+                    "tag_any": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "이 중 하나라도 포함(OR 한 그룹). 남녀 명수 등 동일 차원의 후보 태그용.",
                     },
                     "studio": {"type": "string"},
                     "kind": {"type": "string", "enum": ["instance", "archive", "any"]},

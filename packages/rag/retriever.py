@@ -27,7 +27,9 @@ class Filters:
     month: int | None = None
     studio: str | None = None
     actress_canonical: str | None = None
-    tag_ids: list[int] | None = None  # 복수 태그(AND): 모두 가진 영상만
+    # 태그 그룹: 그룹 내부는 OR(하나라도 포함), 그룹 간은 AND(각 그룹을 모두 충족).
+    # 테마 태그는 [[a],[b]] 처럼 단일 그룹들=AND, 카운트 태그는 [[n:1, n:n]] 처럼 OR 한 그룹.
+    tag_groups: list[list[int]] | None = None
     kind: str | None = None  # "instance" | "archive" | None
     playable: bool | None = None
     min_rank: int | None = None  # rank >= N ("N 이상")
@@ -64,10 +66,14 @@ def _build_qdrant_filter(f: Filters) -> qm.Filter | None:
                 match=qm.MatchValue(value=f.actress_canonical),
             )
         )
-    if f.tag_ids:
-        # 복수 태그는 각각 must 조건 → 모두 포함하는 영상만(AND)
-        for tid in f.tag_ids:
-            must.append(qm.FieldCondition(key="tag_ids", match=qm.MatchValue(value=int(tid))))
+    for group in f.tag_groups or []:
+        conds = [
+            qm.FieldCondition(key="tag_ids", match=qm.MatchValue(value=int(tid))) for tid in group
+        ]
+        if len(conds) == 1:
+            must.append(conds[0])  # 단일 태그 → AND
+        elif conds:
+            must.append(qm.Filter(should=conds))  # 그룹 내 OR (중 하나라도)
     if f.kind:
         must.append(qm.FieldCondition(key="kind", match=qm.MatchValue(value=f.kind)))
     if f.playable is not None:
@@ -189,12 +195,14 @@ def fts_search(
             "WHERE va.opus = v.opus AND va.canonical_name = ?)"
         )
         params.append(f.actress_canonical)
-    if f.tag_ids:
-        for tid in f.tag_ids:
-            where.append(
-                "EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id = ?)"
-            )
-            params.append(int(tid))
+    for group in f.tag_groups or []:
+        if not group:
+            continue
+        ph = ",".join("?" * len(group))
+        where.append(
+            f"EXISTS (SELECT 1 FROM video_tags vt WHERE vt.opus = v.opus AND vt.tag_id IN ({ph}))"
+        )
+        params.extend(int(t) for t in group)
     if f.playable is True:
         where.append(
             "EXISTS (SELECT 1 FROM posters p WHERE p.opus = v.opus AND p.video_path IS NOT NULL)"

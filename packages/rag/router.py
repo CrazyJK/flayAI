@@ -204,6 +204,70 @@ def _extract_tags(query: str, max_tags: int = 4) -> list[str]:
     return out
 
 
+# --- 남녀 명수 → 카운트 태그(앞=남자 수, 뒤=여자 수) ----------------
+# DB 카운트 태그 예: 2:1, n:1, 1:2, 2:2, 1:n, n:n. 값은 1 / 2 / n(여러).
+_COUNT_TAG_RE = re.compile(r"^([0-9n]+):([0-9n]+)$", re.IGNORECASE)
+_NUM_WORDS = {
+    "한": 1, "하나": 1, "두": 2, "둘": 2, "세": 3, "셋": 3, "석": 3,
+    "네": 4, "넷": 4, "다섯": 5, "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9, "열": 10,
+}
+_NUM_ALT = "|".join(sorted(_NUM_WORDS, key=len, reverse=True))  # 긴 한글 수사 우선
+
+
+def _known_count_tags() -> list[tuple[str, str, str]]:
+    """DB 태그 중 'M:W' 형식만 (name, men, women). men/women ∈ {'1','2','n',...}."""
+    out: list[tuple[str, str, str]] = []
+    for name in _known_tags():
+        m = _COUNT_TAG_RE.match(name.strip())
+        if m:
+            out.append((name, m.group(1).lower(), m.group(2).lower()))
+    return out
+
+
+def _count_value(query: str, gender: str) -> str | None:
+    """질문에서 해당 성별(gender 정규식)의 명수를 '1'/'2'/'n'(여러) 로 추출. 없으면 None."""
+    # '여러/여럿/다수 [명(의)] <성별>' (예: '여러 남자', '여러 명의 여자')
+    if re.search(rf"(?:여러|여럿|다수)\s*(?:명\s*의?\s*)?(?:{gender})", query):
+        return "n"
+    # '<성별>[들/이/가/는] 여러/여럿' (예: '남자 여럿', '남자들 여러 명')
+    if re.search(rf"(?:{gender})\s*(?:들|이|가|는)?\s*(?:여러|여럿)", query):
+        return "n"
+    # '<성별> N명' 또는 'N명(의) <성별>'
+    m = re.search(rf"(?:{gender})\D{{0,3}}({_NUM_ALT}|\d+)\s*명", query) or re.search(
+        rf"({_NUM_ALT}|\d+)\s*명\s*의?\s*(?:{gender})", query
+    )
+    if m:
+        tok = m.group(1)
+        n = int(tok) if tok.isdigit() else _NUM_WORDS.get(tok, 0)
+        if n >= 3:
+            return "n"
+        if n in (1, 2):
+            return str(n)
+    return None
+
+
+def _extract_count_tags(query: str) -> list[str]:
+    """남자/여자 명수 표현 → 해당 DB 카운트 태그 후보(OR 그룹).
+
+    한쪽만 지정되면 그 차원에 맞는 태그를 모두(OR), 양쪽 지정되면 정확 조합으로 좁힘.
+    예: '여러 남자' → 남=n → [n:1, n:n].  '남자 1명 여자 여러명' → 남=1·여=n → [1:n].
+    search_videos 에서 tag_any(OR 한 그룹)로 적용 → 다른 테마 태그(AND)와 결합.
+    """
+    q = query or ""
+    men = _count_value(q, "남자|남성")
+    women = _count_value(q, "여자|여성")
+    if men is None and women is None:
+        return []
+    out: list[str] = []
+    for name, mv, wv in _known_count_tags():
+        if men is not None and mv != men:
+            continue
+        if women is not None and wv != women:
+            continue
+        out.append(name)
+    return out
+
+
 # 적용된 검색 필터를 한국어 한 줄로 (LLM 묘사 대체용)
 _KIND_LABEL = {"instance": "지금 볼 수 있는 것", "archive": "보관 영상"}
 
@@ -234,6 +298,8 @@ def _summarize_results(tool_calls: list[dict], results: list[dict]) -> str:
             parts.append(f"#{a['tag']}")
         if a.get("tags"):
             parts.extend(f"#{t}" for t in a["tags"])
+        if a.get("tag_any"):
+            parts.append("#" + "|".join(str(t) for t in a["tag_any"]))
         if a.get("min_rank"):
             parts.append(f"평점 {a['min_rank']}+")
         if a.get("rank"):
@@ -394,6 +460,10 @@ async def route_chat(
         tags = _extract_tags(user_query)
         if tags:
             meta.setdefault("tags", tags)
+        # 남녀 명수(예: '여러 남자', '여자 2명') → 카운트 태그 OR 그룹으로 주입
+        count_tags = _extract_count_tags(user_query)
+        if count_tags:
+            meta.setdefault("tag_any", count_tags)
         if meta:
             for c in tool_calls:
                 fn = c.get("function") or {}

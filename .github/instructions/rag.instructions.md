@@ -35,6 +35,7 @@ description: "RAG 검색 + LLM tool calling 라우팅 규칙"
 - 질문에 품번 패턴(`[A-Za-z]{2,7}-?\d{2,5}`)이 없으면 `get_video`/`similar_to` 호출을 `search_videos` 로 교체.
 - `_extract_meta()` 로 질문에서 year/month/min_rank/rank/min_likes/min_play/max_play/sort/kind/playable 를 정규식으로 추출해 `search_videos` args 에 주입(LLM 누락·미호출 방어). 평점은 "N 이상"→`min_rank`(≥), "랭크 N"·"별점 N"(수식어 없이)→`rank`(정확히 N), "좋아요/하트/찜 N"→`min_likes`(≥, `like_count`), "재생(횟수) N 이상/이하"→`min_play`/`max_play`(`play`), "최근/마지막에 본"→`sort=recent`·"오래 안 본"→`sort=oldest`(`last_play` 정렬). studio/actress 는 query 로 semantic+FTS 매칭.
 - `_extract_tags()` 로 DB `tags.name`(2자+, 10분 캐시 `_known_tags`)이 질문에 그대로 포함되면 **겹치지 않는 모든 매칭을 최장 우선·최대 4개**까지 `tags` 로 주입(테마 질의 정확도↑). 복수 태그는 search_videos 에서 **AND**(모두 포함하는 영상만)로 적용. 한국어 어미·조사 변형은 부분문자열로 못 잡음('웃고 있는'≠태그 '웃는') → 그땐 의미검색 의존.
+- `_extract_count_tags()` 로 남녀 명수 표현을 **카운트 태그**(`M:N` = 앞 남자수·뒤 여자수, 값은 1/2/n=여러)로 환산. '여러/N명/한·두·…' 를 파싱해 한쪽만 지정되면 그 차원 후보를 모두(예: '여러 남자'→남=n→`[n:1, n:n]`), 양쪽 지정되면 정확 조합으로 좁혀 `tag_any`(OR 한 그룹)로 주입. 태그 필터는 `Filters.tag_groups`(그룹 내부 OR·그룹 간 AND): 테마 태그=단일 그룹들(AND), 카운트=OR 한 그룹. Qdrant 는 그룹마다 `should` 중첩 필터, SQLite 는 그룹마다 `tag_id IN (...)` EXISTS.
 - 결과 요약은 `_summarize_results()` 가 코드로 "건수+필터" 한 줄을 만들어 `token` 이벤트로 한 번 push.
 
 ## 검색 / 랭킹
