@@ -384,10 +384,10 @@ export default function ChatPage() {
       {/* 질의 영역 전체를 감싸는 박스 */}
       <div
         className={
-          "flex flex-col gap-2.5 rounded-2xl transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 " +
+          "flex flex-col gap-2 rounded-2xl transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 " +
           (hero
-            ? "border border-neutral-600 bg-neutral-800 px-4 py-3 shadow-lg shadow-black/40"
-            : "border border-neutral-700 bg-neutral-900 px-3 py-2.5")
+            ? "border border-neutral-600 bg-neutral-800 px-4 pt-3.5 pb-2 shadow-lg shadow-black/40"
+            : "border border-neutral-700 bg-neutral-900 px-3 pt-3 pb-1.5")
         }
       >
         {/* 상단: 입력 (Enter 전송 / Shift+Enter 줄바꿈, 내용에 따라 높이 자동 확장) */}
@@ -399,7 +399,7 @@ export default function ChatPage() {
             (hero ? "text-lg" : "text-sm")
           }
           style={{ maxHeight: 200 }}
-          placeholder="무엇을 찾을까요?  (Shift+Enter 줄바꿈)"
+          placeholder="무엇을 찾을까요?"
           value={input}
           disabled={busy}
           autoFocus={hero}
@@ -464,14 +464,11 @@ export default function ChatPage() {
               onClick={abort}
               title="중단"
               aria-label="중단"
-              className={
-                "ml-auto shrink-0 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-500 text-white " +
-                (hero ? "w-10 h-10" : "w-8 h-8")
-              }
+              className="ml-auto shrink-0 flex items-center justify-center text-red-400 hover:text-red-300"
             >
               <svg
-                width={hero ? 18 : 16}
-                height={hero ? 18 : 16}
+                width={hero ? 22 : 18}
+                height={hero ? 22 : 18}
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >
@@ -484,23 +481,21 @@ export default function ChatPage() {
               title="전송"
               aria-label="전송"
               disabled={!input.trim()}
-              className={
-                "ml-auto shrink-0 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white " +
-                (hero ? "w-10 h-10" : "w-8 h-8")
-              }
+              className="ml-auto shrink-0 flex items-center justify-center text-neutral-300 hover:text-blue-400 disabled:opacity-30 disabled:hover:text-neutral-300"
             >
+              {/* 엔터(↵) 모양 — corner-down-left */}
               <svg
-                width={hero ? 20 : 18}
-                height={hero ? 20 : 18}
+                width={hero ? 24 : 20}
+                height={hero ? 24 : 20}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="12" y1="19" x2="12" y2="6" />
-                <polyline points="6 12 12 6 18 12" />
+                <polyline points="9 10 4 15 9 20" />
+                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
               </svg>
             </button>
           )}
@@ -516,10 +511,7 @@ export default function ChatPage() {
       {empty ? (
         // 첫 로딩: 구글처럼 입력창을 화면 중앙에 크고 밝게 배치
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-7 px-4 pb-16">
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl sm:text-4xl font-semibold text-neutral-100">무엇을 찾을까요?</h2>
-            <p className="text-base text-neutral-400">자연어로 비디오 컬렉션을 검색하세요</p>
-          </div>
+          <h2 className="text-3xl sm:text-4xl font-semibold text-neutral-100">무엇을 찾을까요?</h2>
           {renderForm(true)}
           <div className="flex flex-wrap gap-2 justify-center max-w-[760px]">
             {examples.map((q) => (
