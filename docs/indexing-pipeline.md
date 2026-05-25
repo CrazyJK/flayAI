@@ -72,6 +72,7 @@
 - 모델: BGE-M3 (Sentence Transformers, 1024d, multilingual)
 - 입력 문서: 영상 1개당 "title_jp + title_ko + desc_ko + studio + 배우목록 + 태그" 합본 텍스트.
 - 출력: Qdrant `videos` 컬렉션. payload 에 opus, kind, year, studio, canonical_actresses 등 메타 포함 (필터링용).
+- **증분**: 문서 해시를 `embed_state(collection='videos')` 에 저장 → 다음 실행 때 문서가 바뀐 영상만 재임베딩(태그·캡션·배우 변경 시 자동 감지). payload 의 가변 수치(play/like/rank)는 `sync-payload` 가 별도 갱신하므로 벡터는 안 건드림. 첫 실행은 기존 Qdrant 점을 시드해 스킵, `--force` 로 전량 재임베딩.
 
 ### 7. `embed-clip` — 포스터 이미지 임베딩 (M4a)
 
@@ -79,6 +80,7 @@
 - 입력: `posters.path` 의 모든 이미지.
 - 출력: Qdrant `posters_clip`. 텍스트 ↔ 이미지 cross-modal 검색 가능 (CLIP 의 핵심).
 - 성능: 20,334장 / 685초 / GPU.
+- **증분**: 포스터 `path|mtime` 해시를 `embed_state(collection='posters_clip')` 에 저장 → 신규·교체된 포스터만 재인코딩(이미지는 opus 당 불변). 첫 실행은 기존 Qdrant 점을 시드해 전량 스킵(재임베딩 0), `--force` 로 전량 재임베딩.
 
 ### 8. `extract-faces` — 얼굴 추출 (M4b)
 

@@ -18,7 +18,7 @@ from collections.abc import Iterable
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qm
 
-from packages.indexer.db import connect, init_schema
+from packages.indexer.db import connect, init_schema, load_embed_sigs, save_embed_sigs
 from packages.indexer.state import update_stage
 from packages.settings import load_config
 
@@ -187,7 +187,36 @@ def _batched(seq: list, n: int) -> Iterable[list]:
         yield seq[i : i + n]
 
 
-def run(limit: int | None = None, batch_size: int | None = None) -> dict:
+def _existing_ids(qc: QdrantClient, collection: str) -> set[int]:
+    """컬렉션에 이미 존재하는 point id 집합(증분 시드용). 실패/부재 시 빈 set."""
+    ids: set[int] = set()
+    try:
+        offset = None
+        while True:
+            points, offset = qc.scroll(
+                collection_name=collection,
+                limit=10000,
+                with_payload=False,
+                with_vectors=False,
+                offset=offset,
+            )
+            ids.update(int(p.id) for p in points)
+            if offset is None:
+                break
+    except Exception as e:  # 컬렉션이 막 생성됐거나 비었을 때
+        log.debug("scroll %s ids skipped: %s", collection, e)
+    return ids
+
+
+def _doc_sig(document: str) -> str:
+    return hashlib.sha1(document.encode("utf-8")).hexdigest()
+
+
+def run(limit: int | None = None, batch_size: int | None = None, force: bool = False) -> dict:
+    """증분: 문서(벡터 입력) 해시가 직전과 같으면 스킵. payload 갱신은 sync-payload 담당.
+
+    force=True 면 시그니처 무시하고 전량 재임베딩(clean 재구축용).
+    """
     cfg = load_config()
     bs = int(batch_size or cfg["indexing"]["embed_batch_size"])
     conn = connect()
@@ -200,33 +229,60 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
     total = len(all_opus)
     upserted = 0
     skipped = 0
+    unchanged = 0
+
+    sigs = {} if force else load_embed_sigs(conn, COLLECTION)
+    existing = set() if force else _existing_ids(qc, COLLECTION)
+    new_sigs: list[tuple[str, str]] = []
 
     for chunk in _batched(all_opus, bs):
-        bundles = []
+        to_embed: list[tuple[dict, str, str]] = []  # (bundle, document, sig)
         for opus in chunk:
             b = _fetch_video_bundle(conn, opus)
             if b is None:
                 skipped += 1
                 continue
-            bundles.append(b)
-        if not bundles:
-            continue
-        docs = [_build_document(b) for b in bundles]
-        vecs = emb.encode(docs, batch_size=bs, normalize_embeddings=True, show_progress_bar=False)
-        points = [
-            qm.PointStruct(
-                id=opus_to_id(b["video"]["opus"]),
-                vector=v.tolist(),
-                payload=_build_payload(b),
+            doc = _build_document(b)
+            sig = _doc_sig(doc)
+            if not force:
+                prev = sigs.get(opus)
+                if prev == sig:
+                    unchanged += 1
+                    continue
+                if prev is None and opus_to_id(opus) in existing:
+                    # 첫 실행 시드: 기존 점은 유효하다고 보고 sig 만 기록(재임베딩 X)
+                    new_sigs.append((opus, sig))
+                    unchanged += 1
+                    continue
+            to_embed.append((b, doc, sig))
+        if to_embed:
+            vecs = emb.encode(
+                [d for (_b, d, _s) in to_embed],
+                batch_size=bs,
+                normalize_embeddings=True,
+                show_progress_bar=False,
             )
-            for b, v in zip(bundles, vecs)
-        ]
-        qc.upsert(collection_name=COLLECTION, points=points, wait=False)
-        upserted += len(points)
-        if upserted % (bs * 8) == 0:
-            update_stage("embed_text", completed=upserted)
-            log.info("embed_text %d / %d", upserted, total)
+            points = [
+                qm.PointStruct(
+                    id=opus_to_id(b["video"]["opus"]),
+                    vector=v.tolist(),
+                    payload=_build_payload(b),
+                )
+                for (b, _d, _s), v in zip(to_embed, vecs)
+            ]
+            qc.upsert(collection_name=COLLECTION, points=points, wait=False)
+            upserted += len(points)
+            new_sigs.extend((b["video"]["opus"], s) for (b, _d, s) in to_embed)
+            if upserted % (bs * 8) == 0:
+                update_stage("embed_text", completed=upserted)
+                log.info("embed_text %d / %d (unchanged %d)", upserted, total, unchanged)
+        if len(new_sigs) >= 1000:
+            save_embed_sigs(conn, COLLECTION, new_sigs)
+            new_sigs = []
 
-    update_stage("embed_text", done=True, completed=upserted, total=total, skipped=skipped)
+    save_embed_sigs(conn, COLLECTION, new_sigs)
+    update_stage(
+        "embed_text", done=True, completed=upserted, total=total, skipped=skipped + unchanged
+    )
     conn.close()
-    return {"total": total, "upserted": upserted, "skipped": skipped}
+    return {"total": total, "upserted": upserted, "skipped": skipped, "unchanged": unchanged}

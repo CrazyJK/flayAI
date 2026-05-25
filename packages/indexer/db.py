@@ -165,6 +165,15 @@ CREATE TABLE IF NOT EXISTS query_log (
   result_n    INTEGER,
   user_rating INTEGER
 );
+
+-- 임베딩 시그니처 (증분 인덱싱: opus 당 '벡터 입력' 해시) ----------------
+-- sig 가 동일하면 재임베딩 스킵. videos=문서 해시, posters_clip=path|mtime 해시.
+CREATE TABLE IF NOT EXISTS embed_state (
+  collection TEXT NOT NULL,
+  opus       TEXT NOT NULL,
+  sig        TEXT NOT NULL,
+  PRIMARY KEY (collection, opus)
+);
 """
 
 
@@ -203,6 +212,28 @@ def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     # 마이그레이션 (기존 DB 대비)
     _ensure_column(conn, "posters", "caption", "TEXT")  # 포스터 VLM 캡션
+    conn.commit()
+
+
+def load_embed_sigs(conn: sqlite3.Connection, collection: str) -> dict[str, str]:
+    """증분 인덱싱용: 컬렉션의 opus→sig 시그니처 맵."""
+    return {
+        r["opus"]: r["sig"]
+        for r in conn.execute(
+            "SELECT opus, sig FROM embed_state WHERE collection = ?", (collection,)
+        )
+    }
+
+
+def save_embed_sigs(conn: sqlite3.Connection, collection: str, items: list[tuple[str, str]]) -> None:
+    """(opus, sig) 다수를 upsert. 임베딩된 항목만 기록해 다음 실행 때 스킵 판단."""
+    if not items:
+        return
+    conn.executemany(
+        "INSERT INTO embed_state(collection, opus, sig) VALUES(?, ?, ?) "
+        "ON CONFLICT(collection, opus) DO UPDATE SET sig = excluded.sig",
+        [(collection, o, s) for o, s in items],
+    )
     conn.commit()
 
 

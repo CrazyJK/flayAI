@@ -10,6 +10,7 @@ AI_PLAN.md §10 M4 / §6.1 [7].
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 from collections.abc import Iterable
@@ -20,8 +21,8 @@ from PIL import Image
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qm
 
-from packages.indexer.db import connect, init_schema
-from packages.indexer.embed_text import _qdrant, opus_to_id
+from packages.indexer.db import connect, init_schema, load_embed_sigs, save_embed_sigs
+from packages.indexer.embed_text import _existing_ids, _qdrant, opus_to_id
 from packages.indexer.state import update_stage
 from packages.settings import load_config
 
@@ -88,7 +89,7 @@ def ensure_collection(client: QdrantClient) -> None:
 
 def _fetch_poster_bundle(conn: sqlite3.Connection, opus: str) -> dict | None:
     p = conn.execute(
-        "SELECT opus, path, kind, video_path FROM posters WHERE opus = ?", (opus,)
+        "SELECT opus, path, kind, video_path, mtime FROM posters WHERE opus = ?", (opus,)
     ).fetchone()
     if not p or not p["path"]:
         return None
@@ -106,6 +107,7 @@ def _fetch_poster_bundle(conn: sqlite3.Connection, opus: str) -> dict | None:
     return {
         "opus": p["opus"],
         "path": p["path"],
+        "mtime": p["mtime"],
         "kind": p["kind"],
         "video_path": p["video_path"],
         "year": v["release_year"] if v else None,
@@ -151,6 +153,11 @@ def _batched(seq: list, n: int) -> Iterable[list]:
         yield seq[i : i + n]
 
 
+def _poster_sig(b: dict) -> str:
+    """포스터 벡터 입력의 시그니처 = 경로 + 수정시각. 파일 교체(mtime 변경) 시에만 변함."""
+    return hashlib.sha1(f"{b['path']}|{b.get('mtime')}".encode()).hexdigest()
+
+
 def _embed_images(paths: list[Path]) -> tuple[torch.Tensor | None, list[int]]:
     model, preprocess, device = _load_model()
     imgs = []
@@ -171,7 +178,12 @@ def _embed_images(paths: list[Path]) -> tuple[torch.Tensor | None, list[int]]:
     return feats.detach().cpu(), keep_idx
 
 
-def run(limit: int | None = None, batch_size: int | None = None) -> dict:
+def run(limit: int | None = None, batch_size: int | None = None, force: bool = False) -> dict:
+    """증분: 포스터 path|mtime 시그니처가 직전과 같으면 이미지 인코딩 스킵.
+
+    포스터 이미지는 opus 당 불변(교체 시 mtime 변경)이고 payload 는 sync-payload 가
+    갱신하므로 벡터 재계산은 신규·교체분만 하면 충분. force=True 면 전량 재임베딩.
+    """
     cfg = load_config()
     bs = int(batch_size or cfg["indexing"]["clip_batch_size"])
     conn = connect()
@@ -184,42 +196,73 @@ def run(limit: int | None = None, batch_size: int | None = None) -> dict:
     upserted = 0
     skipped = 0
     failed = 0
+    unchanged = 0
+
+    sigs = {} if force else load_embed_sigs(conn, COLLECTION)
+    existing = set() if force else _existing_ids(qc, COLLECTION)
+    new_sigs: list[tuple[str, str]] = []
 
     for chunk in _batched(all_opus, bs):
-        bundles = []
+        to_embed: list[tuple[dict, str]] = []  # (bundle, sig)
         for opus in chunk:
             b = _fetch_poster_bundle(conn, opus)
             if b is None:
                 skipped += 1
                 continue
-            bundles.append(b)
-        if not bundles:
-            continue
-        paths = [Path(b["path"]) for b in bundles]
-        feats, keep_idx = _embed_images(paths)
-        if feats is None:
-            failed += len(bundles)
-            continue
-        points = []
-        for j, idx in enumerate(keep_idx):
-            b = bundles[idx]
-            points.append(
-                qm.PointStruct(
-                    id=opus_to_id(b["opus"]),
-                    vector=feats[j].tolist(),
-                    payload=_build_payload(b),
-                )
-            )
-        failed += len(bundles) - len(keep_idx)
-        if points:
-            qc.upsert(collection_name=COLLECTION, points=points, wait=False)
-            upserted += len(points)
-        if upserted % (bs * 8) == 0 and upserted > 0:
-            update_stage("embed_clip", completed=upserted)
-            log.info("embed_clip %d / %d", upserted, total)
+            sig = _poster_sig(b)
+            if not force:
+                prev = sigs.get(opus)
+                if prev == sig:
+                    unchanged += 1
+                    continue
+                if prev is None and opus_to_id(opus) in existing:
+                    # 첫 실행 시드: 기존 점은 유효하다고 보고 sig 만 기록(재임베딩 X)
+                    new_sigs.append((opus, sig))
+                    unchanged += 1
+                    continue
+            to_embed.append((b, sig))
+        if to_embed:
+            paths = [Path(b["path"]) for (b, _s) in to_embed]
+            feats, keep_idx = _embed_images(paths)
+            if feats is None:
+                failed += len(to_embed)
+            else:
+                points = []
+                for j, idx in enumerate(keep_idx):
+                    b, s = to_embed[idx]
+                    points.append(
+                        qm.PointStruct(
+                            id=opus_to_id(b["opus"]),
+                            vector=feats[j].tolist(),
+                            payload=_build_payload(b),
+                        )
+                    )
+                    new_sigs.append((b["opus"], s))
+                failed += len(to_embed) - len(keep_idx)
+                if points:
+                    qc.upsert(collection_name=COLLECTION, points=points, wait=False)
+                    upserted += len(points)
+                if upserted % (bs * 8) == 0 and upserted > 0:
+                    update_stage("embed_clip", completed=upserted)
+                    log.info("embed_clip %d / %d (unchanged %d)", upserted, total, unchanged)
+        if len(new_sigs) >= 1000:
+            save_embed_sigs(conn, COLLECTION, new_sigs)
+            new_sigs = []
 
+    save_embed_sigs(conn, COLLECTION, new_sigs)
     update_stage(
-        "embed_clip", done=True, completed=upserted, total=total, skipped=skipped, failed=failed
+        "embed_clip",
+        done=True,
+        completed=upserted,
+        total=total,
+        skipped=skipped + unchanged,
+        failed=failed,
     )
     conn.close()
-    return {"total": total, "upserted": upserted, "skipped": skipped, "failed": failed}
+    return {
+        "total": total,
+        "upserted": upserted,
+        "skipped": skipped,
+        "unchanged": unchanged,
+        "failed": failed,
+    }

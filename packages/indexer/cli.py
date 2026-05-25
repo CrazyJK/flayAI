@@ -170,12 +170,13 @@ def translate(
 def embed(
     limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
     batch_size: int = typer.Option(0, "--batch-size", "-b"),
+    force: bool = typer.Option(False, "--force", help="증분 스킵 무시하고 전량 재임베딩"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """bge-m3 → Qdrant videos 컬렉션 upsert."""
+    """bge-m3 → Qdrant videos 컬렉션 upsert (기본 증분: 문서 변경분만)."""
     _setup_log(verbose)
     t = time.time()
-    out = embed_mod.run(limit=limit or None, batch_size=batch_size or None)
+    out = embed_mod.run(limit=limit or None, batch_size=batch_size or None, force=force)
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("embed_text", out)
 
@@ -184,12 +185,13 @@ def embed(
 def embed_clip(
     limit: int = typer.Option(0, "--limit", "-n", help="0이면 전체"),
     batch_size: int = typer.Option(0, "--batch-size", "-b"),
+    force: bool = typer.Option(False, "--force", help="증분 스킵 무시하고 전량 재임베딩"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """OpenCLIP ViT-L/14 → Qdrant posters_clip 컬렉션 upsert."""
+    """OpenCLIP ViT-L/14 → Qdrant posters_clip 컬렉션 upsert (기본 증분: 신규·변경 포스터만)."""
     _setup_log(verbose)
     t = time.time()
-    out = embed_clip_mod.run(limit=limit or None, batch_size=batch_size or None)
+    out = embed_clip_mod.run(limit=limit or None, batch_size=batch_size or None, force=force)
     out["elapsed_sec"] = round(time.time() - t, 2)
     _print("embed_clip", out)
 
