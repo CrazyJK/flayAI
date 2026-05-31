@@ -200,3 +200,6 @@ _*.json
 
 # certificates
 .cert/
+
+# 기획서 빌드 산출물 (재생성 가능; gen.js/mockup.py 만 추적)
+docs/_planbuild/*.png
