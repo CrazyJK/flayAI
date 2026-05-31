@@ -231,9 +231,9 @@ diffItem("⑧ 브라우저 사이드패널 상주 검색 (Side Panel API)",
 // ⑧ 예상 화면 목업 (Q2)
 body.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 40 },
   children: [new ImageRun({ type: "png", data: fs.readFileSync(IMG),
-    transformation: { width: 612, height: 351 },
-    altText: { title: "사내 포털 + 통합 검색 사이드패널", description: "좌측 메뉴·상단 탭·업무 대시보드와 우측 통합 검색 사이드패널 합성", name: "portalSidepanelMockup" } })] }));
-body.push(caption("[그림] 사내 포털(좌측 메뉴·상단 탭·업무 대시보드) 우측에 상주하는 통합 검색 사이드패널 예상 화면. 현재 화면 맥락 칩(⑧)·결과 카드(결재/메일/게시물)·비활성 시 Windows 알림(⑨)을 함께 나타낸 개념 시안이며, 실제 UI 와 다를 수 있습니다."));
+    transformation: { width: 624, height: 339 },
+    altText: { title: "사내 포털 + 통합 검색 사이드패널", description: "실제 사내 포털 화면 우측 보조 패널을 통합 검색 패널로 대체한 합성", name: "portalSidepanelMockup" } })] }));
+body.push(caption("[그림] 실제 사내 포털 화면 그대로에, 우측 보조 패널(기존 Copilot 자리)만 통합 검색 패널로 대체한 합성 예상 화면. 현재 화면 맥락 칩(⑧)·결과 카드(결재/메일/게시물)·비활성 시 Windows 알림(⑨)을 함께 나타냈으며, 실제 UI 와 다를 수 있습니다."));
 diffItem("⑨ 비동기 결과 전달 — 브라우저 비활성 시 OS(윈도우) 알림",
   "무거운 질의(모드 B 요약 생성, 멀티소스 딥서치 등)는 시간이 조금 걸릴 수 있습니다. 사용자가 질의를 던지고 다른 일을 하더라도, 결과가 준비되면 **브라우저·탭이 포커스가 아니어도 윈도우 OS 알림(toast)** 으로 알려 주고, 알림을 클릭하면 사이드패널/웹 앱이 결과 화면으로 이동합니다. 웹 앱은 Web Notifications API(`Notification`), 사이드패널 확장은 `chrome.notifications`(확장 서비스 워커)로 구현하며, 후자는 브라우저가 최소화·비활성인 상태에서도 동작합니다.",
   ["*왜 다른가요?* 많은 사내 검색은 \"결과가 올 때까지 화면을 지켜보는\" 동기 방식입니다. **fire-and-forget + OS 알림**은 온프레미스 LLM 생성·딥서치의 대기 시간을 자연스럽게 가려 주고, 업무를 멈추지 않는 사용 흐름(⑧)을 완성합니다.",
