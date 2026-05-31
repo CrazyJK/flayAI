@@ -8,6 +8,7 @@ const {
 
 const ROOT = "C:/Handyground/Workspace/git/flayAI";
 const IMG = ROOT + "/docs/_planbuild/sidepanel-mockup.png";
+const LOGO = ROOT + "/docs/_planbuild/logo.png";
 
 // ---- 상수/팔레트 ------------------------------------------------
 const CW = 9026;
@@ -125,7 +126,27 @@ body.push(new Paragraph({ children: [new PageBreak()] }));
 
 // ---- 목차 ----
 body.push(h1("목차"));
-body.push(new TableOfContents("목차", { hyperlink: true, headingStyleRange: "1-2" }));
+// 필드(TOC) 대신 정적 목록 — 열람 시 '필드 업데이트' 경고가 뜨지 않도록.
+[
+  "요약",
+  "1. 배경 & 문제",
+  "2. 목표 & 범위",
+  "3. 사용자 시나리오 (예시)",
+  "4. 핵심 설계 원칙",
+  "5. 차별화 포인트 (특장점)",
+  "6. 아키텍처 (빅 픽처)",
+  "7. 데이터 파이프라인 (소스 → 검색 가능 인덱스)",
+  "8. 기술 스택 선택 (Linux · 멀티유저)",
+  "9. 멀티유저 · 권한 · 보안",
+  "10. 구성 옵션 — 무GPU(검색형) vs GPU(생성형)",
+  "11. 성능 · 하드웨어 스펙",
+  "12. 단계별 로드맵",
+  "13. 리스크 & 대응",
+  "14. 결정 필요 사항",
+].forEach((t) => body.push(new Paragraph({
+  spacing: { after: 70, line: 276 }, indent: { left: 220 },
+  children: [new TextRun({ text: t, size: 22 })],
+})));
 body.push(new Paragraph({ children: [new PageBreak()] }));
 
 // ---- 요약 ----
@@ -456,8 +477,17 @@ const doc = new Document({
       page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } },
     },
     headers: {
-      default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 0 },
-        children: [new TextRun({ text: "핸디소프트 · 서비스개발팀  |  사내 업무 통합 검색(RAG) 개발 기획서", size: 16, color: GREY })] })] }),
+      default: new Header({ children: [new Paragraph({
+        tabStops: [{ type: TabStopType.RIGHT, position: CW }],
+        spacing: { after: 0 },
+        border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "D8DDE6", space: 6 } },
+        children: [
+          new TextRun({ text: "사내 업무 통합 검색(RAG) 개발 기획서 · 서비스개발팀", size: 16, color: GREY }),
+          new TextRun({ text: "\t" }),
+          new ImageRun({ type: "png", data: fs.readFileSync(LOGO), transformation: { width: 92, height: 21 },
+            altText: { title: "HANDYSOFT", description: "핸디소프트 로고", name: "headerLogo" } }),
+        ],
+      })] }),
       first: new Header({ children: [new Paragraph({ children: [new TextRun("")] })] }),
     },
     footers: {
