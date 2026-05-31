@@ -201,5 +201,8 @@ _*.json
 # certificates
 .cert/
 
-# 기획서 빌드 산출물 (재생성 가능; gen.js/mockup.py 만 추적)
+# 기획서 빌드 산출물·입력 자산 (재생성 가능/대용량; gen.js·mockup.py 만 추적)
 docs/_planbuild/*.png
+docs/_planbuild/*.jpg
+docs/_planbuild/*.jpeg
+docs/_planbuild/*.ai
