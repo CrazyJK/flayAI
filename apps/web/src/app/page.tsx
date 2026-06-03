@@ -40,34 +40,22 @@ type VideoHit = {
   score_breakdown?: { semantic: number; fts: number; usage: number; recency: number };
 };
 
-// 점수 기여도 막대 정의 (의미/키워드/인기/최근)
-const SCORE_BARS = [
-  { key: "semantic", label: "의미", color: "bg-blue-400" },
-  { key: "fts", label: "키워드", color: "bg-emerald-400" },
-  { key: "usage", label: "인기", color: "bg-amber-400" },
-  { key: "recency", label: "최근", color: "bg-violet-400" },
+// 점수 기여도 신호 (의미/키워드/인기/최근) — 한 줄 텍스트로 표시
+const SCORE_SIGNALS = [
+  { key: "semantic", label: "의미" },
+  { key: "fts", label: "키워드" },
+  { key: "usage", label: "인기" },
+  { key: "recency", label: "최근" },
 ] as const;
 
-function ScoreBars({ b }: { b: NonNullable<VideoHit["score_breakdown"]> }) {
+// 0~1 정규화 기여도를 100점 만점 정수로 (2자리 0-패딩, 예: 0.96→"96", 0→"00")
+const pct100 = (v: number) =>
+  String(Math.round(Math.max(0, Math.min(1, v)) * 100)).padStart(2, "0");
+
+function ScoreLine({ b }: { b: NonNullable<VideoHit["score_breakdown"]> }) {
   return (
-    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5">
-      {SCORE_BARS.map(({ key, label, color }) => {
-        const v = Math.max(0, Math.min(1, b[key] ?? 0));
-        return (
-          <div key={key} className="flex items-center gap-1 text-[9px] leading-none">
-            <span className="w-6 shrink-0 text-neutral-300">{label}</span>
-            <span className="flex-1 h-1 rounded-full bg-white/25 overflow-hidden">
-              <span
-                className={`block h-full rounded-full ${color}`}
-                style={{ width: `${Math.round(v * 100)}%` }}
-              />
-            </span>
-            <span className="w-5 shrink-0 text-right text-neutral-400 tabular-nums">
-              {v.toFixed(2).slice(1)}
-            </span>
-          </div>
-        );
-      })}
+    <div className="mt-1 text-[10px] text-neutral-300 font-mono tabular-nums">
+      {SCORE_SIGNALS.map(({ key, label }) => `${label}: ${pct100(b[key] ?? 0)}`).join(", ")}
     </div>
   );
 }
@@ -176,8 +164,8 @@ function VideoCard({ hit }: { hit: VideoHit }) {
             <span title="좋아요 수">💛 {hit.like_count}</span>
           )}
         </div>
-        {/* 채택 근거: 의미/키워드/인기/최근 기여도(결과셋 내 상대값) */}
-        {hit.score_breakdown && <ScoreBars b={hit.score_breakdown} />}
+        {/* 채택 근거: 의미/키워드/인기/최근 기여도(결과셋 내 상대값, 100점 만점) */}
+        {hit.score_breakdown && <ScoreLine b={hit.score_breakdown} />}
       </div>
     </div>
   );
