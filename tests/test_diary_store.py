@@ -125,12 +125,14 @@ def test_asset_names_from_html():
 
 
 def test_image_caption_cache_roundtrip(conn):
-    store.save_image_caption(conn, "a1.png", "강아지 사진")
-    assert store.get_image_captions(conn, ["a1.png", "none.png"]) == {"a1.png": "강아지 사진"}
+    store.save_image_caption(conn, "a1.png", "강아지 사진", "sig1")
+    assert store.get_image_captions(conn, ["a1.png", "none.png"], "sig1") == {"a1.png": "강아지 사진"}
+    # 시그니처(설정) 바뀌면 캐시 미스 → 재생성 대상
+    assert store.get_image_captions(conn, ["a1.png"], "sig2") == {}
 
 
 def test_recall_image_context_uses_cache(conn, monkeypatch):
-    # 캐시가 있으면 비전 모델을 호출하지 않아야(빠른 회상)
+    # 캐시(같은 sig)가 있으면 비전 모델을 호출하지 않아야(빠른 회상)
     import asyncio
 
     from packages.diary import chat
@@ -139,7 +141,8 @@ def test_recall_image_context_uses_cache(conn, monkeypatch):
         raise AssertionError("비전이 호출되면 안 됨")
 
     monkeypatch.setattr(chat, "describe_image_file", _boom)
-    store.save_image_caption(conn, "abc.png", "강아지가 소파에 앉아있다")
+    monkeypatch.setattr(chat, "_caption_sig", lambda: "S")
+    store.save_image_caption(conn, "abc.png", "강아지가 소파에 앉아있다", "S")
     sessions = [
         {
             "session_id": 7,
@@ -148,6 +151,27 @@ def test_recall_image_context_uses_cache(conn, monkeypatch):
     ]
     out = asyncio.run(chat._recall_image_context(conn, sessions))
     assert out.get(7) == "강아지가 소파에 앉아있다"
+
+
+def test_recall_image_context_regenerates_on_sig_change(conn, monkeypatch):
+    # 설정(sig) 이 바뀌면 옛 캡션은 미스 → 비전 재호출로 재생성 + 새 sig 저장
+    import asyncio
+
+    from packages.diary import chat
+
+    monkeypatch.setattr(chat, "_caption_sig", lambda: "NEW")
+    monkeypatch.setattr(chat, "describe_image_file", lambda *a, **k: "새 묘사")
+    monkeypatch.setattr(chat, "_crudify", lambda x: x)
+    store.save_image_caption(conn, "abc.png", "옛 묘사", "OLD")
+    sessions = [
+        {
+            "session_id": 7,
+            "transcript": {"messages": [{"raw_html": '<img src="/static/diary-assets/abc.png">'}]},
+        }
+    ]
+    out = asyncio.run(chat._recall_image_context(conn, sessions))
+    assert out.get(7) == "새 묘사"
+    assert store.get_image_captions(conn, ["abc.png"], "NEW") == {"abc.png": "새 묘사"}
 
 
 def test_sanitize_removes_model_noise():

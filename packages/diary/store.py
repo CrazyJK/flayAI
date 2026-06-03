@@ -103,24 +103,25 @@ def reset_diary(conn: sqlite3.Connection) -> None:
         log.warning("Qdrant diary 컬렉션 초기화 실패: %s", e)
 
 
-def get_image_captions(conn: sqlite3.Connection, assets: list[str]) -> dict[str, str]:
-    """첨부 이미지 캡션 캐시 조회: {asset: caption}."""
+def get_image_captions(conn: sqlite3.Connection, assets: list[str], sig: str) -> dict[str, str]:
+    """첨부 이미지 캡션 캐시 조회: {asset: caption}. sig 가 일치하는 것만(설정 바뀌면 미스)."""
     if not assets:
         return {}
     ph = ",".join("?" * len(assets))
     return {
         r["asset"]: r["caption"]
         for r in conn.execute(
-            f"SELECT asset, caption FROM diary_image_captions WHERE asset IN ({ph})", tuple(assets)
+            f"SELECT asset, caption FROM diary_image_captions WHERE sig = ? AND asset IN ({ph})",
+            (sig, *assets),
         )
     }
 
 
-def save_image_caption(conn: sqlite3.Connection, asset: str, caption: str) -> None:
+def save_image_caption(conn: sqlite3.Connection, asset: str, caption: str, sig: str) -> None:
     conn.execute(
-        "INSERT INTO diary_image_captions(asset, caption) VALUES(?,?) "
-        "ON CONFLICT(asset) DO UPDATE SET caption = excluded.caption",
-        (asset, caption),
+        "INSERT INTO diary_image_captions(asset, caption, sig) VALUES(?,?,?) "
+        "ON CONFLICT(asset) DO UPDATE SET caption = excluded.caption, sig = excluded.sig",
+        (asset, caption, sig),
     )
     conn.commit()
 

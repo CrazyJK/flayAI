@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
@@ -113,6 +114,19 @@ def _clean_context(text: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def _caption_sig() -> str:
+    """캡션 캐시 무효화 키: 비전 모델 + 묘사 프롬프트 + person_subs 해시.
+    이 중 하나라도 바뀌면 sig 가 달라져 기존 캡션은 미스 → 자동 재생성(수동 DELETE 불필요).
+    """
+    cfg = load_config()
+    parts = [
+        str(cfg["models"].get("vision") or ""),
+        prompts.vision_describe_prompt(),
+        json.dumps(prompts.person_subs(), ensure_ascii=False, sort_keys=True, default=str),
+    ]
+    return hashlib.sha1("\x00".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
 async def _recall_image_context(
     conn: sqlite3.Connection, sessions: list[dict], max_new: int = 4
 ) -> dict[int, str]:
@@ -123,6 +137,7 @@ async def _recall_image_context(
     DB 접근은 메인 스레드, 블로킹인 비전 호출만 to_thread 로(SQLite 는 스레드 공유 불가).
     """
     assets_dir = repo_path(load_config()["data"].get("diary_assets", "data/diary_assets"))
+    sig = _caption_sig()  # 설정(모델·프롬프트·치환) 바뀌면 자동 재생성
     out: dict[int, str] = {}
     new_count = 0
     for s in sessions:
@@ -134,14 +149,14 @@ async def _recall_image_context(
                     assets.append(a)
         if not assets:
             continue
-        cached = store.get_image_captions(conn, assets)
+        cached = store.get_image_captions(conn, assets, sig)
         descs: list[str] = []
         for a in assets:
             cap = cached.get(a)
             if not cap and new_count < max_new:
                 cap = _crudify(await asyncio.to_thread(describe_image_file, str(assets_dir / a)))
                 if cap:
-                    store.save_image_caption(conn, a, cap)
+                    store.save_image_caption(conn, a, cap, sig)
                     new_count += 1
             if cap:
                 descs.append(cap)

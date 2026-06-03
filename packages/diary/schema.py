@@ -50,9 +50,12 @@ CREATE VIRTUAL TABLE IF NOT EXISTS diary_messages_fts USING fts5(
 
 -- 일기 첨부 이미지 캡션 캐시(회상 시 사진을 보고 답하기 위함) -----------------
 -- asset = diary_assets 파일명(sha1.ext, 내용 고정 → 캡션 1회 생성 후 재사용).
+-- sig = 캡션 생성에 쓰인 설정(비전 모델·묘사 프롬프트·person_subs) 해시. 설정이 바뀌면
+--       sig 불일치로 캐시 미스 → 자동 재생성(수동 DELETE 불필요).
 CREATE TABLE IF NOT EXISTS diary_image_captions (
   asset    TEXT PRIMARY KEY,
-  caption  TEXT NOT NULL
+  caption  TEXT NOT NULL,
+  sig      TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -64,6 +67,9 @@ def init_diary_schema(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(diary_messages)")}
     if "indexed" not in cols:
         conn.execute("ALTER TABLE diary_messages ADD COLUMN indexed INTEGER NOT NULL DEFAULT 1")
+    cap_cols = {r[1] for r in conn.execute("PRAGMA table_info(diary_image_captions)")}
+    if cap_cols and "sig" not in cap_cols:
+        conn.execute("ALTER TABLE diary_image_captions ADD COLUMN sig TEXT NOT NULL DEFAULT ''")
     conn.commit()
 
 
