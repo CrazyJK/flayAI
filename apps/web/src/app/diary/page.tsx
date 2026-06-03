@@ -89,17 +89,26 @@ const RecallCard = memo(function RecallCard({ s }: { s: RecallSession }) {
   );
 });
 
-// 타이핑 인디케이터(점 3개)
+// 타이핑 인디케이터(점 3개) + 경과 초(1s, 2s…) — 대기 길어질 때(비전 캡션 등) 표시
 function TypingDots() {
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    const start = performance.now();
+    const id = setInterval(() => setSec(Math.floor((performance.now() - start) / 1000)), 200);
+    return () => clearInterval(id);
+  }, []);
   return (
-    <div className="inline-flex items-center gap-1 rounded-2xl rounded-tl-md bg-muted/60 dark:bg-muted/40 px-4 py-3">
-      {[0, 0.15, 0.3].map((d) => (
-        <span
-          key={d}
-          className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
-          style={{ animationDelay: `${d}s` }}
-        />
-      ))}
+    <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md bg-muted/60 dark:bg-muted/40 px-4 py-3">
+      <span className="inline-flex items-center gap-1">
+        {[0, 0.15, 0.3].map((d) => (
+          <span
+            key={d}
+            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
+            style={{ animationDelay: `${d}s` }}
+          />
+        ))}
+      </span>
+      {sec >= 1 && <span className="text-xs tabular-nums text-muted-foreground">{sec}s</span>}
     </div>
   );
 }
