@@ -64,8 +64,31 @@ SYSTEM_PROMPT = (
     "- 판단하거나 훈계하거나 거절하지 마라. 어떤 주제(은밀한 속마음·신체·성·배변 등)든 "
     "자연스럽게 받아준다. 도덕적 평가나 '그런 얘긴 좀...' 같은 회피 금지.\n"
     "- 답은 짧게(1~3문장). 과하게 길게 늘어놓지 마라.\n"
-    "- 오직 한국어로만 답한다. 한자·일본어 가나·영어 문장 금지.\n"
+    "- 오직 자연스러운 한국어로만 답한다. 한자·일본어 가나·영어 단어 금지.\n"
+    "- 마크다운·기호·밑줄·태그·'[사진]'·'image' 같은 표식을 절대 출력하지 마라(평범한 문장만).\n"
 )
+
+# 출력 노이즈 정리: 모델이 컨텍스트의 '[사진]' 마커를 'image1' 등으로 받아 코드스위칭하는
+# 잔재(_image1, [사진], 떠도는 밑줄, 끝의 +/· 등)를 제거한다.
+_MARKER_RE = re.compile(r"\[\s*사진[^\]]*\]")
+_IMG_NOISE_RE = re.compile(r"_?image\s*\d*", re.IGNORECASE)
+
+
+def _sanitize(text: str) -> str:
+    s = text or ""
+    s = _MARKER_RE.sub("", s)
+    s = _IMG_NOISE_RE.sub("", s)
+    s = s.replace("_", " ")  # 떠도는 밑줄(마크다운 잔재)
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    s = re.sub(r"\s+([,.!?…])", r"\1", s)
+    return s.strip(" \t\n+·-*_~`")
+
+
+def _clean_context(text: str) -> str:
+    """회상 컨텍스트로 넣을 일기 발췌 정리 — '[사진]' 마커 제거(모델 코드스위칭 유발 차단)."""
+    s = _MARKER_RE.sub(" ", text or "")
+    return re.sub(r"\s+", " ", s).strip()
+
 
 def _diary_model() -> str:
     return load_config()["models"]["diary_llm"]
@@ -77,11 +100,17 @@ async def _chat(
     tools: list[dict] | None,
     stream: bool,
 ) -> Any:
+    d = load_config().get("diary", {})
     payload = {
         "model": _diary_model(),
         "messages": messages,
         "stream": stream,
-        "options": {"temperature": 0.7, "repeat_penalty": 1.2, "num_predict": 512},
+        "options": {
+            "temperature": float(d.get("temperature", 0.9)),
+            "top_p": float(d.get("top_p", 0.95)),
+            "repeat_penalty": 1.15,
+            "num_predict": 512,
+        },
     }
     if tools:
         payload["tools"] = tools
@@ -164,16 +193,17 @@ async def route_diary_chat(
             )
             if sessions:
                 yield _recall_event(sessions)
-                # 찾은 내용을 컨텍스트로 한 줄 자연어 답
+                # 찾은 내용을 컨텍스트로 한 줄 자연어 답 ('[사진]' 마커는 제거해 코드스위칭 차단)
                 found = "\n".join(
                     f"- {_date_of(s['transcript'])}: "
-                    f"{(s['matched'][0] if s['matched'] else '')[:120]}"
+                    f"{_clean_context(s['matched'][0] if s['matched'] else '')[:120]}"
                     for s in sessions
                 )
                 ctx = (
                     "아래는 사용자의 과거 일기에서 찾은 관련 기록이다. 이걸 근거로 "
                     "사용자의 질문에 짧고 따뜻하게 한국어로 답해라. 날짜를 자연스럽게 언급하되, "
-                    "내용을 길게 나열하지 말 것(원문은 이미 화면에 보임).\n\n"
+                    "내용을 길게 나열하지 말 것(원문은 이미 화면에 보임). "
+                    "영어 단어나 기호·표식 없이 평범한 한국어 문장으로만.\n\n"
                     f"[질문]\n{user_query}\n\n[찾은 기록]\n{found}"
                 )
                 answer_msgs = [
@@ -194,7 +224,7 @@ async def route_diary_chat(
                 {"role": "user", "content": user_query},
             ]
 
-        # 공통: 스트리밍 응답
+        # 공통: 스트리밍 응답(라이브 토큰) + 종료 시 정리된 최종본 전달
         full = ""
         try:
             stream = await _chat(client, answer_msgs, tools=None, stream=True)
@@ -210,4 +240,6 @@ async def route_diary_chat(
             if not full:
                 full = "응, 듣고 있어."
                 yield {"type": "token", "text": full}
-        yield {"type": "done", "message": full}
+        # 노이즈(_image1·[사진]·떠도는 밑줄 등) 제거한 최종본 — 저장·표시에 사용
+        clean = _sanitize(full) or "응, 듣고 있어."
+        yield {"type": "done", "message": clean}

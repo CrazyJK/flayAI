@@ -218,9 +218,10 @@ export default function DiaryPage() {
                 updateAssistant(asstId, (m) => ({ ...m, text: m.text + String(ev.text ?? "") }));
                 break;
               case "done":
+                // 정리된 최종본으로 교체(스트리밍 중 섞인 노이즈를 done 에서 정정)
                 updateAssistant(asstId, (m) => ({
                   ...m,
-                  text: m.text || String(ev.message ?? ""),
+                  text: String(ev.message ?? m.text),
                   status: "done",
                 }));
                 break;

@@ -115,20 +115,25 @@ async def diary_chat(req: DiaryChatRequest):
         # 세션 식별자를 먼저 알려 프론트가 이어쓰기 가능하게
         yield _emit({"type": "session", "session_id": session_id})
         full = ""
+        final = ""
         try:
             async for ev in route_diary_chat(
                 conn, reply_query, history=history, exclude_message_id=user_msg_id
             ):
-                if ev.get("type") == "token":
+                t = ev.get("type")
+                if t == "token":
                     full += str(ev.get("text") or "")
+                elif t == "done":
+                    final = str(ev.get("message") or "")
                 yield _emit(ev)
         except Exception as e:
             log.exception("diary chat error: %s", e)
             yield _emit({"type": "error", "message": str(e)})
         finally:
-            # 어시스턴트 응답 저장(임베딩 안 함 — 회상 대상은 내 말 위주)
-            if full.strip():
-                store.add_message(conn, session_id, "assistant", full, embed=False)
+            # 어시스턴트 응답 저장 — 정리된 최종본(done) 우선(임베딩 안 함: 회상 대상은 내 말 위주)
+            saved = (final or full).strip()
+            if saved:
+                store.add_message(conn, session_id, "assistant", saved, embed=False)
             conn.close()
 
     return StreamingResponse(
