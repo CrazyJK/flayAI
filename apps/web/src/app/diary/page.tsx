@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
+const MAX_IMAGES = 8;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB (config.upload_max_bytes 와 일치)
 
 // 회상된 과거 세션(그때 일기 원문 전체)
 type RecallMessage = {
@@ -25,6 +27,7 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  images?: string[]; // 사용자 첨부 이미지(미리보기 dataURL)
   recall?: RecallSession[];
   status: "streaming" | "done" | "error" | "aborted";
   error?: string;
@@ -104,11 +107,35 @@ function AssistantBlock({ msg }: { msg: Message }) {
 export default function DiaryPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [pending, setPending] = useState<string[]>([]); // 전송 대기 첨부 이미지(dataURL)
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const readAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = () => reject(fr.error);
+      fr.readAsDataURL(file);
+    });
+
+  const addFiles = useCallback(async (files: FileList | null) => {
+    if (!files) return;
+    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const urls: string[] = [];
+    for (const f of imgs) {
+      if (f.size > MAX_IMAGE_BYTES) {
+        alert(`${f.name} 은(는) 10MB 를 넘어 건너뜁니다.`);
+        continue;
+      }
+      urls.push(await readAsDataUrl(f));
+    }
+    if (urls.length) setPending((prev) => [...prev, ...urls].slice(0, MAX_IMAGES));
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,15 +149,17 @@ export default function DiaryPage() {
     abortRef.current?.abort();
     setMessages([]);
     setSessionId(null);
+    setPending([]);
   }, []);
 
   const send = useCallback(
-    async (query: string) => {
-      if (!query.trim() || busy) return;
+    async (query: string, images: string[] = []) => {
+      if ((!query.trim() && images.length === 0) || busy) return;
       const userMsg: Message = {
         id: `u-${Date.now()}`,
         role: "user",
         text: query,
+        images: images.length ? images : undefined,
         status: "done",
       };
       const asstId = `a-${Date.now()}`;
@@ -144,7 +173,11 @@ export default function DiaryPage() {
         const r = await fetch(`${API_BASE}/api/diary/chat`, {
           method: "POST",
           headers: { "content-type": "application/json", accept: "text/event-stream" },
-          body: JSON.stringify({ query, session_id: sessionId ?? undefined }),
+          body: JSON.stringify({
+            query,
+            session_id: sessionId ?? undefined,
+            images: images.length ? images : undefined,
+          }),
           signal: ac.signal,
         });
         if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`);
@@ -249,8 +282,21 @@ export default function DiaryPage() {
           {messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
-                <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%] whitespace-pre-wrap">
-                  {m.text}
+                <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%] space-y-2">
+                  {m.images && m.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {m.images.map((src, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={src}
+                          alt="첨부 이미지"
+                          className="max-h-48 rounded-md border border-blue-500/30"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
                 </div>
               </div>
             ) : (
@@ -271,12 +317,59 @@ export default function DiaryPage() {
         onSubmit={(e) => {
           e.preventDefault();
           const q = input;
+          const imgs = pending;
           setInput("");
+          setPending([]);
           if (taRef.current) taRef.current.style.height = "auto";
-          void send(q);
+          void send(q, imgs);
         }}
       >
+        {/* 첨부 이미지 미리보기 */}
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {pending.map((src, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="첨부 미리보기" className="h-16 w-16 object-cover rounded-md border border-border" />
+                <button
+                  type="button"
+                  onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label="첨부 제거"
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none flex items-center justify-center hover:bg-black"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-end gap-2 rounded-2xl border border-border bg-card px-3 py-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30">
+          {/* 이미지 첨부 */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              void addFiles(e.target.files);
+              e.target.value = ""; // 같은 파일 재선택 허용
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy || pending.length >= MAX_IMAGES}
+            title="사진 첨부"
+            aria-label="사진 첨부"
+            className="shrink-0 text-muted-foreground hover:text-blue-500 disabled:opacity-30"
+          >
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+            </svg>
+          </button>
           <textarea
             ref={taRef}
             rows={1}
@@ -316,7 +409,7 @@ export default function DiaryPage() {
               type="submit"
               title="전송"
               aria-label="전송"
-              disabled={!input.trim()}
+              disabled={!input.trim() && pending.length === 0}
               className="shrink-0 text-muted-foreground hover:text-blue-500 disabled:opacity-30"
             >
               <svg

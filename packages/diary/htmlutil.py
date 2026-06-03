@@ -20,6 +20,11 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# data:image/<subtype>;base64,<payload> (업로드 data URL 분해용)
+_DATA_URL_RE = re.compile(
+    r"^data:image/(?P<ext>[a-zA-Z0-9.+-]+);base64,(?P<data>.+)$", re.IGNORECASE | re.DOTALL
+)
+
 # data:image/<subtype>;base64,<payload>  (img src 안)
 _DATA_IMG_RE = re.compile(
     r'src\s*=\s*"data:image/(?P<ext>[a-zA-Z0-9.+-]+);base64,(?P<data>[^"]+)"',
@@ -75,3 +80,50 @@ def extract_images(html: str, assets_dir: Path, url_prefix: str = "/static/diary
         return f'src="{url_prefix}/{name}"'
 
     return _DATA_IMG_RE.sub(_repl, html)
+
+
+def _split_data_url(data: str) -> tuple[str, str]:
+    """업로드 이미지(data URL 또는 순수 base64) → (ext, base64payload)."""
+    m = _DATA_URL_RE.match(data.strip())
+    if m:
+        return _EXT_MAP.get(m.group("ext").lower(), "bin"), m.group("data").strip()
+    return "jpg", data.strip()  # 접두사 없는 순수 base64 는 jpg 가정
+
+
+def save_upload_image(
+    data: str, assets_dir: Path, url_prefix: str = "/static/diary-assets"
+) -> str | None:
+    """업로드 이미지(data URL/base64)를 assets_dir 로 저장하고 '{url_prefix}/{name}' 반환.
+
+    파일명은 내용 해시(SHA1) — 중복 저장 방지(멱등). 디코드 실패 시 None.
+    """
+    ext, payload = _split_data_url(data)
+    try:
+        blob = base64.b64decode(payload, validate=False)
+    except (binascii.Error, ValueError) as e:
+        log.warning("업로드 이미지 디코드 실패: %s", e)
+        return None
+    if not blob:
+        return None
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{hashlib.sha1(blob).hexdigest()}.{ext}"
+    out = assets_dir / name
+    if not out.exists():
+        out.write_bytes(blob)
+    return f"{url_prefix}/{name}"
+
+
+def to_base64_payload(data: str) -> str:
+    """data URL 이면 base64 본문만, 순수 base64 면 그대로 — Ollama images 인자용."""
+    return _split_data_url(data)[1]
+
+
+def build_message_html(text: str, image_urls: list[str]) -> str:
+    """사용자 텍스트 + 첨부 이미지 → 표시용 HTML(raw_html)."""
+    parts: list[str] = []
+    if text.strip():
+        safe = _html.escape(text).replace("\n", "<br>")
+        parts.append(f"<p>{safe}</p>")
+    for u in image_urls:
+        parts.append(f'<img src="{_html.escape(u, quote=True)}">')
+    return "".join(parts)

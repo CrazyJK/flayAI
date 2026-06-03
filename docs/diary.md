@@ -30,6 +30,21 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
 \+ 짧은 한글 키워드용 LIKE 부분매칭(똥·꿈·비 등 1~2글자) 결합. Qdrant 가 없으면 FTS+LIKE
 단독으로 graceful degrade.
 
+## 이미지 첨부 + 비전 분석
+
+대화에 사진을 첨부할 수 있고, 비전 모델이 그 사진을 분석해 반응한다.
+
+- 일기 챗 모델(EXAONE)은 텍스트 전용이라, **이미지가 붙은 턴은 비전 모델**
+  (`config.models.vision` = gemma-4-abliterated, 무검열 멀티모달)로 라우팅한다.
+- 흐름(`packages/diary/vision.describe_images` + 라우터 `_prepare_images`):
+  1. 첨부 이미지를 `data/diary_assets/`로 추출(raw_html 의 `<img>`).
+  2. 비전 모델이 한국어로 1~2문장 **사실 묘사**(caption) 생성.
+  3. caption 을 검색용 `content` 에 `[사진: …]`로 합류 → **나중에 사진 내용으로도 회상** 가능.
+  4. 일기 텍스트 모델이 caption 을 컨텍스트로 받아 사진에 **공감하는 답**을 한다.
+- 전송: 프론트가 base64 data URL 을 `POST /api/diary/chat` 의 `images[]`(최대 8장,
+  장당 10MB)로 실어 보낸다. 비전 호출은 블로킹이라 `asyncio.to_thread` 로 처리.
+- 사진은 사용자 버블·회상 카드에 그대로 보인다(레거시 일기 사진과 동일 경로로 서빙).
+
 ## 데이터 모델
 
 - `diary_sessions(id, started_at, ended_at, title, weather, summary, source_key)`
@@ -68,7 +83,7 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| POST | `/api/diary/chat` | (SSE) 일상 대화 + 회상. `{query, session_id?}` |
+| POST | `/api/diary/chat` | (SSE) 일상 대화 + 회상 + 이미지. `{query, session_id?, images?[]}` |
 | GET | `/api/diary/sessions` | 세션 목록(히스토리) |
 | GET | `/api/diary/sessions/{id}` | 세션 transcript |
 | GET | `/static/diary-assets/{name}` | 임포트된 일기 이미지 서빙 |

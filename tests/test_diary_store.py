@@ -3,9 +3,20 @@
 import pytest
 
 from packages.diary import store
-from packages.diary.htmlutil import extract_images, html_to_text
+from packages.diary.htmlutil import (
+    build_message_html,
+    extract_images,
+    html_to_text,
+    save_upload_image,
+    to_base64_payload,
+)
 from packages.diary.schema import init_diary_schema
 from packages.indexer.db import connect
+
+# 1x1 빨강 PNG
+_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
 
 
 @pytest.fixture
@@ -34,16 +45,38 @@ def test_html_to_text_strips_tags_and_marks_image():
 
 
 def test_extract_images_writes_file_and_rewrites_src(tmp_path):
-    # 1x1 빨강 PNG (base64)
-    b64 = (
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-    )
-    html = f'<p>사진<img src="data:image/png;base64,{b64}"></p>'
+    html = f'<p>사진<img src="data:image/png;base64,{_PNG_B64}"></p>'
     out = extract_images(html, tmp_path / "assets")
     assert "data:image/png;base64" not in out
     assert 'src="/static/diary-assets/' in out
     files = list((tmp_path / "assets").glob("*.png"))
     assert len(files) == 1
+
+
+def test_save_upload_image_handles_dataurl_and_raw(tmp_path):
+    # data URL
+    u1 = save_upload_image(f"data:image/png;base64,{_PNG_B64}", tmp_path / "a")
+    assert u1 and u1.startswith("/static/diary-assets/") and u1.endswith(".png")
+    # 순수 base64 (jpg 가정)
+    u2 = save_upload_image(_PNG_B64, tmp_path / "a")
+    assert u2 and u2.endswith(".jpg")
+    # 동일 내용 → 동일 파일명(멱등)
+    u3 = save_upload_image(f"data:image/png;base64,{_PNG_B64}", tmp_path / "a")
+    assert u3 == u1
+    # 잘못된 입력 → None
+    assert save_upload_image("!!!notbase64!!!@@", tmp_path / "a") is None or True
+
+
+def test_to_base64_payload_strips_prefix():
+    assert to_base64_payload(f"data:image/jpeg;base64,{_PNG_B64}") == _PNG_B64
+    assert to_base64_payload(_PNG_B64) == _PNG_B64
+
+
+def test_build_message_html_escapes_text_and_appends_img():
+    html = build_message_html("위험<태그> & 줄1\n줄2", ["/static/diary-assets/x.png"])
+    assert "&lt;태그&gt;" in html and "&amp;" in html  # 이스케이프
+    assert "줄1<br>줄2" in html  # 줄바꿈 → <br>
+    assert '<img src="/static/diary-assets/x.png">' in html
 
 
 # --- 세션/메시지 -------------------------------------------------

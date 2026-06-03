@@ -156,6 +156,7 @@ models_cache/
 data/qdrant/
 data/sqlite/
 data/state.json
+data/diary_assets/
 *.sqlite
 *.sqlite3
 *.db
