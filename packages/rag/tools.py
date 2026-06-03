@@ -56,7 +56,7 @@ def _video_to_hit(conn, opus: str, scored=None) -> dict | None:
         for r in conn.execute("SELECT canonical_name FROM video_actresses WHERE opus = ?", (opus,))
     ]
     poster = conn.execute(
-        "SELECT path, video_path, kind FROM posters WHERE opus = ?", (opus,)
+        "SELECT path, video_path, kind, caption FROM posters WHERE opus = ?", (opus,)
     ).fetchone()
     out: dict[str, Any] = {
         "opus": v["opus"],
@@ -76,6 +76,8 @@ def _video_to_hit(conn, opus: str, scored=None) -> dict | None:
         "poster_path": poster["path"] if poster else None,
         "video_path": poster["video_path"] if poster else None,
         "playable": bool(poster and poster["video_path"]),
+        # 채택 이유(키워드 매칭) 표시용 — 프론트에서 질의어와 대조
+        "caption": poster["caption"] if poster else None,
     }
     if scored is not None:
         out["score"] = round(scored.final_score, 4)

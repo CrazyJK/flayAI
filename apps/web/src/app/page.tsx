@@ -38,7 +38,87 @@ type VideoHit = {
   score?: number;
   // 채택 근거: ranker 의 정규화 기여도(결과셋 내 상대값, 0~1). 메타전용 질의엔 없음.
   score_breakdown?: { semantic: number; fts: number; usage: number; recency: number };
+  caption?: string | null; // 채택 이유(키워드 매칭) 표시용
 };
+
+// 채택 이유 문장 생성용 — 질의에서 무시할 흔한 단어(조사·동사·일반어)
+const REASON_STOPWORDS = new Set([
+  "영상",
+  "보여줘",
+  "보여",
+  "추천",
+  "해줘",
+  "찾아",
+  "찾아줘",
+  "나오는",
+  "나온",
+  "있는",
+  "하는",
+  "그리고",
+  "또는",
+  "느낌",
+  "같은",
+  "관련",
+]);
+
+// 질의어 중 hit 텍스트(캡션·제목·배우 등)에 실제로 등장하는 키워드 추출.
+// 한국어 조사 대응: 끝 글자를 하나씩 떼며 본문 포함 여부 확인(최소 2자). 최대 4개.
+function matchedKeywords(query: string, haystack: string): string[] {
+  if (!query || !haystack) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of query.split(/[\s,./·]+/)) {
+    const tok = raw.trim();
+    if (tok.length < 2 || REASON_STOPWORDS.has(tok)) continue;
+    let cand = tok;
+    let found = "";
+    while (cand.length >= 2) {
+      if (haystack.includes(cand)) {
+        found = cand;
+        break;
+      }
+      cand = cand.slice(0, -1);
+    }
+    if (found) {
+      // 표시용으로 끝 조사 제거(소파에→소파, 온천에서→온천). 남은 어간이 2자 미만이면 원형 유지.
+      const stem = found.replace(
+        /(에서|에게서|에게|으로서|으로|부터|까지|에|은|는|이|가|을|를|와|과|이랑|랑|도|만|의|께)$/,
+        ""
+      );
+      const disp = stem.length >= 2 ? stem : found;
+      if (!seen.has(disp) && !REASON_STOPWORDS.has(disp)) {
+        seen.add(disp);
+        out.push(disp);
+        if (out.length >= 4) break;
+      }
+    }
+  }
+  return out;
+}
+
+// hit + 질의 → 사람이 읽는 채택 이유 한 줄(규칙 기반, LLM 미사용).
+function buildReason(hit: VideoHit, query: string): string {
+  const b = hit.score_breakdown;
+  const haystack = [hit.caption, hit.title, hit.title_ko, hit.title_jp, hit.studio, ...(hit.actresses ?? [])]
+    .filter(Boolean)
+    .join(" ");
+  const kws = matchedKeywords(query, haystack);
+  const parts: string[] = [];
+  if (kws.length) parts.push(`키워드 ${kws.map((w) => `'${w}'`).join("·")} 일치`);
+  if (b) {
+    if (!kws.length && b.semantic >= 0.5) parts.push("의미가 유사");
+    else if (kws.length && b.semantic >= 0.7) parts.push("의미도 유사");
+    if (b.usage >= 0.6) {
+      const bits: string[] = [];
+      if ((hit.play ?? 0) > 0) bits.push(`재생 ${hit.play}`);
+      if ((hit.rank ?? 0) > 0) bits.push(`평점 ${hit.rank}`);
+      parts.push(bits.length ? `인기작(${bits.join("·")})` : "인기작");
+    }
+    if (b.recency >= 0.5) parts.push("최근 본 영상");
+  }
+  if (!parts.length) parts.push("관련도 기반 선택");
+  return parts.join(" · ");
+}
 
 // 점수 기여도 신호 (의미/키워드/인기/최근) — 한 줄 텍스트로 표시
 const SCORE_SIGNALS = [
@@ -110,9 +190,10 @@ function openFlayPopup(opus: string) {
   );
 }
 
-function VideoCard({ hit }: { hit: VideoHit }) {
+function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
   const title = hit.title || hit.title_ko || hit.title_jp || hit.opus;
   const posterUrl = `${API_BASE}/static/posters/${encodeURIComponent(hit.opus)}`;
+  const reason = buildReason(hit, query);
   return (
     <div
       className="relative aspect-[400/269] rounded-md overflow-hidden border border-border cursor-pointer"
@@ -166,6 +247,12 @@ function VideoCard({ hit }: { hit: VideoHit }) {
         </div>
         {/* 채택 근거: 의미/키워드/인기/최근 기여도(결과셋 내 상대값, 100점 만점) */}
         {hit.score_breakdown && <ScoreLine b={hit.score_breakdown} />}
+        {/* 사람이 읽는 채택 이유 — 한 줄(넘치면 …), 호버 시 전체 표시 */}
+        {reason && (
+          <div className="mt-0.5 text-[10px] text-neutral-400 truncate" title={reason}>
+            ↳ {reason}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -196,6 +283,10 @@ function ToolCallChip({ ev }: { ev: ToolEvent }) {
 }
 
 function AssistantBlock({ msg }: { msg: Message }) {
+  // 채택 이유(키워드 매칭)용 — 실제 search_videos 에 넘어간 질의어
+  const searchQuery = String(
+    msg.toolCalls.find((c) => c.name === "search_videos")?.args?.query ?? ""
+  );
   // 모든 toolResults의 VideoHit를 opus 기준으로 중복 제거하여 합산
   const allHits: VideoHit[] = [];
   const seenOpus = new Set<string>();
@@ -224,7 +315,7 @@ function AssistantBlock({ msg }: { msg: Message }) {
           <div className="text-xs text-muted-foreground font-mono text-center">↳ {allHits.length} items</div>
           <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(440px,1fr))]">
             {allHits.map((h) => (
-              <VideoCard key={h.opus} hit={h} />
+              <VideoCard key={h.opus} hit={h} query={searchQuery} />
             ))}
           </div>
         </div>
