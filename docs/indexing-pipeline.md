@@ -58,8 +58,10 @@
 
 ### 4. `fts` — FTS5 인덱스 (M1)
 
-- 가상 테이블 `videos_fts` (title_jp + title_ko + desc_ko + studio + actresses + tags).
-- 사용처: 키워드 매칭 (BM25). 의미 검색만으론 약한 정확한 이름 매칭에 강함.
+- 가상 테이블 `videos_fts` (title_jp, title_ko, desc_jp, desc_ko, comment, **caption**) — trigram.
+- caption(포스터 VLM 캡션)도 인덱싱 → "소파/수영복/교실/해변" 같은 **시각 키워드**를 BM25 정확 매칭으로 검색(의미검색 희석 보완). `posters.caption` 을 LEFT JOIN 해 채운다.
+- 사용처: 키워드 매칭 (BM25). 의미 검색만으론 약한 정확한 이름·시각 키워드 매칭에 강함.
+- ⚠️ trigram 한계: **2글자 미만 키워드는 매칭 불가**(소파·교실 등 2자어는 의미검색 경로가 담당). 3자+ 키워드(수영복·비키니 등)에 특히 강함.
 
 ### 5. `translate` — JP → KO 번역 (M2)
 

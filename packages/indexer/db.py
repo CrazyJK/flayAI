@@ -7,10 +7,13 @@ AI_PLAN.md §5.1 의 스키마를 그대로 구현.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
 from packages.settings import load_config, repo_path
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 -- 영상 ----------------------------------------------------------------
@@ -39,8 +42,10 @@ CREATE INDEX IF NOT EXISTS idx_videos_rank       ON videos(rank DESC, last_play 
 CREATE INDEX IF NOT EXISTS idx_videos_kind       ON videos(kind);
 
 -- FTS5 trigram (한/일 부분매칭) ----------------------------------------
+-- caption: 포스터 VLM 캡션(장소/의상/소품 등 시각 속성)도 인덱싱 → "소파/수영복/교실"
+-- 같은 시각 키워드를 BM25 정확 매칭으로 검색(의미검색 희석 보완). posters.caption 에서 채움.
 CREATE VIRTUAL TABLE IF NOT EXISTS videos_fts USING fts5(
-  opus UNINDEXED, title_jp, title_ko, desc_jp, desc_ko, comment,
+  opus UNINDEXED, title_jp, title_ko, desc_jp, desc_ko, comment, caption,
   tokenize = 'trigram'
 );
 
@@ -212,6 +217,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     # 마이그레이션 (기존 DB 대비)
     _ensure_column(conn, "posters", "caption", "TEXT")  # 포스터 VLM 캡션
+    # videos_fts 에 caption 컬럼 추가 — FTS5 는 ALTER 불가라 드롭 후 재생성(다음 fts_rebuild 로 채움).
+    fts_cols = {r[1] for r in conn.execute("PRAGMA table_info(videos_fts)")}
+    if fts_cols and "caption" not in fts_cols:
+        conn.execute("DROP TABLE IF EXISTS videos_fts")
+        conn.executescript(SCHEMA)  # IF NOT EXISTS — 빠진 videos_fts 만 새 스키마로 재생성
+        log.info("videos_fts 재생성(caption 컬럼 추가) — fts 재구축 필요")
     conn.commit()
 
 
@@ -238,14 +249,16 @@ def save_embed_sigs(conn: sqlite3.Connection, collection: str, items: list[tuple
 
 
 def fts_rebuild(conn: sqlite3.Connection) -> None:
-    """videos_fts 를 videos 기반으로 재구축."""
+    """videos_fts 를 videos + posters.caption 기반으로 재구축."""
     conn.execute("DELETE FROM videos_fts")
     conn.execute("""
-        INSERT INTO videos_fts (opus, title_jp, title_ko, desc_jp, desc_ko, comment)
-        SELECT opus,
-               COALESCE(title_jp, ''), COALESCE(title_ko, ''),
-               COALESCE(desc_jp,  ''), COALESCE(desc_ko,  ''),
-               COALESCE(comment,  '')
-        FROM videos
+        INSERT INTO videos_fts (opus, title_jp, title_ko, desc_jp, desc_ko, comment, caption)
+        SELECT v.opus,
+               COALESCE(v.title_jp, ''), COALESCE(v.title_ko, ''),
+               COALESCE(v.desc_jp,  ''), COALESCE(v.desc_ko,  ''),
+               COALESCE(v.comment,  ''),
+               COALESCE(p.caption,  '')
+        FROM videos v
+        LEFT JOIN posters p ON p.opus = v.opus
         """)
     conn.commit()
