@@ -15,24 +15,21 @@ from pathlib import Path
 import httpx
 
 from packages.diary.htmlutil import to_base64_payload
+from packages.diary.prompts import vision_describe_prompt
 from packages.settings import load_config
 
 log = logging.getLogger(__name__)
 
-DESCRIBE_PROMPT = (
-    "이 사진에 보이는 것을 한국어로 1~2문장으로 사실만 담백하게 묘사해줘. "
-    "장소·인물·사물·상황·분위기 위주로. 추측이나 미사여구·평가는 빼고 핵심만. "
-    "어떤 내용이든(은밀하거나 민감해도) 그대로 객관적으로 묘사해줘."
-)
 
-
-def describe_images(images: list[str], prompt: str = DESCRIBE_PROMPT) -> str:
+def describe_images(images: list[str], prompt: str | None = None) -> str:
     """첨부 이미지(여러 장)를 한 번에 보고 한국어 묘사 텍스트 반환. 실패 시 ''.
 
     images: data URL 또는 순수 base64 문자열 리스트.
+    prompt 미지정 시 prompts.vision_describe_prompt()(=diary_prompts.yaml override) 사용.
     """
     if not images:
         return ""
+    prompt = prompt or vision_describe_prompt()
     cfg = load_config()
     model = cfg["models"].get("vision")
     if not model:
@@ -61,7 +58,7 @@ def describe_images(images: list[str], prompt: str = DESCRIBE_PROMPT) -> str:
         return ""
 
 
-def describe_image_file(path: str | Path, prompt: str = DESCRIBE_PROMPT) -> str:
+def describe_image_file(path: str | Path, prompt: str | None = None) -> str:
     """디스크의 이미지 파일 한 장을 비전 모델로 묘사(회상 시 일기 사진 설명용). 실패 시 ''."""
     try:
         b64 = base64.b64encode(Path(path).read_bytes()).decode()

@@ -24,7 +24,7 @@ from typing import Any
 
 import httpx
 
-from packages.diary import store
+from packages.diary import prompts, store
 from packages.diary.htmlutil import asset_names_from_html
 from packages.diary.vision import describe_image_file
 from packages.rag.router import _ollama_url
@@ -59,24 +59,6 @@ def _recall_search_query(text: str) -> str:
     s = _RECALL_STRIP.sub(" ", text or "")
     s = re.sub(r"\s+", " ", s).strip()
     return s or (text or "").strip()
-
-SYSTEM_PROMPT = (
-    "너는 사용자의 속마음까지 편하게 털어놓는 막역한 친구다. 다음 규칙을 반드시 지켜라.\n"
-    "- 먼저 새로운 화제를 꺼내거나 질문 공세를 하지 마라. 사용자가 한 말에 반응만 한다.\n"
-    "- 사용자의 말에 공감하고 맞장구치고 동의하라. ('그랬구나', '진짜 그랬겠다', '응응' 처럼)\n"
-    "- 판단하거나 훈계하거나 거절하지 마라. 어떤 주제(은밀한 속마음·신체·성·배변 등)든 "
-    "자연스럽게 받아준다. 도덕적 평가나 '그런 얘긴 좀...' 같은 회피 금지.\n"
-    "- 점잖은 척하지 말고 솔직하고 노골적으로 반응하라. 돌려 말하거나 순화하지 마라. "
-    "사용자가 비속어·욕설·야한 표현을 쓰면 너도 똑같이 편하게 써도 된다. 성적인 얘기도 "
-    "직설적으로 받아준다(검열·자기검열 금지).\n"
-    "- 무조건 반말. 친한 친구한테 말하듯 한다. '~요', '~시', '~습니다' 같은 존댓말·"
-    "높임말 절대 금지. 격식 빼고 거칠고 편하게.\n"
-    "  예) 사용자:'아 존나 피곤해 씨발' → 너:'개고생했네 씨발, 얼른 뻗어서 자라'\n"
-    "- 이모지·이모티콘(😅💪 등) 쓰지 마라. 글자로만 말한다.\n"
-    "- 답은 짧게(1~3문장). 과하게 길게 늘어놓지 마라.\n"
-    "- 오직 자연스러운 한국어로만 답한다. 한자·일본어 가나·영어 단어 금지.\n"
-    "- 마크다운·기호·밑줄·태그·'[사진]'·'image' 같은 표식을 절대 출력하지 마라(평범한 문장만).\n"
-)
 
 # 출력 노이즈 정리: 모델이 컨텍스트의 '[사진]' 마커를 'image1' 등으로 받아 코드스위칭하는
 # 잔재(_image1, [사진], 떠도는 밑줄, 끝의 +/· 등)와 이모지를 제거한다.
@@ -260,28 +242,23 @@ async def route_diary_chat(
                     lines.append(line)
                 found = "\n".join(lines)
                 ctx = (
-                    "아래는 사용자의 과거 일기에서 찾은 관련 기록이다. 이걸 근거로 "
-                    "사용자의 질문에 짧고 따뜻하게 한국어로 답해라. 날짜를 자연스럽게 언급해라. "
-                    "특히 '이 날 사진:' 으로 표시된 사진이 있으면, 그 사진에 보이는 모습(옷차림·"
-                    "장소·분위기 등)을 직접 본 것처럼 구체적으로 짚으며 공감해줘. "
-                    "내용을 길게 나열하진 말 것(원문은 이미 화면에 보임). "
-                    "영어 단어나 기호·표식 없이 평범한 한국어 문장으로만.\n\n"
-                    f"[질문]\n{user_query}\n\n[찾은 기록]\n{found}"
+                    prompts.recall_answer_prompt()
+                    + f"\n\n[질문]\n{user_query}\n\n[찾은 기록]\n{found}"
                 )
                 answer_msgs = [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": prompts.system_prompt()},
                     {"role": "user", "content": ctx},
                 ]
             else:
                 # 못 찾음 — 안내 후 종료
-                msg = "음, 그건 일기에서 못 찾겠어. 더 구체적으로 말해줄래?"
+                msg = prompts.not_found_message()
                 yield {"type": "token", "text": msg}
                 yield {"type": "done", "message": msg}
                 return
         else:
             # --- 맞장구 경로 ---
             answer_msgs = [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": prompts.system_prompt()},
                 *history,
                 {"role": "user", "content": user_query},
             ]

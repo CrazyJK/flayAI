@@ -122,6 +122,19 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
 
 SSE 이벤트: `session`(session_id) → (`recall` 그때 일기 원문) → `token`* → `done`.
 
+## 프롬프트 커스터마이징 (말투·수위)
+
+LLM 페르소나/말투/사진묘사 지시는 **`diary_prompts.yaml`(repo 루트, gitignore 됨)** 에서
+조정한다. 개인 취향·수위가 git 에 올라가지 않도록 한 구조:
+
+- 코드(`packages/diary/prompts.py`)에는 **점잖은 기본값**만 있고(공개 저장소엔 순화본),
+  `diary_prompts.yaml` 이 있으면 그 값으로 키별 덮어쓴다(없으면 기본값 → 신규 클론도 동작).
+- 키: `system`(페르소나) · `recall_answer`(회상 답변 지시) · `not_found` · `vision_describe`.
+- 시작 틀은 `diary_prompts.example.yaml` 복사 → `diary_prompts.yaml` 로 저장 후 수정.
+- 수정 후 **API 재시작 필요**(자동 리로드 없음). 답변 다양성·과감함은 `config.diary.temperature`.
+- 주의: `vision_describe` 를 바꿔도 **이미 캐시된 캡션은 그대로**다. 다시 묘사하려면
+  `DELETE FROM diary_image_captions;`.
+
 ## 설정 (config.yaml)
 
 - `models.diary_llm`: `huihui_ai/exaone3.5-abliterated:7.8b` (영상 채팅 `llm` 과 분리)
