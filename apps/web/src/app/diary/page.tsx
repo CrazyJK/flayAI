@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
@@ -45,58 +45,88 @@ function withImageHost(html: string): string {
   return html.replaceAll('src="/static/diary-assets/', `src="${API_BASE}/static/diary-assets/`);
 }
 
-// 회상 카드: 그때 일기 한 건(날짜·제목·날씨 + 원문)
-function RecallCard({ s }: { s: RecallSession }) {
+// 회상 카드: 그때 일기 한 건(날짜·제목·날씨 + 원문). memo — 스트리밍 토큰마다 리렌더되어
+// 흔들리지 않게(부모 text 변경과 무관, s 참조 고정).
+const RecallCard = memo(function RecallCard({ s }: { s: RecallSession }) {
   return (
-    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 dark:bg-amber-400/5 p-3 space-y-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="font-mono text-amber-700 dark:text-amber-300">{s.date}</span>
-        {s.weather && <span>{WEATHER_ICON[s.weather] ?? s.weather}</span>}
-        {s.title && <span className="font-semibold text-foreground">{s.title}</span>}
+    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] dark:bg-amber-400/[0.05] px-4 py-3.5 shadow-sm">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-mono text-amber-700 dark:text-amber-300">
+          {s.date}
+        </span>
+        {s.weather && (
+          <span className="text-sm" title={s.weather}>
+            {WEATHER_ICON[s.weather] ?? s.weather}
+          </span>
+        )}
+        {s.title && (
+          <span className="text-sm font-semibold text-foreground truncate">{s.title}</span>
+        )}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {s.messages.map((m, i) =>
           m.raw_html ? (
             <div
               key={i}
-              className="diary-html text-sm leading-relaxed text-foreground [&_img]:max-w-full [&_img]:rounded-md [&_h3]:font-semibold"
+              className="diary-html text-sm leading-relaxed text-foreground/90 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-1.5 [&_h3]:font-semibold [&_p]:my-0.5"
               dangerouslySetInnerHTML={{ __html: withImageHost(m.raw_html) }}
             />
+          ) : m.role === "user" ? (
+            <p key={i} className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
+              {m.content}
+            </p>
           ) : (
-            <div
+            <p
               key={i}
-              className={
-                m.role === "user"
-                  ? "text-sm whitespace-pre-wrap text-foreground"
-                  : "text-sm whitespace-pre-wrap text-muted-foreground"
-              }
+              className="border-l-2 border-amber-500/20 pl-2.5 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap"
             >
               {m.content}
-            </div>
+            </p>
           )
         )}
       </div>
+    </div>
+  );
+});
+
+// 타이핑 인디케이터(점 3개)
+function TypingDots() {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-2xl rounded-tl-md bg-muted/60 dark:bg-muted/40 px-4 py-3">
+      {[0, 0.15, 0.3].map((d) => (
+        <span
+          key={d}
+          className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
+          style={{ animationDelay: `${d}s` }}
+        />
+      ))}
     </div>
   );
 }
 
 function AssistantBlock({ msg }: { msg: Message }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {msg.recall && msg.recall.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">↳ 그때 일기 {msg.recall.length}건</div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            그때 일기 {msg.recall.length}건
+          </div>
           {msg.recall.map((s) => (
             <RecallCard key={s.session_id} s={s} />
           ))}
         </div>
       )}
       {msg.text && (
-        <div className="whitespace-pre-wrap text-foreground leading-relaxed">{msg.text}</div>
+        <div className="inline-block max-w-[88%] rounded-2xl rounded-tl-md bg-muted/60 dark:bg-muted/40 px-4 py-2.5 text-[15px] leading-relaxed text-foreground whitespace-pre-wrap">
+          {msg.text}
+        </div>
       )}
-      {msg.status === "streaming" && !msg.text && (
-        <div className="text-xs text-muted-foreground animate-pulse">…</div>
-      )}
+      {msg.status === "streaming" && !msg.text && <TypingDots />}
       {msg.status === "error" && (
         <div className="text-xs text-red-600 dark:text-red-400">⚠ {msg.error}</div>
       )}
@@ -296,7 +326,7 @@ export default function DiaryPage() {
           {messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} data-mid={m.id} className="flex justify-end">
-                <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%] space-y-2">
+                <div className="rounded-2xl rounded-tr-md bg-blue-500 text-white dark:bg-blue-600 px-3.5 py-2.5 text-[15px] max-w-[82%] space-y-2 shadow-sm">
                   {m.images && m.images.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {m.images.map((src, i) => (
@@ -305,12 +335,12 @@ export default function DiaryPage() {
                           key={i}
                           src={src}
                           alt="첨부 이미지"
-                          className="max-h-48 rounded-md border border-blue-500/30"
+                          className="max-h-48 rounded-lg border border-white/20"
                         />
                       ))}
                     </div>
                   )}
-                  {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
+                  {m.text && <div className="whitespace-pre-wrap leading-relaxed">{m.text}</div>}
                 </div>
               </div>
             ) : (
