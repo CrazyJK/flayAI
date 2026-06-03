@@ -166,19 +166,34 @@ export default function DiaryPage() {
       fr.readAsDataURL(file);
     });
 
-  const addFiles = useCallback(async (files: FileList | null) => {
+  const addFiles = useCallback(async (files: FileList | File[] | null) => {
     if (!files) return;
     const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
     const urls: string[] = [];
     for (const f of imgs) {
       if (f.size > MAX_IMAGE_BYTES) {
-        alert(`${f.name} 은(는) 10MB 를 넘어 건너뜁니다.`);
+        alert(`${f.name || "이미지"} 은(는) 10MB 를 넘어 건너뜁니다.`);
         continue;
       }
       urls.push(await readAsDataUrl(f));
     }
     if (urls.length) setPending((prev) => [...prev, ...urls].slice(0, MAX_IMAGES));
   }, []);
+
+  // 클립보드에서 이미지(스샷 등) 붙여넣기 → 첨부
+  const onPaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.items ?? [])
+        .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+        .map((it) => it.getAsFile())
+        .filter((f): f is File => !!f);
+      if (files.length) {
+        e.preventDefault(); // 이미지일 때만 텍스트 입력 대신 첨부
+        void addFiles(files);
+      }
+    },
+    [addFiles]
+  );
 
   useEffect(() => {
     // 보낸 질문을 화면 맨 위로 올린다. 회상/답변 내용이 아래에 채워져야 올릴 수 있으므로
@@ -470,6 +485,7 @@ export default function DiaryPage() {
             value={input}
             disabled={busy}
             autoFocus
+            onPaste={onPaste}
             onChange={(e) => setInput(e.target.value)}
             onInput={(e) => {
               const ta = e.currentTarget;
