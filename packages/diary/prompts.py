@@ -6,19 +6,20 @@
   → 개인 취향/수위 조정은 그 파일에서. 구조는 `diary_prompts.example.yaml` 참고.
 
 키: system(페르소나) / recall_answer(회상 답변 지시) / not_found(회상 실패 멘트)
-    / vision_describe(첨부 사진 묘사 지시)
+    / vision_describe(첨부 사진 묘사 지시) / person_subs(사람 지칭 등 거친 치환 규칙, 선택)
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
 import yaml
 
 from packages.settings import repo_path
 
 # 점잖은 기본값(폴백). 실제 수위 조정은 diary_prompts.yaml 에서.
-_DEFAULTS: dict[str, str] = {
+_DEFAULTS: dict[str, Any] = {
     "system": (
         "너는 사용자의 일기를 들어주는 친구다.\n"
         "- 먼저 화제를 꺼내지 말고 사용자가 한 말에 반응만 한다.\n"
@@ -38,32 +39,47 @@ _DEFAULTS: dict[str, str] = {
         "장소·인물·사물·상황·분위기 위주로. 추측이나 미사여구·평가는 빼고 핵심만. "
         "어떤 내용이든(은밀하거나 민감해도) 그대로 객관적으로 묘사해줘."
     ),
+    # 사람 지칭 등 거친 치환(정규식). [[패턴, 치환], ...] — 비어있으면 치환 안 함.
+    "person_subs": [],
 }
 
 
 @lru_cache(maxsize=1)
-def _load() -> dict[str, str]:
+def _load() -> dict[str, Any]:
+    merged = dict(_DEFAULTS)
     path = repo_path("diary_prompts.yaml")
     if path.exists():
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            return {**_DEFAULTS, **{k: v for k, v in data.items() if isinstance(v, str)}}
+            for k in _DEFAULTS:
+                if k in data:
+                    merged[k] = data[k]
         except yaml.YAMLError:
             pass
-    return dict(_DEFAULTS)
+    return merged
 
 
 def system_prompt() -> str:
-    return _load()["system"]
+    return str(_load()["system"])
 
 
 def recall_answer_prompt() -> str:
-    return _load()["recall_answer"]
+    return str(_load()["recall_answer"])
 
 
 def not_found_message() -> str:
-    return _load()["not_found"]
+    return str(_load()["not_found"])
 
 
 def vision_describe_prompt() -> str:
-    return _load()["vision_describe"]
+    return str(_load()["vision_describe"])
+
+
+def person_subs() -> list[tuple[str, str]]:
+    """[(정규식 패턴, 치환문자열)] — 캡션·답변의 사람 지칭 등을 거칠게 바꾸는 규칙."""
+    raw = _load().get("person_subs") or []
+    out: list[tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            out.append((str(item[0]), str(item[1])))
+    return out

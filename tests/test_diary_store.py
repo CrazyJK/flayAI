@@ -154,13 +154,25 @@ def test_sanitize_removes_model_noise():
     from packages.diary.chat import _clean_context, _sanitize
 
     # 코드스위칭/마커 잔재 제거
-    out = _sanitize("정말 놀라웠겠다 싶어 공감돼요._image1 moment들 속에 아쉬움도 보이네요+ 😌💪")
+    out = _sanitize("개꼴리네 damn ᄏᄏ._image1 moment 보이네요+ 😌💪")
     assert "_image1" not in out and "image1" not in out and "[" not in out
     assert not out.endswith("+")
     assert "😌" not in out and "💪" not in out  # 이모지 제거
-    assert "공감돼요" in out and "아쉬움도" in out
+    assert "damn" not in out and "moment" not in out  # 영어 군더더기 제거
+    assert "ᄏ" not in out  # 깨진 조합 자모 제거
+    assert "개꼴리네" in out
     # 컨텍스트용 [사진] 마커 제거
     assert "[사진]" not in _clean_context("오늘 [사진] 좋았다 [사진: 강아지]")
+
+
+def test_crudify_applies_person_subs(monkeypatch):
+    from packages.diary import chat
+
+    monkeypatch.setattr(chat.prompts, "person_subs", lambda: [("여성|여자", "저년")])
+    assert chat._crudify("여성이 서고 여자가 앉음") == "저년이 서고 저년가 앉음"
+    # 규칙 없으면 그대로
+    monkeypatch.setattr(chat.prompts, "person_subs", lambda: [])
+    assert chat._crudify("여자") == "여자"
 
 
 def test_recall_intent_detection():

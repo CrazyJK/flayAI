@@ -69,6 +69,10 @@ _EMOJI_RE = re.compile(
     "[\U0001f300-\U0001faff\U00002600-\U000027bf\U0001f1e6-\U0001f1ff"
     "\U00002b00-\U00002bff\U00002190-\U000021ff️‍♀♂]"
 )
+# 깨진 조합 자모(ᄏᄏ 같은 degenerate ㅋ/ㅎ) — 일반 'ㅋㅋ'(U+314B)는 보존
+_JAMO_RE = re.compile(r"[ᄀ-ᇿ]+")
+# 모델이 흘리는 영어 군더더기(한국어만 규칙 보강)
+_EN_FILLER_RE = re.compile(r"\b(damn|fuck|shit|wow|oh+|omg|lol|haha|moment|image)\b", re.IGNORECASE)
 
 
 def _sanitize(text: str) -> str:
@@ -76,10 +80,26 @@ def _sanitize(text: str) -> str:
     s = _MARKER_RE.sub("", s)
     s = _IMG_NOISE_RE.sub("", s)
     s = _EMOJI_RE.sub("", s)
+    s = _JAMO_RE.sub("", s)
+    s = _EN_FILLER_RE.sub("", s)
     s = s.replace("_", " ")  # 떠도는 밑줄(마크다운 잔재)
     s = re.sub(r"[ \t]{2,}", " ", s)
     s = re.sub(r"\s+([,.!?…])", r"\1", s)
     return s.strip(" \t\n+·-*_~`")
+
+
+def _crudify(text: str) -> str:
+    """diary_prompts.yaml 의 person_subs 규칙으로 사람 지칭 등을 거칠게 치환.
+
+    거친 표현 자체는 코드(git)에 두지 않고 gitignore 된 yaml 에서 주입(공개 저장소 보호).
+    """
+    s = text or ""
+    for pat, repl in prompts.person_subs():
+        try:
+            s = re.sub(pat, repl, s)
+        except re.error:
+            continue
+    return s
 
 
 def _clean_context(text: str) -> str:
@@ -114,7 +134,7 @@ async def _recall_image_context(
         for a in assets:
             cap = cached.get(a)
             if not cap and new_count < max_new:
-                cap = await asyncio.to_thread(describe_image_file, str(assets_dir / a))
+                cap = _crudify(await asyncio.to_thread(describe_image_file, str(assets_dir / a)))
                 if cap:
                     store.save_image_caption(conn, a, cap)
                     new_count += 1
@@ -279,6 +299,6 @@ async def route_diary_chat(
             if not full:
                 full = "응, 듣고 있어."
                 yield {"type": "token", "text": full}
-        # 노이즈(_image1·[사진]·떠도는 밑줄 등) 제거한 최종본 — 저장·표시에 사용
-        clean = _sanitize(full) or "응, 듣고 있어."
+        # 노이즈 제거(_sanitize) + 사람 지칭 거칠게(_crudify) 한 최종본 — 저장·표시에 사용
+        clean = _crudify(_sanitize(full)) or "응, 듣고 있어."
         yield {"type": "done", "message": clean}
