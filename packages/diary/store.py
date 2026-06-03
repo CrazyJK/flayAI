@@ -83,6 +83,26 @@ def create_session(
     return int(cur.lastrowid)
 
 
+def reset_diary(conn: sqlite3.Connection) -> None:
+    """모든 일기 데이터 삭제(SQLite 테이블 + Qdrant 컬렉션 재생성). 재임포트용."""
+    conn.executescript(
+        "DELETE FROM diary_messages_fts; DELETE FROM diary_messages; DELETE FROM diary_sessions;"
+    )
+    conn.commit()
+    try:
+        from packages.diary.schema import DIARY_COLLECTION, ensure_diary_collection
+        from packages.indexer.embed_text import _qdrant
+
+        qc = _qdrant()
+        try:
+            qc.delete_collection(DIARY_COLLECTION)
+        except Exception as e:
+            log.debug("diary 컬렉션 삭제 스킵: %s", e)
+        ensure_diary_collection(qc)
+    except Exception as e:
+        log.warning("Qdrant diary 컬렉션 초기화 실패: %s", e)
+
+
 def session_by_source_key(conn: sqlite3.Connection, source_key: str) -> int | None:
     row = conn.execute(
         "SELECT id FROM diary_sessions WHERE source_key = ?", (source_key,)
@@ -102,10 +122,13 @@ def add_message(
     created_at: str | None = None,
     source: str = "chat",
     embed: bool = True,
+    index: bool = True,
 ) -> int:
-    """메시지 저장. user 발화면 FTS 인덱싱 + (embed=True 시) 임베딩·Qdrant upsert.
+    """메시지 저장. user 발화이고 index=True 면 FTS 인덱싱 + (embed 시) 임베딩·Qdrant upsert.
 
-    embed=False 는 테스트/오프라인용(Qdrant 없이 FTS 경로만 검증).
+    - index=False: 회상 '대상'에서 제외(예: 회상 질문 자체 — 기억이 아니라 물음이므로
+      색인하면 과거 질문이 새 질문과 매칭돼 회상을 오염시킨다). 저장은 됨(대화 연속성).
+    - embed=False: 임베딩만 생략(테스트/오프라인 — FTS 경로만).
     """
     ts = created_at or _now_iso()
     cur = conn.execute(
@@ -118,13 +141,14 @@ def add_message(
         "UPDATE diary_sessions SET ended_at = ? WHERE id = ?",
         (ts, session_id),
     )
-    if role == "user" and content.strip():
+    indexable = role == "user" and index and bool(content.strip())
+    if indexable:
         conn.execute(
             "INSERT INTO diary_messages_fts(content, message_id, session_id) VALUES(?,?,?)",
             (content, msg_id, session_id),
         )
     conn.commit()
-    if role == "user" and embed and content.strip():
+    if indexable and embed:
         _embed_message(msg_id, session_id, role, content, _iso_to_epoch(ts))
     return msg_id
 

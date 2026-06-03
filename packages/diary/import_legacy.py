@@ -78,6 +78,11 @@ def import_one(
     raw_html = extract_images(content_html, assets_dir)
     created_iso = _epoch_ms_to_iso(meta.get("created")) or f"{source_key}T00:00:00"
     modified_iso = _epoch_ms_to_iso(meta.get("lastModified")) or created_iso
+    title = (meta.get("title") or "").strip()
+
+    # 검색용 content 에는 제목을 포함(제목은 고신호인데 본문엔 없을 수 있음 — 회상 정확도↑).
+    # 표시는 raw_html(본문) + 카드 헤더의 title 로 따로 보이므로 중복 노출 아님.
+    search_content = f"{title}\n{text}" if title else text
 
     session_id = store.create_session(
         conn,
@@ -91,7 +96,7 @@ def import_one(
         conn,
         session_id,
         role="user",
-        content=text,
+        content=search_content,
         raw_html=raw_html,
         created_at=created_iso,
         source="diary_import",
@@ -100,13 +105,16 @@ def import_one(
     return "imported"
 
 
-def run(diary_dir: str | None = None, embed: bool = True) -> dict[str, int]:
+def run(diary_dir: str | None = None, embed: bool = True, reset: bool = False) -> dict[str, int]:
     cfg = load_config()
     ddir = Path(diary_dir or cfg["data"].get("diary_dir", "K:/Crazy/Diary"))
     assets_dir = repo_path(cfg["data"].get("diary_assets", "data/diary_assets"))
 
     conn = connect()
     init_diary_schema(conn)
+    if reset:
+        log.info("기존 일기 데이터 초기화(reset) — 전량 재임포트")
+        store.reset_diary(conn)
     if embed:
         try:
             from packages.indexer.embed_text import _qdrant
@@ -135,9 +143,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="레거시 .diary 일회성 임포트")
     ap.add_argument("--dir", default=None, help="일기 디렉토리(기본: config.data.diary_dir)")
     ap.add_argument("--no-embed", action="store_true", help="임베딩/Qdrant 생략(FTS만)")
+    ap.add_argument("--reset", action="store_true", help="기존 일기 데이터 전량 삭제 후 재임포트")
     args = ap.parse_args()
     logging.basicConfig(level="INFO", format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    run(diary_dir=args.dir, embed=not args.no_embed)
+    run(diary_dir=args.dir, embed=not args.no_embed, reset=args.reset)
 
 
 if __name__ == "__main__":

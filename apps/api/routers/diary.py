@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from packages.diary import store
-from packages.diary.chat import route_diary_chat
+from packages.diary.chat import _looks_like_recall, route_diary_chat
 from packages.diary.htmlutil import build_message_html, save_upload_image
 from packages.diary.vision import describe_images
 from packages.indexer.db import connect
@@ -98,9 +98,12 @@ async def diary_chat(req: DiaryChatRequest):
     else:
         store_content, raw_html, reply_query = text, None, text
 
+    # 회상 질문(이미지 없는 순수 회상 요청)은 '기억'이 아니라 '물음'이므로 색인 제외
+    # — 색인하면 과거 질문이 새 질문과 매칭돼 회상을 오염시킨다.
+    index = not (not req.images and _looks_like_recall(text))
     # 사용자 메시지 저장(임베딩까지). 이미지 묘사가 content 에 합류해 회상 가능.
     user_msg_id = store.add_message(
-        conn, session_id, "user", store_content, raw_html=raw_html, embed=True
+        conn, session_id, "user", store_content, raw_html=raw_html, embed=True, index=index
     )
 
     async def sse() -> AsyncGenerator[bytes, None]:

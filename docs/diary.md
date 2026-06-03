@@ -17,7 +17,7 @@ flayAI 의 로컬 인프라를 재활용한 **일상 대화이자 영구 일기*
 apps/web /diary  ──SSE──▶  POST /api/diary/chat
                                   │  packages/diary/chat.route_diary_chat
                                   ▼
-        ┌─ 1차 LLM(diary_llm, recall_memory tool) ─ 회상 의도 판정
+        ┌─ 회상 의도 감지(코드 정규식 _looks_like_recall)
         │      회상이면 ▶ store.recall_sessions ─ 그때 일기 원문 + 한 줄 답
         │      아니면   ▶ 맞장구/공감 스트리밍
         ▼
@@ -26,9 +26,21 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
    Qdrant: diary_messages 컬렉션(bge-m3 1024d) — user 발화만 임베딩
 ```
 
+**회상 의도 감지는 코드(정규식)로 한다.** diary_llm(EXAONE 3.5)은 Ollama tool-calling 을
+지원하지 않아(`tools` 인자에 400) tool-call 라우팅이 불가능하다. `_looks_like_recall` 이
+검색/조회 명령·기억/시점 질문·명시적 회상어("보여줘/찾아줘/기억나?/언제였지?/회상")를 잡고,
+`_recall_search_query` 가 명령어를 떼어 주제만 검색어로 만든다.
+
 회상 검색은 영상 retriever 와 같은 **RRF(K=60)** 패턴: Qdrant 의미검색 + FTS5(BM25)
 \+ 짧은 한글 키워드용 LIKE 부분매칭(똥·꿈·비 등 1~2글자) 결합. Qdrant 가 없으면 FTS+LIKE
 단독으로 graceful degrade.
+
+**색인 정책(회상 정확도):**
+- 레거시 일기는 **제목을 검색용 content 에 포함**해 임베딩/FTS(제목은 고신호인데 본문엔
+  없을 수 있음 — 예: 본문에 "크리스마스"가 없어도 제목 "크리스마스 소원 이벤트"로 회상).
+- **회상 질문 메시지는 색인하지 않는다**(`add_message(index=False)`). 질문은 기억이 아니라
+  물음이라, 색인하면 과거 질문이 새 질문과 매칭돼 회상을 오염시킨다.
+- 재임포트/정리: `import_legacy --reset` 로 전량 삭제 후 다시 적재(`store.reset_diary`).
 
 ## 이미지 첨부 + 비전 분석
 

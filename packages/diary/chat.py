@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import AsyncIterator
 from typing import Any
@@ -28,6 +29,34 @@ from packages.settings import load_config
 
 log = logging.getLogger(__name__)
 
+# 회상 의도 감지(코드 레벨) — diary_llm(EXAONE)이 Ollama tool-calling 을 지원하지 않아
+# (tools 인자에 400) tool-call 라우팅 대신 정규식으로 '과거를 떠올려 달라'는 요청을 잡는다.
+# 검색/조회 명령·기억 질문·시점 질문·명시적 회상어에 한정(일상 회고 서술엔 안 걸리게).
+_RECALL_RE = re.compile(
+    r"보여\s*줘|보여\s*줄래|찾아\s*줘|찾아\s*봐|찾아\s*줄래|알려\s*줘|꺼내\s*줘|"
+    r"떠올려|회상|되짚|"
+    r"기억\s*(나|났|나니|해|하니|하는지|할|해\s*줘|을?\s*보여|좀)|"
+    r"언제\s*(였|이었|쯤|더라|지|인지|였나|예요|인가)|"
+    r"(저번|예전|옛날|지난번|지난주|지난달|그때|작년|재작년|며칠\s*전|얼마\s*전)"
+    r".{0,20}(언제|뭐|무슨|무엇|어땠|있었|했었|했던|봤|먹었|갔|기억|보여|찾|줘|\?)"
+)
+
+# 회상 검색어에서 명령·기억 표현을 떼어내 '주제'만 남긴다(검색 정확도↑).
+_RECALL_STRIP = re.compile(
+    r"기억(을|이|은|좀)?|보여\s*줘|보여\s*줄래|찾아\s*줘|찾아\s*봐|알려\s*줘|"
+    r"떠올려\s*줘?|꺼내\s*줘|회상(\s*해\s*줘)?|해\s*줘|좀|줘|보여"
+)
+
+
+def _looks_like_recall(text: str) -> bool:
+    return bool(_RECALL_RE.search(text or ""))
+
+
+def _recall_search_query(text: str) -> str:
+    s = _RECALL_STRIP.sub(" ", text or "")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s or (text or "").strip()
+
 SYSTEM_PROMPT = (
     "너는 사용자의 일상 일기를 들어주는 다정한 친구다. 다음 규칙을 반드시 지켜라.\n"
     "- 먼저 새로운 화제를 꺼내거나 질문 공세를 하지 마라. 사용자가 한 말에 반응만 한다.\n"
@@ -37,32 +66,6 @@ SYSTEM_PROMPT = (
     "- 답은 짧게(1~3문장). 과하게 길게 늘어놓지 마라.\n"
     "- 오직 한국어로만 답한다. 한자·일본어 가나·영어 문장 금지.\n"
 )
-
-# 회상 의도일 때만 호출되는 도구. 인자 query = 과거에서 찾을 주제.
-RECALL_TOOL = [
-    {
-        "type": "function",
-        "function": {
-            "name": "recall_memory",
-            "description": (
-                "사용자가 과거의 일/기억을 떠올려 달라고 묻을 때 호출한다. "
-                "예: '저번에 ~한 게 언제였지?', '예전에 ~한 적 있나?', '내가 ~했던 날 기억해?'. "
-                "단순 일상 얘기/감상엔 호출하지 마라."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "과거 일기에서 찾을 핵심 주제·키워드(사용자 표기 그대로).",
-                    }
-                },
-                "required": ["query"],
-            },
-        },
-    }
-]
-
 
 def _diary_model() -> str:
     return load_config()["models"]["diary_llm"]
@@ -150,31 +153,10 @@ async def route_diary_chat(
     cfg = load_config()
     top_k = int(cfg.get("diary", {}).get("recall_top_k", 5))
 
-    async with httpx.AsyncClient() as client:
-        # 1차: 회상 의도 판정
-        route_msgs = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            *history,
-            {"role": "user", "content": user_query},
-        ]
-        recall_query: str | None = None
-        try:
-            first = await _chat(client, route_msgs, tools=RECALL_TOOL, stream=False)
-            calls = (first.get("message", {}) or {}).get("tool_calls") or []
-            for c in calls:
-                fn = c.get("function") or {}
-                if fn.get("name") == "recall_memory":
-                    args = fn.get("arguments") or {}
-                    if isinstance(args, str):
-                        try:
-                            args = json.loads(args)
-                        except json.JSONDecodeError:
-                            args = {}
-                    recall_query = (args.get("query") or user_query).strip()
-                    break
-        except Exception as e:
-            log.warning("diary 라우팅(1차) 실패, 일반 응답으로 진행: %s", e)
+    # 회상 의도는 코드로 감지(diary_llm 의 tool-call 미지원 — Ollama 400 방어).
+    recall_query = _recall_search_query(user_query) if _looks_like_recall(user_query) else None
 
+    async with httpx.AsyncClient() as client:
         # --- 회상 경로 ---
         if recall_query:
             sessions = store.recall_sessions(

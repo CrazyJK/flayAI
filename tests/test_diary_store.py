@@ -116,6 +116,29 @@ def test_recall_excludes_current_message(conn):
     assert all(h["message_id"] != mid for h in hits)
 
 
+def test_recall_intent_detection():
+    from packages.diary.chat import _looks_like_recall, _recall_search_query
+
+    # 회상 요청(검색/조회 명령·기억/시점 질문)
+    for q in [
+        "회사 크리스마스 행사 기억을 보여줘",
+        "저번에 똥 싼 게 언제였지?",
+        "크리스마스 행사 기억나?",
+        "예전에 갔던 온천 찾아줘",
+        "그때 뭐 먹었더라",
+    ]:
+        assert _looks_like_recall(q), q
+    # 일상 서술/감상(회상 아님)
+    for q in [
+        "오늘 회사에서 크리스마스 파티 했어",
+        "예전 친구가 생각나서 기분이 좋았어",
+        "배고프다",
+    ]:
+        assert not _looks_like_recall(q), q
+    # 검색어 정제: 명령·기억어 제거 후 주제만
+    assert _recall_search_query("회사 크리스마스 행사 기억을 보여줘") == "회사 크리스마스 행사"
+
+
 def test_transcript_returns_meta_and_messages(conn):
     s = store.create_session(conn, title="제목", weather="sunny", source_key="2023-02-02")
     store.add_message(conn, s, "user", "본문", embed=False)
