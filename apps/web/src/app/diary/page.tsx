@@ -149,6 +149,8 @@ export default function DiaryPage() {
   const [pending, setPending] = useState<string[]>([]); // 전송 대기 첨부 이미지(dataURL)
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState(false); // 이미지 드래그 오버 표시
+  const dragDepth = useRef(0); // 자식 위를 지날 때 dragleave 오작동 방지(깊이 카운트)
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingTopRef = useRef<string | null>(null); // 상단 정렬 대기 중인 질문 id
@@ -306,8 +308,42 @@ export default function DiaryPage() {
   const abort = useCallback(() => abortRef.current?.abort(), []);
   const empty = messages.length === 0;
 
+  // 화면 위로 이미지(파일) 드래그 → 첨부로 인식
+  const hasFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer?.types ?? []).includes("Files");
+
   return (
-    <main className="flex-1 flex flex-col w-full min-h-0">
+    <main
+      className="relative flex-1 flex flex-col w-full min-h-0"
+      onDragEnter={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth.current += 1;
+        setDragOver(true);
+      }}
+      onDragOver={(e) => {
+        if (hasFiles(e)) e.preventDefault(); // drop 허용
+      }}
+      onDragLeave={(e) => {
+        if (!hasFiles(e)) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth.current = 0;
+        setDragOver(false);
+        void addFiles(e.dataTransfer.files);
+      }}
+    >
+      {dragOver && (
+        <div className="absolute inset-0 z-50 m-2 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-500/10 backdrop-blur-[1px] pointer-events-none">
+          <div className="rounded-xl bg-card px-5 py-3 text-sm font-medium text-blue-600 dark:text-blue-300 shadow-lg">
+            여기에 놓으면 사진 첨부
+          </div>
+        </div>
+      )}
       <AppHeader
         active="diary"
         actions={
