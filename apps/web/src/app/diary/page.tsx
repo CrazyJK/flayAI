@@ -142,7 +142,8 @@ export default function DiaryPage() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const pendingTopRef = useRef<string | null>(null); // 전송한 질문을 한 번 정렬할지 표시
+  const pendingTopRef = useRef<string | null>(null); // 상단 정렬 대기 중인 질문 id
+  const pinDeadlineRef = useRef(0); // 이 시각까지만 상단 정렬 시도(회상 도착 대기)
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -169,15 +170,16 @@ export default function DiaryPage() {
   }, []);
 
   useEffect(() => {
-    // 전송한 질문이 화면 절반 아래에 있을 때만 상단으로 한 번 올린다. 그 외엔 스크롤 안 건드림.
+    // 보낸 질문을 화면 맨 위로 올린다. 회상/답변 내용이 아래에 채워져야 올릴 수 있으므로
+    // (회상은 빠르게 도착) 상단에 닿을 때까지 렌더마다 시도하고, 닿으면(또는 시간 초과) 멈춘다.
     const id = pendingTopRef.current;
     const c = scrollRef.current;
     if (!id || !c) return;
-    pendingTopRef.current = null; // 한 번만
     const el = c.querySelector(`[data-mid="${id}"]`) as HTMLElement | null;
     if (!el) return;
-    const top = el.getBoundingClientRect().top - c.getBoundingClientRect().top;
-    if (top > c.clientHeight / 2) c.scrollTop += top - 8;
+    const top = () => el.getBoundingClientRect().top - c.getBoundingClientRect().top;
+    if (top() > 8) c.scrollTop += top() - 8; // 내용이 부족하면 자연 클램프(끝까지 못 올라감)
+    if (top() <= 9 || performance.now() > pinDeadlineRef.current) pendingTopRef.current = null;
   }, [messages]);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
@@ -201,7 +203,8 @@ export default function DiaryPage() {
         images: images.length ? images : undefined,
         status: "done",
       };
-      pendingTopRef.current = userMsg.id; // 보낸 질문을 화면 상단에 맞춤(이후 자동 스크롤 X)
+      pendingTopRef.current = userMsg.id; // 보낸 질문을 화면 상단으로(회상 도착까지 잠깐 재시도)
+      pinDeadlineRef.current = performance.now() + 2000;
       const asstId = `a-${Date.now()}`;
       const asstMsg: Message = { id: asstId, role: "assistant", text: "", status: "streaming" };
       setMessages((prev) => [...prev, userMsg, asstMsg]);
