@@ -32,8 +32,13 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
 `_recall_search_query` 가 명령어를 떼어 주제만 검색어로 만든다.
 
 회상 검색은 영상 retriever 와 같은 **RRF(K=60)** 패턴: Qdrant 의미검색 + FTS5(BM25)
-\+ 짧은 한글 키워드용 LIKE 부분매칭(똥·꿈·비 등 1~2글자) 결합. Qdrant 가 없으면 FTS+LIKE
-단독으로 graceful degrade.
+\+ 짧은 한글 키워드용 LIKE 부분매칭 결합. Qdrant 가 없으면 FTS+LIKE 단독으로 graceful degrade.
+
+- **LIKE 부분매칭은 단일 글자(똥·꿈·비)나 질의 전체가 짧은 2글자(온천)만** 대상.
+  긴 질의의 2글자 토큰(회사·행사·여행)은 노이즈라 제외.
+- **관련도 컷오프**(`diary.recall_min_semantic`, 기본 0.5): 실제 키워드 매칭이 없고 의미
+  유사도도 임계 미만이면 무관으로 보고 버린다. 의미검색은 무관해도 최근접을 늘 돌려주므로,
+  이 컷이 없으면 top_k 까지 무관한 일기로 채워진다. 매칭이 없으면 0건 → "못 찾겠어" 응답.
 
 **색인 정책(회상 정확도):**
 - 레거시 일기는 **제목을 검색용 content 에 포함**해 임베딩/FTS(제목은 고신호인데 본문엔

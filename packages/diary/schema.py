@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS diary_messages (
   content     TEXT NOT NULL,           -- 검색·임베딩용 평문
   raw_html    TEXT,                    -- 풍부 표시용 원본 HTML(레거시 일기·이미지 포함, nullable)
   created_at  TEXT NOT NULL,           -- ISO8601
-  source      TEXT NOT NULL DEFAULT 'chat'  -- 'chat' | 'diary_import'
+  source      TEXT NOT NULL DEFAULT 'chat',  -- 'chat' | 'diary_import'
+  indexed     INTEGER NOT NULL DEFAULT 1     -- 회상 대상 여부(회상 질문은 0 — 오염 방지)
 );
 CREATE INDEX IF NOT EXISTS idx_diary_msg_session ON diary_messages(session_id);
 
@@ -50,8 +51,12 @@ CREATE VIRTUAL TABLE IF NOT EXISTS diary_messages_fts USING fts5(
 
 
 def init_diary_schema(conn: sqlite3.Connection) -> None:
-    """일기 테이블/FTS 생성(멱등)."""
+    """일기 테이블/FTS 생성(멱등) + 마이그레이션."""
     conn.executescript(DIARY_SCHEMA)
+    # 기존 DB 마이그레이션: indexed 컬럼 추가(CREATE TABLE IF NOT EXISTS 는 컬럼 추가 안 함)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(diary_messages)")}
+    if "indexed" not in cols:
+        conn.execute("ALTER TABLE diary_messages ADD COLUMN indexed INTEGER NOT NULL DEFAULT 1")
     conn.commit()
 
 

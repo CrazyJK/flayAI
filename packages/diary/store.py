@@ -131,17 +131,17 @@ def add_message(
     - embed=False: 임베딩만 생략(테스트/오프라인 — FTS 경로만).
     """
     ts = created_at or _now_iso()
+    indexable = role == "user" and index and bool(content.strip())
     cur = conn.execute(
-        "INSERT INTO diary_messages(session_id, role, content, raw_html, created_at, source) "
-        "VALUES(?,?,?,?,?,?)",
-        (session_id, role, content, raw_html, ts, source),
+        "INSERT INTO diary_messages(session_id, role, content, raw_html, created_at, source, indexed) "
+        "VALUES(?,?,?,?,?,?,?)",
+        (session_id, role, content, raw_html, ts, source, 1 if indexable else 0),
     )
     msg_id = int(cur.lastrowid)
     conn.execute(
         "UPDATE diary_sessions SET ended_at = ? WHERE id = ?",
         (ts, session_id),
     )
-    indexable = role == "user" and index and bool(content.strip())
     if indexable:
         conn.execute(
             "INSERT INTO diary_messages_fts(content, message_id, session_id) VALUES(?,?,?)",
@@ -302,18 +302,21 @@ def _fts(conn: sqlite3.Connection, query: str, top_k: int) -> list[_Cand]:
 
 
 def _substr(conn: sqlite3.Connection, query: str, top_k: int) -> list[_Cand]:
-    """토큰 부분문자열(LIKE) 매칭. trigram FTS 가 못 잡는 1~2글자 한글 키워드(똥·꿈·비)
-    회상을 보장하고, Qdrant 없이도 키워드 회상이 동작하게 한다(최신순).
+    """짧은 한글 키워드 부분문자열(LIKE) 매칭. trigram FTS 가 못 잡는 1글자(똥·꿈·비)와
+    질의 전체가 짧은 2글자(온천)만 대상 — 긴 질의의 2글자 토큰(회사·행사·여행)은 노이즈라
+    제외. indexed=1(회상 대상) 메시지만. Qdrant 없이도 키워드 회상이 동작하게 한다.
     """
-    toks = [t for t in re.split(r"[\s,.:;!?　、。・]+", query.strip()) if len(t) >= 1]
-    toks = [t for t in toks if len(t) <= 2][:4]  # 짧은 토큰만(긴 토큰은 FTS 담당)
-    if not toks:
+    q = query.strip()
+    toks = [t for t in re.split(r"[\s,.:;!?　、。・]+", q) if t]
+    # 단일 글자 토큰, 또는 질의 전체가 그 2글자일 때만
+    keep = [t for t in toks if len(t) == 1 or (len(t) == 2 and t == q)][:4]
+    if not keep:
         return []
-    where = " OR ".join("content LIKE ?" for _ in toks)
-    params: list[Any] = [f"%{t}%" for t in toks]
+    where = " OR ".join("content LIKE ?" for _ in keep)
+    params: list[Any] = [f"%{t}%" for t in keep]
     rows = conn.execute(
         f"SELECT id, session_id, content FROM diary_messages "
-        f"WHERE role = 'user' AND ({where}) ORDER BY id DESC LIMIT ?",
+        f"WHERE role = 'user' AND indexed = 1 AND ({where}) ORDER BY id DESC LIMIT ?",
         (*params, top_k),
     ).fetchall()
     return [
@@ -362,10 +365,16 @@ def recall(
     fts = _fts(conn, query, pool)
     sub = _substr(conn, query, pool)
     merged = _rrf_merge(sem, fts, sub)
+    # 관련도 컷오프: 실제 키워드 매칭(fts>0=FTS/substr) 이 있거나, 의미 유사도가 임계 이상일 때만.
+    # 의미검색은 무관해도 최근접을 항상 돌려주므로(낮은 점수로 채움) 이 컷이 없으면 무관한
+    # 일기가 top_k 까지 채워진다.
+    sem_min = float(load_config().get("diary", {}).get("recall_min_semantic", 0.5))
     out: list[dict[str, Any]] = []
     for c in merged:
         if exclude_message_id is not None and c.message_id == exclude_message_id:
             continue
+        if c.fts <= 0 and c.semantic < sem_min:
+            continue  # 키워드 매칭 없고 의미도 약함 → 무관
         out.append(
             {
                 "message_id": c.message_id,

@@ -139,6 +139,23 @@ def test_recall_intent_detection():
     assert _recall_search_query("회사 크리스마스 행사 기억을 보여줘") == "회사 크리스마스 행사"
 
 
+def test_recall_excludes_non_indexed(conn):
+    # 회상 질문(index=False)은 substr 로도 회상되지 않아야(오염 방지)
+    s = store.create_session(conn)
+    store.add_message(conn, s, "user", "저번에 똥 싼 거 언제였지", embed=False, index=False)
+    assert store.recall(conn, "똥") == []
+
+
+def test_substr_ignores_two_char_tokens_in_long_query(conn):
+    # 긴 질의의 2글자 토큰(회사/행사)은 노이즈라 substr 대상 아님 → 무관 결과 없음
+    s = store.create_session(conn)
+    store.add_message(conn, s, "user", "오늘 온천 갔다. 회사 워크숍도 했다.", embed=False)
+    # 단일/질의-전체 2글자(온천)는 매칭
+    assert any("온천" in h["content"] for h in store.recall(conn, "온천"))
+    # 2글자 토큰들로만 이뤄진 긴 질의 → 매칭 없음
+    assert store.recall(conn, "회사 행사 일정") == []
+
+
 def test_transcript_returns_meta_and_messages(conn):
     s = store.create_session(conn, title="제목", weather="sunny", source_key="2023-02-02")
     store.add_message(conn, s, "user", "본문", embed=False)
