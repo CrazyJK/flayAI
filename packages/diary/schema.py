@@ -47,6 +47,13 @@ CREATE INDEX IF NOT EXISTS idx_diary_msg_session ON diary_messages(session_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS diary_messages_fts USING fts5(
   content, message_id UNINDEXED, session_id UNINDEXED, tokenize='trigram'
 );
+
+-- 일기 첨부 이미지 캡션 캐시(회상 시 사진을 보고 답하기 위함) -----------------
+-- asset = diary_assets 파일명(sha1.ext, 내용 고정 → 캡션 1회 생성 후 재사용).
+CREATE TABLE IF NOT EXISTS diary_image_captions (
+  asset    TEXT PRIMARY KEY,
+  caption  TEXT NOT NULL
+);
 """
 
 

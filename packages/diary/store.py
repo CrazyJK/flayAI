@@ -103,6 +103,28 @@ def reset_diary(conn: sqlite3.Connection) -> None:
         log.warning("Qdrant diary 컬렉션 초기화 실패: %s", e)
 
 
+def get_image_captions(conn: sqlite3.Connection, assets: list[str]) -> dict[str, str]:
+    """첨부 이미지 캡션 캐시 조회: {asset: caption}."""
+    if not assets:
+        return {}
+    ph = ",".join("?" * len(assets))
+    return {
+        r["asset"]: r["caption"]
+        for r in conn.execute(
+            f"SELECT asset, caption FROM diary_image_captions WHERE asset IN ({ph})", tuple(assets)
+        )
+    }
+
+
+def save_image_caption(conn: sqlite3.Connection, asset: str, caption: str) -> None:
+    conn.execute(
+        "INSERT INTO diary_image_captions(asset, caption) VALUES(?,?) "
+        "ON CONFLICT(asset) DO UPDATE SET caption = excluded.caption",
+        (asset, caption),
+    )
+    conn.commit()
+
+
 def session_by_source_key(conn: sqlite3.Connection, source_key: str) -> int | None:
     row = conn.execute(
         "SELECT id FROM diary_sessions WHERE source_key = ?", (source_key,)

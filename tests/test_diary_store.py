@@ -116,6 +116,40 @@ def test_recall_excludes_current_message(conn):
     assert all(h["message_id"] != mid for h in hits)
 
 
+def test_asset_names_from_html():
+    from packages.diary.htmlutil import asset_names_from_html
+
+    html = '<p>x</p><img src="/static/diary-assets/a1.png"><img src="/static/diary-assets/b2.jpg">'
+    assert asset_names_from_html(html) == ["a1.png", "b2.jpg"]
+    assert asset_names_from_html("") == []
+
+
+def test_image_caption_cache_roundtrip(conn):
+    store.save_image_caption(conn, "a1.png", "강아지 사진")
+    assert store.get_image_captions(conn, ["a1.png", "none.png"]) == {"a1.png": "강아지 사진"}
+
+
+def test_recall_image_context_uses_cache(conn, monkeypatch):
+    # 캐시가 있으면 비전 모델을 호출하지 않아야(빠른 회상)
+    import asyncio
+
+    from packages.diary import chat
+
+    def _boom(*a, **k):
+        raise AssertionError("비전이 호출되면 안 됨")
+
+    monkeypatch.setattr(chat, "describe_image_file", _boom)
+    store.save_image_caption(conn, "abc.png", "강아지가 소파에 앉아있다")
+    sessions = [
+        {
+            "session_id": 7,
+            "transcript": {"messages": [{"raw_html": '<img src="/static/diary-assets/abc.png">'}]},
+        }
+    ]
+    out = asyncio.run(chat._recall_image_context(conn, sessions))
+    assert out.get(7) == "강아지가 소파에 앉아있다"
+
+
 def test_sanitize_removes_model_noise():
     from packages.diary.chat import _clean_context, _sanitize
 

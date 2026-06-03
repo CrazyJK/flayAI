@@ -118,6 +118,21 @@ def to_base64_payload(data: str) -> str:
     return _split_data_url(data)[1]
 
 
+_ASSET_RE = re.compile(r"/static/diary-assets/([A-Za-z0-9._-]+)")
+
+
+def asset_names_from_html(html: str) -> list[str]:
+    """raw_html 에서 첨부 이미지 파일명(diary_assets) 목록을 순서대로(중복 제거) 추출."""
+    if not html:
+        return []
+    seen: list[str] = []
+    for m in _ASSET_RE.finditer(html):
+        name = m.group(1)
+        if name not in seen:
+            seen.append(name)
+    return seen
+
+
 def build_message_html(text: str, image_urls: list[str]) -> str:
     """사용자 텍스트 + 첨부 이미지 → 표시용 HTML(raw_html)."""
     parts: list[str] = []

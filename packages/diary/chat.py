@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -24,8 +25,10 @@ from typing import Any
 import httpx
 
 from packages.diary import store
+from packages.diary.htmlutil import asset_names_from_html
+from packages.diary.vision import describe_image_file
 from packages.rag.router import _ollama_url
-from packages.settings import load_config
+from packages.settings import load_config, repo_path
 
 log = logging.getLogger(__name__)
 
@@ -85,9 +88,46 @@ def _sanitize(text: str) -> str:
 
 
 def _clean_context(text: str) -> str:
-    """회상 컨텍스트로 넣을 일기 발췌 정리 — '[사진]' 마커 제거(모델 코드스위칭 유발 차단)."""
+    """회상 컨텍스트로 넣을 일기 발췌 정리 — '[사진]' 마커 제거(사진은 비전 묘사로 대체)."""
     s = _MARKER_RE.sub(" ", text or "")
     return re.sub(r"\s+", " ", s).strip()
+
+
+async def _recall_image_context(
+    conn: sqlite3.Connection, sessions: list[dict], max_new: int = 4
+) -> dict[int, str]:
+    """회상된 세션의 첨부 사진을 비전 모델로 묘사(캐시 우선) → {session_id: '묘사 / 묘사'}.
+
+    같은 사진은 한 번만 생성해 diary_image_captions 에 캐시(다음 회상은 즉시). 한 요청에서
+    새로 생성하는 사진 수는 max_new 로 제한(첫 회상 지연 억제).
+    DB 접근은 메인 스레드, 블로킹인 비전 호출만 to_thread 로(SQLite 는 스레드 공유 불가).
+    """
+    assets_dir = repo_path(load_config()["data"].get("diary_assets", "data/diary_assets"))
+    out: dict[int, str] = {}
+    new_count = 0
+    for s in sessions:
+        sid = s["session_id"]
+        assets: list[str] = []
+        for m in s["transcript"].get("messages", []):
+            for a in asset_names_from_html(m.get("raw_html") or ""):
+                if a not in assets:
+                    assets.append(a)
+        if not assets:
+            continue
+        cached = store.get_image_captions(conn, assets)
+        descs: list[str] = []
+        for a in assets:
+            cap = cached.get(a)
+            if not cap and new_count < max_new:
+                cap = await asyncio.to_thread(describe_image_file, str(assets_dir / a))
+                if cap:
+                    store.save_image_caption(conn, a, cap)
+                    new_count += 1
+            if cap:
+                descs.append(cap)
+        if descs:
+            out[sid] = " / ".join(descs[:4])
+    return out
 
 
 def _diary_model() -> str:
@@ -193,16 +233,25 @@ async def route_diary_chat(
             )
             if sessions:
                 yield _recall_event(sessions)
-                # 찾은 내용을 컨텍스트로 한 줄 자연어 답 ('[사진]' 마커는 제거해 코드스위칭 차단)
-                found = "\n".join(
-                    f"- {_date_of(s['transcript'])}: "
-                    f"{_clean_context(s['matched'][0] if s['matched'] else '')[:120]}"
-                    for s in sessions
-                )
+                # 일기에 붙은 사진을 비전 모델로 묘사(캐시) → LLM 이 사진 보고 얘기하게
+                img_ctx = await _recall_image_context(conn, sessions)
+                # 찾은 내용을 컨텍스트로 한 줄 자연어 답. '[사진]' 마커는 빼고 사진은 묘사로 대체.
+                lines: list[str] = []
+                for s in sessions:
+                    date = _date_of(s["transcript"])
+                    body = _clean_context(s["matched"][0] if s["matched"] else "")[:120]
+                    line = f"- {date}: {body}"
+                    desc = img_ctx.get(s["session_id"])
+                    if desc:
+                        line += f" (이 날 사진: {desc})"
+                    lines.append(line)
+                found = "\n".join(lines)
                 ctx = (
                     "아래는 사용자의 과거 일기에서 찾은 관련 기록이다. 이걸 근거로 "
-                    "사용자의 질문에 짧고 따뜻하게 한국어로 답해라. 날짜를 자연스럽게 언급하되, "
-                    "내용을 길게 나열하지 말 것(원문은 이미 화면에 보임). "
+                    "사용자의 질문에 짧고 따뜻하게 한국어로 답해라. 날짜를 자연스럽게 언급해라. "
+                    "특히 '이 날 사진:' 으로 표시된 사진이 있으면, 그 사진에 보이는 모습(옷차림·"
+                    "장소·분위기 등)을 직접 본 것처럼 구체적으로 짚으며 공감해줘. "
+                    "내용을 길게 나열하진 말 것(원문은 이미 화면에 보임). "
                     "영어 단어나 기호·표식 없이 평범한 한국어 문장으로만.\n\n"
                     f"[질문]\n{user_query}\n\n[찾은 기록]\n{found}"
                 )

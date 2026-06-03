@@ -64,6 +64,19 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
   장당 10MB)로 실어 보낸다. 비전 호출은 블로킹이라 `asyncio.to_thread` 로 처리.
 - 사진은 사용자 버블·회상 카드에 그대로 보인다(레거시 일기 사진과 동일 경로로 서빙).
 
+## 회상 시 사진 보고 답하기
+
+회상한 일기에 **첨부 사진이 있으면, 비전 모델이 그 사진을 보고 묘사**해 LLM 컨텍스트에
+넣는다. 그래서 답이 `[사진]` 마커가 아니라 "체크무늬 원피스를 입고 있었네" 처럼 **사진을
+직접 본 것처럼** 나온다(`chat._recall_image_context`).
+
+- 회상된 세션의 `raw_html` 에서 이미지 파일명을 뽑아(`asset_names_from_html`),
+  `config.models.vision` 으로 한국어 묘사 생성.
+- **캡션 캐시**(`diary_image_captions` 테이블, 파일명=내용 해시 키): 같은 사진은 한 번만
+  묘사하고 재사용 → 첫 회상만 느리고(비전 호출) 이후는 즉시. 한 요청의 신규 생성은 4장으로
+  제한(`max_new`)해 첫 회상 지연을 억제.
+- DB 접근은 메인(async) 스레드, 블로킹인 비전 호출만 `asyncio.to_thread`(SQLite 스레드 공유 불가).
+
 ## 데이터 모델
 
 - `diary_sessions(id, started_at, ended_at, title, weather, summary, source_key)`
