@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import re
 import sqlite3
 from collections.abc import AsyncIterator
@@ -96,7 +97,11 @@ def _crudify(text: str) -> str:
     s = text or ""
     for pat, repl in prompts.person_subs():
         try:
-            s = re.sub(pat, repl, s)
+            if isinstance(repl, list):
+                if repl:
+                    s = re.sub(pat, lambda m, r=repl: random.choice(r), s)  # 매칭마다 무작위
+            else:
+                s = re.sub(pat, lambda m, r=repl: r, s)  # 리터럴(그룹참조 해석 방지)
         except re.error:
             continue
     return s

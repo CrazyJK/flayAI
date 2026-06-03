@@ -170,6 +170,10 @@ def test_crudify_applies_person_subs(monkeypatch):
 
     monkeypatch.setattr(chat.prompts, "person_subs", lambda: [("여성|여자", "저년")])
     assert chat._crudify("여성이 서고 여자가 앉음") == "저년이 서고 저년가 앉음"
+    # 리스트 치환 → 후보 중 하나로 무작위
+    monkeypatch.setattr(chat.prompts, "person_subs", lambda: [("여자", ["저년", "저 보지"])])
+    out = chat._crudify("여자 둘이 있다")
+    assert "여자" not in out and (("저년" in out) or ("저 보지" in out))
     # 규칙 없으면 그대로
     monkeypatch.setattr(chat.prompts, "person_subs", lambda: [])
     assert chat._crudify("여자") == "여자"

@@ -75,11 +75,17 @@ def vision_describe_prompt() -> str:
     return str(_load()["vision_describe"])
 
 
-def person_subs() -> list[tuple[str, str]]:
-    """[(정규식 패턴, 치환문자열)] — 캡션·답변의 사람 지칭 등을 거칠게 바꾸는 규칙."""
+def person_subs() -> list[tuple[str, str | list[str]]]:
+    """[(정규식 패턴, 치환)] — 캡션·답변의 사람 지칭 등을 거칠게 바꾸는 규칙.
+
+    치환은 문자열(고정) 또는 문자열 리스트(매칭마다 무작위 선택). 패턴의 '|'만 OR 이고,
+    치환 문자열은 리터럴이라 '|' 가 그대로 박힌다 — 여러 후보를 쓰려면 리스트로.
+    """
     raw = _load().get("person_subs") or []
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str | list[str]]] = []
     for item in raw:
         if isinstance(item, (list, tuple)) and len(item) == 2:
-            out.append((str(item[0]), str(item[1])))
+            pat, repl = item[0], item[1]
+            opts = [str(x) for x in repl] if isinstance(repl, list) else str(repl)
+            out.append((str(pat), opts))
     return out
