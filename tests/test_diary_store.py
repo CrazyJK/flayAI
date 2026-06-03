@@ -154,9 +154,10 @@ def test_sanitize_removes_model_noise():
     from packages.diary.chat import _clean_context, _sanitize
 
     # 코드스위칭/마커 잔재 제거
-    out = _sanitize("정말 놀라웠겠다 싶어 공감돼요._image1 moment들 속에 아쉬움도 보이네요+")
+    out = _sanitize("정말 놀라웠겠다 싶어 공감돼요._image1 moment들 속에 아쉬움도 보이네요+ 😌💪")
     assert "_image1" not in out and "image1" not in out and "[" not in out
     assert not out.endswith("+")
+    assert "😌" not in out and "💪" not in out  # 이모지 제거
     assert "공감돼요" in out and "아쉬움도" in out
     # 컨텍스트용 [사진] 마커 제거
     assert "[사진]" not in _clean_context("오늘 [사진] 좋았다 [사진: 강아지]")
