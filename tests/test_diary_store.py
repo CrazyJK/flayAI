@@ -156,6 +156,20 @@ def test_substr_ignores_two_char_tokens_in_long_query(conn):
     assert store.recall(conn, "회사 행사 일정") == []
 
 
+def test_recall_sessions_sorted_chronologically(conn):
+    # 같은 키워드 일기 3개를 날짜 뒤섞어 입력 → 회상은 시간순(오래된→최근)으로 표시
+    for sk, ts in [
+        ("2023-03-03", "2023-03-03T10:00:00"),
+        ("2023-01-01", "2023-01-01T10:00:00"),
+        ("2023-02-02", "2023-02-02T10:00:00"),
+    ]:
+        s = store.create_session(conn, started_at=ts, source_key=sk)
+        store.add_message(conn, s, "user", "온천 갔다 왔다", created_at=ts, embed=False)
+    res = store.recall_sessions(conn, "온천", top_k=5)
+    dates = [r["transcript"]["session"]["source_key"] for r in res]
+    assert dates == ["2023-01-01", "2023-02-02", "2023-03-03"]
+
+
 def test_transcript_returns_meta_and_messages(conn):
     s = store.create_session(conn, title="제목", weather="sunny", source_key="2023-02-02")
     store.add_message(conn, s, "user", "본문", embed=False)

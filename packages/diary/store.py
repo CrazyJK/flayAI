@@ -399,6 +399,7 @@ def recall_sessions(
     """회상 결과를 '세션 단위'로 묶어 그때 대화 전체(transcript)를 함께 반환.
 
     같은 세션의 여러 메시지가 매칭되면 한 번만(최고 점수) 표시.
+    선택은 관련도(top_k) 로 하되, 일기이므로 **표시는 시간순(오래된→최근)** 으로 정렬한다.
     반환: [{session_id, score, matched: [content...], transcript: {session, messages}}]
     """
     hits = recall(conn, query, top_k=top_k * 3, exclude_message_id=exclude_message_id)
@@ -413,7 +414,7 @@ def recall_sessions(
                 continue
             seen[sid] = {"session_id": sid, "score": h["score"], "matched": [], "transcript": tr}
         seen[sid]["matched"].append(h["content"])
-        if len(seen) >= top_k and sid in seen:
-            pass
-    out = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
-    return out[:top_k]
+    # 관련도 상위 top_k 선별 → 시간순(세션 시작 시각 오름차순)으로 표시
+    top = sorted(seen.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+    top.sort(key=lambda x: (x["transcript"]["session"].get("started_at") or ""))
+    return top
