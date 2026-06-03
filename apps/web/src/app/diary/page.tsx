@@ -113,6 +113,7 @@ export default function DiaryPage() {
   const [spacerH, setSpacerH] = useState(0); // 마지막 질문을 화면 맨 위까지 올릴 여유 공간
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const spacerRef = useRef<HTMLDivElement | null>(null);
   const pendingTopRef = useRef<string | null>(null); // 전송 후 이 메시지를 화면 상단에 한 번만 맞춤
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -269,17 +270,27 @@ export default function DiaryPage() {
   const abort = useCallback(() => abortRef.current?.abort(), []);
   const empty = messages.length === 0;
 
-  // 스크롤 컨테이너 높이만큼 하단 스페이서를 둬서, 방금 보낸 질문을 항상 화면 맨 위까지
-  // 올릴 수 있게 한다(짧은 답변이어도). 컨테이너 리사이즈에 맞춰 갱신.
+  // 하단 여백 = 마지막 질문을 화면 맨 위로 올릴 만큼만(= 한 화면 − 질문 아래 내용).
+  // 답변이 길면 0 → 불필요한 빈 공간 없음. 스트리밍 중엔 내용↑·여백↓ 로 총 높이가 일정해
+  // 스크롤바도 안정. 메시지 변경 시에만 계산 → 타이핑(textarea 리사이즈)엔 반응 안 함.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const update = () => setSpacerH(el.clientHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [empty]);
+    const c = scrollRef.current;
+    if (!c) return;
+    const recompute = () => {
+      const nodes = c.querySelectorAll<HTMLElement>("[data-mid]");
+      const q = nodes[nodes.length - 1];
+      if (!q) {
+        setSpacerH(0);
+        return;
+      }
+      const spH = spacerRef.current?.offsetHeight ?? 0;
+      const belowQ = c.scrollHeight - spH - q.offsetTop; // 질문 상단 ~ 내용 끝 높이
+      setSpacerH(Math.max(0, c.clientHeight - belowQ - 8));
+    };
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, [messages]);
 
   return (
     <main className="flex-1 flex flex-col w-full min-h-0">
@@ -308,7 +319,7 @@ export default function DiaryPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
+          className="relative flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
         >
           {messages.map((m) =>
             m.role === "user" ? (
@@ -338,8 +349,8 @@ export default function DiaryPage() {
               </div>
             )
           )}
-          {/* 하단 여유 공간: 마지막 질문을 화면 맨 위까지 올릴 수 있게 */}
-          <div aria-hidden style={{ height: spacerH }} className="shrink-0" />
+          {/* 하단 여백: 마지막 질문을 화면 맨 위까지 올릴 만큼만(딱 필요한 높이) */}
+          <div ref={spacerRef} aria-hidden style={{ height: spacerH }} className="shrink-0" />
         </div>
       )}
 
