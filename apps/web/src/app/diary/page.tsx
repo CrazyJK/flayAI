@@ -111,8 +111,15 @@ export default function DiaryPage() {
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const stickRef = useRef(true); // 하단 근처면 자동 스크롤 유지, 위로 올리면 멈춤
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // 스크롤이 하단 근처인지 추적(위로 올려 일기 읽는 중엔 자동 스크롤 안 함)
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const readAsDataUrl = (file: File) =>
@@ -138,7 +145,10 @@ export default function DiaryPage() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // 하단 근처일 때만 즉시(애니메이션 없이) 하단으로 — 스트리밍 중 덜컹임 방지
+    if (!stickRef.current) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
@@ -155,6 +165,7 @@ export default function DiaryPage() {
   const send = useCallback(
     async (query: string, images: string[] = []) => {
       if ((!query.trim() && images.length === 0) || busy) return;
+      stickRef.current = true; // 새로 보내면 하단으로 따라가기 재개
       const userMsg: Message = {
         id: `u-${Date.now()}`,
         role: "user",
@@ -279,7 +290,11 @@ export default function DiaryPage() {
           </p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
+        >
           {messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
@@ -308,7 +323,6 @@ export default function DiaryPage() {
               </div>
             )
           )}
-          <div ref={bottomRef} />
         </div>
       )}
 
