@@ -178,17 +178,14 @@ def test_sanitize_removes_model_noise():
     from packages.diary.chat import _clean_context, _sanitize
 
     # 코드스위칭/마커 잔재 제거
-    out = _sanitize("개꼴리네 damn ᄏᄏ._image1 moment 보이네요+ 😌💪")
-    assert "_image1" not in out and "image1" not in out and "[" not in out
+    out = _sanitize("개꼴리네 ᄏᄏ._image1 보이네요+ 😌💪")
+    assert "_image1" not in out and "image1" not in out
     assert not out.endswith("+")
     assert "😌" not in out and "💪" not in out  # 이모지 제거
-    assert "damn" not in out and "moment" not in out  # 영어 군더더기 제거
     assert "ᄏ" not in out  # 깨진 조합 자모 제거
     assert "개꼴리네" in out
-    # 임의의 영어(목록에 없어도) 통째 제거 — 한국어는 보존
-    out2 = _sanitize("진짜 행운을 빌어! fucked up awesome 순간 될 것 같네.")
-    assert not any(c.isascii() and c.isalpha() for c in out2)
-    assert "진짜 행운을 빌어!" in out2 and "순간 될 것 같네" in out2
+    # 영어는 그대로 보여준다(번역 없이 지우면 문맥만 깨짐)
+    assert _sanitize("좋네 awesome 진짜") == "좋네 awesome 진짜"
     # 컨텍스트용 [사진] 마커 제거
     assert "[사진]" not in _clean_context("오늘 [사진] 좋았다 [사진: 강아지]")
 

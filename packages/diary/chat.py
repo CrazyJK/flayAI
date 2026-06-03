@@ -73,18 +73,14 @@ _EMOJI_RE = re.compile(
 )
 # 깨진 조합 자모(ᄏᄏ 같은 degenerate ㅋ/ㅎ) — 일반 'ㅋㅋ'(U+314B)는 보존
 _JAMO_RE = re.compile(r"[ᄀ-ᇿ]+")
-# 한국어 전용 — 영어 단어(라틴 알파벳 2글자 이상 묶음)는 모델 코드스위칭 잔재로 보고 제거.
-# 답변 텍스트에만 적용(일기 원문·제목은 별개로 보존됨).
-_EN_WORD_RE = re.compile(r"[A-Za-z]{2,}(?:['’-][A-Za-z]+)*")
-
-
 def _sanitize(text: str) -> str:
+    # 영어는 지우지 않는다(번역 없이 제거하면 문맥만 깨짐) — 마커·이모지·깨진 자모 등
+    # 명백한 쓰레기만 정리.
     s = text or ""
     s = _MARKER_RE.sub("", s)
     s = _IMG_NOISE_RE.sub("", s)
     s = _EMOJI_RE.sub("", s)
     s = _JAMO_RE.sub("", s)
-    s = _EN_WORD_RE.sub("", s)
     s = s.replace("_", " ")  # 떠도는 밑줄(마크다운 잔재)
     s = re.sub(r"[ \t]{2,}", " ", s)
     s = re.sub(r"\s+([,.!?…])", r"\1", s)
