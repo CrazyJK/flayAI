@@ -11,6 +11,7 @@
 | 5 | [api-reference.md](api-reference.md) | REST 엔드포인트 목록 |
 | 6 | [dev-guide.md](dev-guide.md) | 로컬 실행, 자주 쓰는 명령 |
 | 7 | [admin.md](admin.md) | 관리자 모니터링 페이지 + 인덱서 작업 트리거 |
+| 8 | [diary.md](diary.md) | 일기형 대화(`/diary`) — 일상 챗 + 영구 일기 + 회상 |
 
 상위 문서로 [`AI_PLAN.md`](AI_PLAN.md) 가 있습니다. 거기는 전체 설계 명세이고,
 이 폴더는 **이미 구현된 것을 기준으로 한 동작 설명서**입니다.

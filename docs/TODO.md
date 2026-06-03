@@ -7,6 +7,16 @@
 
 ---
 
+## 🆕 일기형 대화(Diary) — 수동 후속 작업
+
+신규 기능 [`docs/diary.md`](diary.md) 구현 완료(코드·테스트·빌드 통과). 환경 의존 단계는 사용자 실행 필요:
+
+- 🔴 **모델 받기**: `ollama pull huihui_ai/exaone3.5-abliterated:7.8b` (한국어 무검열, 7.8B Q4 ≈ 5GB VRAM — 영상 시청과 GPU 공유 유의).
+- 🔴 **레거시 일기 일회성 임포트**: `.\.venv\Scripts\python.exe -m packages.diary.import_legacy` (Qdrant·Ollama 기동 상태에서). 정본 `.diary` 24개 적재, 멱등.
+- ⚪ 후속 아이디어: 세션 제목/요약 LLM 지연 생성, assistant 발화 양방향 임베딩, `/diary` 히스토리 사이드 패널.
+
+---
+
 ## ✅ 완료 (1차 처리)
 
 문서(B 전체) + lock 무관 코드(A2/A4 + A1 주석)를 반영했다. 의존성 변경과 환경 필요 작업은 아래 "남은 작업" 으로 미뤘다.

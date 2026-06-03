@@ -42,8 +42,16 @@ data:
   db_path:         "data/sqlite/flay.db"
   state_path:      "data/state.json"
 
+  # 일기형 대화: 레거시 일기 파일(.diary, JSON) 디렉토리 — 일회성 임포트 소스
+  diary_dir:       "K:/Crazy/Diary"
+  # 일기 첨부 이미지(레거시 base64 추출분) 저장 경로 — /static/diary-assets 로 서빙
+  diary_assets:    "data/diary_assets"
+
 models:
   llm:            "huihui_ai/qwen2.5-abliterate:7b"
+  # 일기형 대화(일상 챗) 전용 LLM. 한국어 특화 EXAONE 3.5 의 무검열(abliterated) 판.
+  # 영상 검색 채팅(llm)과 분리 — 페르소나(수동적 경청자)와 도구셋이 전혀 다름.
+  diary_llm:      "huihui_ai/exaone3.5-abliterated:7.8b"
   # 포스터 캡션용 비전(VLM) 모델. think 를 끌 수 있는 gemma 계열(무검열) 사용.
   # 배치 캡션 전용 — 채팅엔 미사용. 교체 시 이 한 줄만 변경(파이프라인은 모델 비종속).
   vision:         "huihui_ai/gemma-4-abliterated:e4b"
@@ -100,6 +108,14 @@ server:
     - png
     - webp
     - gif
+
+diary:
+  # 새 세션 시작 기준: 마지막 메시지가 이 시간(시) 넘게 지났으면 새 세션, 아니면 이어감
+  idle_hours: 6
+  # 채팅 컨텍스트에 넣을 현재 세션 최근 메시지 수(단기 연속성)
+  context_messages: 12
+  # 회상 검색 기본 반환 세션 수
+  recall_top_k: 5
 
 logging:
   log_dir:        "logs"

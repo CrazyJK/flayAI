@@ -6,6 +6,7 @@ import ThemeToggle from "./ThemeToggle";
 // 전 페이지 공용 네비게이션 항목 (채팅 헤더 기준)
 const NAV = [
   { key: "chat", href: "/", label: "채팅" },
+  { key: "diary", href: "/diary", label: "일기" },
   { key: "image", href: "/image", label: "이미지" },
   { key: "face", href: "/face", label: "얼굴" },
   { key: "labels", href: "/labels", label: "라벨링" },

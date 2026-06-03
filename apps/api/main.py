@@ -114,6 +114,19 @@ async def _lifespan(app: FastAPI):
     if host not in ("127.0.0.1", "localhost", "::1", "ai.kamoru.jk"):
         log.error("FastAPI must bind to localhost only. config.server.host=%s", host)
         sys.exit(1)
+    # 일기 서브시스템 스키마/컬렉션 준비(멱등)
+    try:
+        from packages.diary.schema import ensure_diary_collection, init_diary_schema
+        from packages.indexer.db import connect as _connect
+
+        _c = _connect()
+        init_diary_schema(_c)
+        _c.close()
+        from packages.indexer.embed_text import _qdrant
+
+        ensure_diary_collection(_qdrant())
+    except Exception as e:
+        log.warning("diary 초기화 건너뜀(첫 요청 때 재시도): %s", e)
     # 백그라운드 워밍업 — 기동을 막지 않음
     asyncio.create_task(_warmup_face_model())
     yield
@@ -244,6 +257,24 @@ def create_app() -> FastAPI:
     from apps.api.routers.admin import router as admin_router
 
     app.include_router(admin_router)
+
+    # ---- 일기형 대화 ----
+    from apps.api.routers.diary import router as diary_router
+
+    app.include_router(diary_router)
+
+    # ---- 일기 첨부 이미지 서빙 (레거시 base64 추출분) ----
+    @app.get("/static/diary-assets/{name}")
+    def diary_asset(name: str):
+        from packages.settings import repo_path
+
+        # 경로 탈출 방지: 파일명만 허용
+        if "/" in name or "\\" in name or ".." in name:
+            raise HTTPException(400, "bad name")
+        p = repo_path(cfg["data"].get("diary_assets", "data/diary_assets")) / name
+        if not p.exists():
+            raise HTTPException(404, "asset not found")
+        return FileResponse(str(p))
 
     return app
 
