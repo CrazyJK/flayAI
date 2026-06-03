@@ -110,11 +110,9 @@ export default function DiaryPage() {
   const [pending, setPending] = useState<string[]>([]); // 전송 대기 첨부 이미지(dataURL)
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
-  const [spacerH, setSpacerH] = useState(0); // 마지막 질문을 화면 맨 위까지 올릴 여유 공간
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const spacerRef = useRef<HTMLDivElement | null>(null);
-  const pendingTopRef = useRef<string | null>(null); // 전송 후 이 메시지를 화면 상단에 한 번만 맞춤
+  const pendingTopRef = useRef<string | null>(null); // 전송한 질문을 한 번 정렬할지 표시
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -141,20 +139,16 @@ export default function DiaryPage() {
   }, []);
 
   useEffect(() => {
-    // 방금 보낸 질문을 화면 맨 위에 '한 번만' 맞춘다(이후 스트리밍 중엔 자동 스크롤 안 함 →
-    // 회상 일기 끝으로 끌려가지 않고, 처음부터 직접 내려 보게 됨).
+    // 전송한 질문이 화면 절반 아래에 있을 때만 상단으로 한 번 올린다. 그 외엔 스크롤 안 건드림.
     const id = pendingTopRef.current;
     const c = scrollRef.current;
     if (!id || !c) return;
+    pendingTopRef.current = null; // 한 번만
     const el = c.querySelector(`[data-mid="${id}"]`) as HTMLElement | null;
     if (!el) return;
-    // 컨테이너만 스크롤(상위 페이지 영향 없음): 질문 상단을 컨테이너 상단(+8)에 맞춤
-    c.scrollTop += el.getBoundingClientRect().top - c.getBoundingClientRect().top - 8;
-    // 상단에 도달했으면 완료, 아니면(스페이서가 아직 안 커서 못 올라감) 다음 렌더에서 재시도
-    if (el.getBoundingClientRect().top - c.getBoundingClientRect().top <= 9) {
-      pendingTopRef.current = null;
-    }
-  }, [messages, spacerH]);
+    const top = el.getBoundingClientRect().top - c.getBoundingClientRect().top;
+    if (top > c.clientHeight / 2) c.scrollTop += top - 8;
+  }, [messages]);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? patch(m) : m)));
@@ -270,28 +264,6 @@ export default function DiaryPage() {
   const abort = useCallback(() => abortRef.current?.abort(), []);
   const empty = messages.length === 0;
 
-  // 하단 여백 = 마지막 질문을 화면 맨 위로 올릴 만큼만(= 한 화면 − 질문 아래 내용).
-  // 답변이 길면 0 → 불필요한 빈 공간 없음. 스트리밍 중엔 내용↑·여백↓ 로 총 높이가 일정해
-  // 스크롤바도 안정. 메시지 변경 시에만 계산 → 타이핑(textarea 리사이즈)엔 반응 안 함.
-  useEffect(() => {
-    const c = scrollRef.current;
-    if (!c) return;
-    const recompute = () => {
-      const nodes = c.querySelectorAll<HTMLElement>("[data-mid]");
-      const q = nodes[nodes.length - 1];
-      if (!q) {
-        setSpacerH(0);
-        return;
-      }
-      const spH = spacerRef.current?.offsetHeight ?? 0;
-      const belowQ = c.scrollHeight - spH - q.offsetTop; // 질문 상단 ~ 내용 끝 높이
-      setSpacerH(Math.max(0, c.clientHeight - belowQ - 8));
-    };
-    recompute();
-    window.addEventListener("resize", recompute);
-    return () => window.removeEventListener("resize", recompute);
-  }, [messages]);
-
   return (
     <main className="flex-1 flex flex-col w-full min-h-0">
       <AppHeader
@@ -319,7 +291,7 @@ export default function DiaryPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="relative flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
+          className="flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
         >
           {messages.map((m) =>
             m.role === "user" ? (
@@ -349,8 +321,6 @@ export default function DiaryPage() {
               </div>
             )
           )}
-          {/* 하단 여백: 마지막 질문을 화면 맨 위까지 올릴 만큼만(딱 필요한 높이) */}
-          <div ref={spacerRef} aria-hidden style={{ height: spacerH }} className="shrink-0" />
         </div>
       )}
 
