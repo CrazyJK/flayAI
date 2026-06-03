@@ -3,7 +3,7 @@
 # 이 파일을 `diary_prompts.yaml` 로 복사한 뒤 취향대로 수정하세요.
 # diary_prompts.yaml 은 .gitignore 되어 git 에 올라가지 않습니다(개인 수위/말투 보호).
 # 비워두거나 일부 키만 둬도 됩니다 — 빠진 키는 코드의 기본값(packages/diary/prompts.py)을 씁니다.
-# 수정 후에는 API 재시작 필요(자동 리로드 없음).
+# 저장하면 다음 대화부터 자동 반영됩니다(API 재시작 불필요).
 
 # 페르소나 — 일상 대화·회상 답변 둘 다에 적용
 system: |

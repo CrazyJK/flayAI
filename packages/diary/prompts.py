@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any
 
 import yaml
@@ -44,18 +43,32 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 
-@lru_cache(maxsize=1)
+# 파일 수정시각(mtime) 기반 캐시 — diary_prompts.yaml 을 저장하면 다음 호출에서 자동 반영
+# (재시작 불필요). 호출당 stat() 한 번이라 부담 없음.
+_cache: dict[str, Any] | None = None
+_cache_mtime: float = -1.0
+
+
 def _load() -> dict[str, Any]:
-    merged = dict(_DEFAULTS)
+    global _cache, _cache_mtime
     path = repo_path("diary_prompts.yaml")
+    try:
+        mtime = path.stat().st_mtime if path.exists() else 0.0
+    except OSError:
+        mtime = 0.0
+    if _cache is not None and mtime == _cache_mtime:
+        return _cache
+
+    merged = dict(_DEFAULTS)
     if path.exists():
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
             for k in _DEFAULTS:
                 if k in data:
                     merged[k] = data[k]
-        except yaml.YAMLError:
+        except (yaml.YAMLError, OSError):
             pass
+    _cache, _cache_mtime = merged, mtime
     return merged
 
 

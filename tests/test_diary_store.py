@@ -233,6 +233,28 @@ def test_recall_sessions_sorted_chronologically(conn):
     assert dates == ["2023-01-01", "2023-02-02", "2023-03-03"]
 
 
+def test_prompts_hot_reload_on_file_change(tmp_path, monkeypatch):
+    import os
+
+    from packages.diary import prompts
+
+    f = tmp_path / "diary_prompts.yaml"
+    monkeypatch.setattr(prompts, "repo_path", lambda rel: f)
+    prompts._cache = None
+    prompts._cache_mtime = -1.0
+    try:
+        f.write_text('not_found: "처음"', encoding="utf-8")
+        os.utime(f, (1000, 1000))
+        assert prompts.not_found_message() == "처음"
+        # 파일 수정(mtime 변경) → 재시작 없이 다음 호출에서 반영
+        f.write_text('not_found: "바뀜"', encoding="utf-8")
+        os.utime(f, (2000, 2000))
+        assert prompts.not_found_message() == "바뀜"
+    finally:
+        prompts._cache = None
+        prompts._cache_mtime = -1.0
+
+
 def test_transcript_returns_meta_and_messages(conn):
     s = store.create_session(conn, title="제목", weather="sunny", source_key="2023-02-02")
     store.add_message(conn, s, "user", "본문", embed=False)
