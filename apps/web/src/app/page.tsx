@@ -108,13 +108,8 @@ function buildReason(hit: VideoHit, query: string): string {
   if (b) {
     if (!kws.length && b.semantic >= 0.5) parts.push("의미가 유사");
     else if (kws.length && b.semantic >= 0.7) parts.push("의미도 유사");
-    if (b.usage >= 0.6) {
-      const bits: string[] = [];
-      if ((hit.play ?? 0) > 0) bits.push(`재생 ${hit.play}`);
-      if ((hit.rank ?? 0) > 0) bits.push(`평점 ${hit.rank}`);
-      parts.push(bits.length ? `인기작(${bits.join("·")})` : "인기작");
-    }
-    if (b.recency >= 0.5) parts.push("최근 본 영상");
+    if (b.usage >= 0.6) parts.push("인기"); // 재생수·평점은 메타 줄에 이미 표시
+    if (b.recency >= 0.5) parts.push("최근");
   }
   if (!parts.length) parts.push("관련도 기반 선택");
   return parts.join(" · ");
@@ -132,12 +127,9 @@ const SCORE_SIGNALS = [
 const pct100 = (v: number) =>
   String(Math.round(Math.max(0, Math.min(1, v)) * 100)).padStart(2, "0");
 
-function ScoreLine({ b }: { b: NonNullable<VideoHit["score_breakdown"]> }) {
-  return (
-    <div className="mt-1 text-[10px] text-neutral-300 font-mono tabular-nums">
-      {SCORE_SIGNALS.map(({ key, label }) => `${label}: ${pct100(b[key] ?? 0)}`).join(", ")}
-    </div>
-  );
+// 점수 수치 한 줄 문자열 ("의미: 96, 키워드: 00, ...")
+function scoreText(b: NonNullable<VideoHit["score_breakdown"]>): string {
+  return SCORE_SIGNALS.map(({ key, label }) => `${label}: ${pct100(b[key] ?? 0)}`).join(", ");
 }
 
 type ToolEvent = { name: string; args?: Record<string, unknown> };
@@ -194,6 +186,8 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
   const title = hit.title || hit.title_ko || hit.title_jp || hit.opus;
   const posterUrl = `${API_BASE}/static/posters/${encodeURIComponent(hit.opus)}`;
   const reason = buildReason(hit, query);
+  const scores = hit.score_breakdown ? scoreText(hit.score_breakdown) : "";
+  const detailFull = [scores, reason].filter(Boolean).join(" · ");
   return (
     <div
       className="relative aspect-[400/269] rounded-md overflow-hidden border border-border cursor-pointer"
@@ -245,12 +239,16 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
             <span title="좋아요 수">💛 {hit.like_count}</span>
           )}
         </div>
-        {/* 채택 근거: 의미/키워드/인기/최근 기여도(결과셋 내 상대값, 100점 만점) */}
-        {hit.score_breakdown && <ScoreLine b={hit.score_breakdown} />}
-        {/* 사람이 읽는 채택 이유 — 한 줄(넘치면 …), 호버 시 전체 표시 */}
-        {reason && (
-          <div className="mt-0.5 text-[10px] text-neutral-400 truncate" title={reason}>
-            ↳ {reason}
+        {/* 채택 근거: 수치 + 사람이 읽는 이유를 한 줄로(넘치면 …, 호버 시 전체) */}
+        {detailFull && (
+          <div className="mt-1 text-[10px] truncate" title={detailFull}>
+            <span className="text-neutral-300 font-mono tabular-nums">{scores}</span>
+            {reason && (
+              <span className="text-neutral-400">
+                {scores ? " · " : ""}
+                {reason}
+              </span>
+            )}
           </div>
         )}
       </div>
