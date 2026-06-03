@@ -110,16 +110,11 @@ export default function DiaryPage() {
   const [pending, setPending] = useState<string[]>([]); // 전송 대기 첨부 이미지(dataURL)
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
+  const [spacerH, setSpacerH] = useState(0); // 마지막 질문을 화면 맨 위까지 올릴 여유 공간
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const stickRef = useRef(true); // 하단 근처면 자동 스크롤 유지, 위로 올리면 멈춤
+  const pendingTopRef = useRef<string | null>(null); // 전송 후 이 메시지를 화면 상단에 한 번만 맞춤
   const taRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // 스크롤이 하단 근처인지 추적(위로 올려 일기 읽는 중엔 자동 스크롤 안 함)
-  const onScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (el) stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  }, []);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const readAsDataUrl = (file: File) =>
@@ -145,11 +140,20 @@ export default function DiaryPage() {
   }, []);
 
   useEffect(() => {
-    // 하단 근처일 때만 즉시(애니메이션 없이) 하단으로 — 스트리밍 중 덜컹임 방지
-    if (!stickRef.current) return;
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    // 방금 보낸 질문을 화면 맨 위에 '한 번만' 맞춘다(이후 스트리밍 중엔 자동 스크롤 안 함 →
+    // 회상 일기 끝으로 끌려가지 않고, 처음부터 직접 내려 보게 됨).
+    const id = pendingTopRef.current;
+    const c = scrollRef.current;
+    if (!id || !c) return;
+    const el = c.querySelector(`[data-mid="${id}"]`) as HTMLElement | null;
+    if (!el) return;
+    // 컨테이너만 스크롤(상위 페이지 영향 없음): 질문 상단을 컨테이너 상단(+8)에 맞춤
+    c.scrollTop += el.getBoundingClientRect().top - c.getBoundingClientRect().top - 8;
+    // 상단에 도달했으면 완료, 아니면(스페이서가 아직 안 커서 못 올라감) 다음 렌더에서 재시도
+    if (el.getBoundingClientRect().top - c.getBoundingClientRect().top <= 9) {
+      pendingTopRef.current = null;
+    }
+  }, [messages, spacerH]);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? patch(m) : m)));
@@ -165,7 +169,6 @@ export default function DiaryPage() {
   const send = useCallback(
     async (query: string, images: string[] = []) => {
       if ((!query.trim() && images.length === 0) || busy) return;
-      stickRef.current = true; // 새로 보내면 하단으로 따라가기 재개
       const userMsg: Message = {
         id: `u-${Date.now()}`,
         role: "user",
@@ -173,6 +176,7 @@ export default function DiaryPage() {
         images: images.length ? images : undefined,
         status: "done",
       };
+      pendingTopRef.current = userMsg.id; // 보낸 질문을 화면 상단에 맞춤(이후 자동 스크롤 X)
       const asstId = `a-${Date.now()}`;
       const asstMsg: Message = { id: asstId, role: "assistant", text: "", status: "streaming" };
       setMessages((prev) => [...prev, userMsg, asstMsg]);
@@ -265,6 +269,18 @@ export default function DiaryPage() {
   const abort = useCallback(() => abortRef.current?.abort(), []);
   const empty = messages.length === 0;
 
+  // 스크롤 컨테이너 높이만큼 하단 스페이서를 둬서, 방금 보낸 질문을 항상 화면 맨 위까지
+  // 올릴 수 있게 한다(짧은 답변이어도). 컨테이너 리사이즈에 맞춰 갱신.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => setSpacerH(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [empty]);
+
   return (
     <main className="flex-1 flex flex-col w-full min-h-0">
       <AppHeader
@@ -292,12 +308,11 @@ export default function DiaryPage() {
       ) : (
         <div
           ref={scrollRef}
-          onScroll={onScroll}
           className="flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
         >
           {messages.map((m) =>
             m.role === "user" ? (
-              <div key={m.id} className="flex justify-end">
+              <div key={m.id} data-mid={m.id} className="flex justify-end">
                 <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%] space-y-2">
                   {m.images && m.images.length > 0 && (
                     <div className="flex flex-wrap gap-2">
@@ -323,6 +338,8 @@ export default function DiaryPage() {
               </div>
             )
           )}
+          {/* 하단 여유 공간: 마지막 질문을 화면 맨 위까지 올릴 수 있게 */}
+          <div aria-hidden style={{ height: spacerH }} className="shrink-0" />
         </div>
       )}
 
