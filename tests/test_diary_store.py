@@ -190,6 +190,15 @@ def test_sanitize_removes_model_noise():
     assert "[사진]" not in _clean_context("오늘 [사진] 좋았다 [사진: 강아지]")
 
 
+def test_clip_sentences():
+    from packages.diary.chat import _clip_sentences
+
+    t = "씨발 배고프지. 당장 먹자! 뭐 먹을래? 매운 거 어때?"
+    assert _clip_sentences(t, 2) == "씨발 배고프지. 당장 먹자!"
+    assert _clip_sentences(t, 0) == t  # 0=무제한
+    assert _clip_sentences("한 문장만.", 2) == "한 문장만."  # n보다 적으면 그대로
+
+
 def test_crudify_applies_person_subs(monkeypatch):
     from packages.diary import chat
 

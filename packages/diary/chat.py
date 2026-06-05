@@ -87,6 +87,21 @@ def _sanitize(text: str) -> str:
     return s.strip(" \t\n+·-*_~`")
 
 
+_SENT_RE = re.compile(r"[^.!?…]*[.!?…]")
+
+
+def _clip_sentences(text: str, n: int) -> str:
+    """앞에서 n문장만 남긴다(EXAONE 이 길게 채우고 꼬리 질문을 다는 걸 잘라 짧게 유지).
+    문장 경계(.!?…)로 자르므로 중간에 끊기지 않고, 미완성 꼬리는 버려진다. n<=0 이면 그대로.
+    """
+    if n <= 0:
+        return text or ""
+    parts = _SENT_RE.findall(text or "")
+    if len(parts) <= n:
+        return (text or "").strip()
+    return "".join(parts[:n]).strip()
+
+
 def _crudify(text: str) -> str:
     """diary_prompts.yaml 의 person_subs 규칙으로 사람 지칭 등을 거칠게 치환.
 
@@ -181,7 +196,7 @@ async def _chat(
             "temperature": float(d.get("temperature", 0.9)),
             "top_p": float(d.get("top_p", 0.95)),
             "repeat_penalty": 1.15,
-            "num_predict": 512,
+            "num_predict": int(d.get("max_tokens", 256)),  # 짧게 유지용 하드 캡
         },
     }
     if tools:
@@ -316,6 +331,7 @@ async def route_diary_chat(
             if not full:
                 full = "응, 듣고 있어."
                 yield {"type": "token", "text": full}
-        # 노이즈 제거(_sanitize) + 사람 지칭 거칠게(_crudify) 한 최종본 — 저장·표시에 사용
-        clean = _crudify(_sanitize(full)) or "응, 듣고 있어."
+        # 노이즈 제거 + 앞 N문장만(짧게) + 사람 지칭 거칠게 — 저장·표시에 사용
+        max_sent = int(cfg.get("diary", {}).get("max_sentences", 0))
+        clean = _crudify(_clip_sentences(_sanitize(full), max_sent)) or "응, 듣고 있어."
         yield {"type": "done", "message": clean}
