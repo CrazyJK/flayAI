@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS query_log (
 );
 
 -- 임베딩 시그니처 (증분 인덱싱: opus 당 '벡터 입력' 해시) ----------------
--- sig 가 동일하면 재임베딩 스킵. videos=문서 해시, posters_clip=path|mtime 해시.
+-- sig 가 동일하면 재임베딩 스킵. videos=문서 해시, posters_clip=path|mtime|타일구성 해시.
 CREATE TABLE IF NOT EXISTS embed_state (
   collection TEXT NOT NULL,
   opus       TEXT NOT NULL,

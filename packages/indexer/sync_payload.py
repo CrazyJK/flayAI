@@ -7,8 +7,8 @@ SQLite 가 진실 소스 (`videos.kind` + `posters.video_path`).
 1. SQLite 에서 (opus → kind, playable) 맵 구성 = truth.
 2. 각 컬렉션을 scroll 로 훑으며 (opus, current_payload) 수집.
 3. 다른 것만 골라 `set_payload` 호출 (벡터는 건드리지 않음).
-   - videos / posters_clip / poster_ocr : opus 당 1 point → point id 로 갱신.
-   - faces : opus 당 다수 point → opus 필터로 일괄 갱신.
+   - videos / poster_ocr : opus 당 1 point → point id 로 갱신.
+   - posters_clip (7타일) / faces : opus 당 다수 point → opus 필터로 일괄 갱신.
 
 이미지/얼굴/OCR 풀 재처리 대비 수십~수백배 빠름.
 """
@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 # (컬렉션 이름, opus 당 다중 point 여부)
 COLLECTIONS = [
     ("videos", False),
-    ("posters_clip", False),
+    ("posters_clip", True),
     ("poster_ocr", False),
     ("faces", True),
 ]

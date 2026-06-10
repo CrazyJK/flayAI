@@ -48,6 +48,25 @@ def _kind_filter(kind: str | None) -> qm.Filter | None:
     return qm.Filter(must=[qm.FieldCondition(key="kind", match=qm.MatchValue(value=kind))])
 
 
+def _clip_search_best_per_opus(vec: list[float], limit: int, kind: str | None):
+    """posters_clip 검색. 포스터당 7타일 점이 있으므로 opus 로 그룹핑해
+    포스터별 최고 점수 1점만 반환(같은 포스터가 결과를 도배하는 것 방지)."""
+    groups = (
+        _qdrant()
+        .query_points_groups(
+            collection_name=POSTERS_CLIP,
+            query=vec,
+            group_by="opus",
+            limit=limit,
+            group_size=1,
+            query_filter=_kind_filter(kind),
+            with_payload=True,
+        )
+        .groups
+    )
+    return [g.hits[0] for g in groups if g.hits]
+
+
 def _hits_from_posters(points) -> list[dict[str, Any]]:
     """posters_clip 검색 결과 → video hit 형식 (RAG tool과 동일)."""
     conn = connect()
@@ -140,14 +159,7 @@ def image_search_text(req: ImageTextSearchRequest) -> dict[str, Any]:
         feats = model.encode_text(toks)
         feats = feats / feats.norm(dim=-1, keepdim=True)
     clip_vec = feats[0].cpu().tolist()
-    qc = _qdrant()
-    clip_pts = qc.query_points(
-        collection_name=POSTERS_CLIP,
-        query=clip_vec,
-        limit=pool,
-        query_filter=_kind_filter(req.kind),
-        with_payload=True,
-    ).points
+    clip_pts = _clip_search_best_per_opus(clip_vec, pool, req.kind)
 
     # 2) bge-m3 캡션 → poster_caption (한국어 자연어 의미; 캡션 미실행 시 빈 결과)
     cap_pts = _caption_search(req.query, pool, req.kind)
@@ -183,14 +195,7 @@ def image_search(
         feats = model.encode_image(batch)
         feats = feats / feats.norm(dim=-1, keepdim=True)
     vec = feats[0].cpu().tolist()
-    qc = _qdrant()
-    res = qc.query_points(
-        collection_name=POSTERS_CLIP,
-        query=vec,
-        limit=limit,
-        query_filter=_kind_filter(kind),
-        with_payload=True,
-    ).points
+    res = _clip_search_best_per_opus(vec, limit, kind)
     return {"items": _hits_from_posters(res)}
 
 

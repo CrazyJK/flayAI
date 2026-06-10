@@ -81,8 +81,9 @@
 - 모델: OpenCLIP `ViT-L-14` (`laion2b_s32b_b82k`, 768d)
 - 입력: `posters.path` 의 모든 이미지.
 - 출력: Qdrant `posters_clip`. 텍스트 ↔ 이미지 cross-modal 검색 가능 (CLIP 의 핵심).
-- 성능: 20,334장 / 685초 / GPU.
-- **증분**: 포스터 `path|mtime` 해시를 `embed_state(collection='posters_clip')` 에 저장 → 신규·교체된 포스터만 재인코딩(이미지는 opus 당 불변). 첫 실행은 기존 Qdrant 점을 시드해 전량 스킵(재임베딩 0), `--force` 로 전량 재임베딩.
+- **타일링(7벡터/장)**: 포스터당 전체 + 좌/우 절반 + 4분면을 각각 임베딩(`TILE_SCHEME="tiles7"`). CLIP 전역 임베딩은 잘린 이미지를 못 잡으므로, 절반·1/4 조각 질의가 대응 타일과 직접 매칭되게 한다. 점 id 는 full=`SHA1(opus)`(레거시 단일점 자리 덮어쓰기), 나머지=`SHA1(opus#tile)`. payload 에 `tile` 필드 포함. 검색 측은 `query_points_groups(group_by="opus")` 로 포스터당 최고점 1개만 사용.
+- 성능: 장당 약 111ms (7타일, 4070 Ti) → 20K 전량 약 38분. GPU 인코딩은 `clip_batch_size` 단위 미니배치라 타일 7배수여도 VRAM 사용량은 동일.
+- **증분**: 포스터 `path|mtime|타일구성` 해시를 `embed_state(collection='posters_clip')` 에 저장 → 신규·교체된 포스터만 7타일 재인코딩(이미지는 opus 당 불변). `TILE_SCHEME` 변경 시 시그니처가 달라져 다음 실행 때 자동 전량 재임베딩. 첫 실행 시드는 7타일 점이 모두 있는 opus 만 스킵, `--force` 로 전량 재임베딩.
 
 ### 8. `extract-faces` — 얼굴 추출 (M4b)
 

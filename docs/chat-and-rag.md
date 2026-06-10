@@ -180,7 +180,9 @@ RRF (Reciprocal Rank Fusion) = `Σ 1 / (k + rank_i)`. 점수 스케일이 다른
 ### 이미지 한 장 → 비슷한 포스터 (`/api/image/search`)
 
 1. 업로드된 이미지를 OpenCLIP ViT-L/14 로 768d 임베딩.
-2. Qdrant `posters_clip` top-K.
+2. Qdrant `posters_clip` 검색 — 포스터당 7타일(전체+절반2+4분면) 점이 있으므로
+   `query_points_groups(group_by="opus")` 로 포스터별 최고점 1개만 top-K
+   (절반·조각 이미지 질의도 대응 타일에 매칭, 같은 포스터의 결과 도배 방지).
 3. opus 로 SQLite 메타 join → hit.
 
 ### 이미지 한 장 → 배우 매칭 (`/api/face/search`)
