@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import AppHeader from "../_components/AppHeader";
+import { DropOverlay, useImageDropPaste } from "../_components/useImageDropPaste";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
@@ -119,8 +120,17 @@ export default function ImageSearchPage() {
     setPreview(f ? URL.createObjectURL(f) : null);
   }
 
+  // 드래그&드롭·붙여넣기로 들어온 이미지 — 이미지 탭으로 전환하고 첨부
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const { dragOver, dropProps } = useImageDropPaste((f) => {
+    if (fileRef.current) fileRef.current.value = "";
+    setTab("image");
+    onPick(f);
+  });
+
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="relative flex-1 flex flex-col" {...dropProps}>
+      {dragOver && <DropOverlay />}
       <AppHeader active="image" />
 
       <div className="px-4 py-3 border-b border-border space-y-3">
@@ -173,6 +183,7 @@ export default function ImageSearchPage() {
         ) : (
           <div className="flex gap-3 items-start">
             <input
+              ref={fileRef}
               type="file"
               accept="image/*"
               onChange={(e) => onPick(e.target.files?.[0] ?? null)}

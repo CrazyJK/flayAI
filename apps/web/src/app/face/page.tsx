@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import AppHeader from "../_components/AppHeader";
+import { DropOverlay, useImageDropPaste } from "../_components/useImageDropPaste";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
@@ -28,6 +29,7 @@ export default function FaceSearchPage() {
   const [res, setRes] = useState<SearchResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   function onPick(f: File | null) {
     setFile(f);
@@ -35,6 +37,12 @@ export default function FaceSearchPage() {
     setPreview(f ? URL.createObjectURL(f) : null);
     setRes(null);
   }
+
+  // 드래그&드롭·붙여넣기로 들어온 이미지 — 파일 입력의 이전 선택 표시는 비운다
+  const { dragOver, dropProps } = useImageDropPaste((f) => {
+    if (fileRef.current) fileRef.current.value = "";
+    onPick(f);
+  });
 
   async function go() {
     if (!file) return;
@@ -58,11 +66,13 @@ export default function FaceSearchPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="relative flex-1 flex flex-col" {...dropProps}>
+      {dragOver && <DropOverlay />}
       <AppHeader active="face" />
 
       <div className="px-4 py-3 border-b border-border flex gap-3 items-start">
         <input
+          ref={fileRef}
           type="file"
           accept="image/*"
           onChange={(e) => onPick(e.target.files?.[0] ?? null)}
