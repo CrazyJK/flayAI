@@ -74,6 +74,28 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* 일기장 무드 — /diary 한정(diary/layout.tsx 가 래퍼에 부착).
+ * 도구 화면과 다른 '사적 공간' 체감: 세리프(명조) + 따뜻한 색조.
+ * 시맨틱 변수만 덮어쓰므로 bg-background/bg-card 등 기존 유틸리티가 그대로 물든다.
+ * 헤더는 AppHeader 의 font-sans 가 세리프 상속을 끊어 전 화면 동일하게 유지. */
+.diary-mood {
+  --background: #faf6ec; /* 크림 캔버스 */
+  --card: #fffdf6; /* 종이 느낌 표면 */
+  --muted: #efe7d6;
+  --accent: #f3ecdc;
+  --border: #e6dcc6;
+  --input: #d9cdb2;
+  font-family: Georgia, "Noto Serif KR", "Nanum Myeongjo", Batang, serif;
+}
+.dark .diary-mood {
+  --background: #16120b; /* 난색 차콜(기본 다크는 한색) */
+  --card: #1e1910;
+  --muted: #282115;
+  --accent: #342b1c;
+  --border: #362d1d;
+  --input: #362d1d;
+}
+
 /*
  * 스크롤바 (flayground 5.scrollbar.scss 기준)
  * - 얇은 스크롤바 + 반투명 thumb. flayAI 는 항상 다크 테마라 흰색 thumb 적용.
