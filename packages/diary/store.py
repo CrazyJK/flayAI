@@ -468,8 +468,26 @@ def _list_sessions_meta(
     out: list[dict[str, Any]] = []
     for r in rows:
         tr = get_session_transcript(conn, int(r["id"]))
-        if tr:
-            out.append({"session_id": int(r["id"]), "score": 0.0, "matched": [], "transcript": tr})
+        if not tr:
+            continue
+        # matched 에 첫 user 발화를 채운다 — 비워두면 LLM 답변 컨텍스트([찾은 기록])가
+        # 날짜만 있는 빈 줄이 되어 모델이 내용을 지어낸다(환각).
+        first_user = next(
+            (
+                str(m.get("content") or "")
+                for m in tr["messages"]
+                if m.get("role") == "user" and str(m.get("content") or "").strip()
+            ),
+            "",
+        )
+        out.append(
+            {
+                "session_id": int(r["id"]),
+                "score": 0.0,
+                "matched": [first_user] if first_user else [],
+                "transcript": tr,
+            }
+        )
     out.sort(key=lambda x: (x["transcript"]["session"].get("started_at") or ""))
     return out
 

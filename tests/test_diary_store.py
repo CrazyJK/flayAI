@@ -341,7 +341,10 @@ def test_recall_sessions_date_and_recent(conn):
         return [r["transcript"]["session"]["source_key"] for r in res]
 
     # 특정 일자
-    assert dates(store.recall_sessions(conn, "", date_from="2026-06-09", date_to="2026-06-09")) == ["2026-06-09"]
+    res = store.recall_sessions(conn, "", date_from="2026-06-09", date_to="2026-06-09")
+    assert dates(res) == ["2026-06-09"]
+    # 메타 전용 결과도 matched 에 첫 user 발화가 채워진다(빈 컨텍스트 → LLM 환각 방지)
+    assert res[0]["matched"] == ["쉬는 날"]
     # 월 범위
     assert dates(store.recall_sessions(conn, "", date_from="2026-06-01", date_to="2026-06-31")) == [
         "2026-06-09",
