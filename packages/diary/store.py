@@ -426,37 +426,78 @@ def _photo_session_ids(conn: sqlite3.Connection, session_ids: list[int]) -> set[
     return {int(r["session_id"]) for r in rows}
 
 
+# 세션의 대표 날짜: 레거시 일기는 source_key(YYYY-MM-DD), 라이브 챗은 started_at 의 날짜부.
+_SESSION_DATE_SQL = "COALESCE(s.source_key, substr(s.started_at, 1, 10))"
+
+
+def _session_date(entry: dict[str, Any]) -> str:
+    meta = entry["transcript"]["session"]
+    return meta.get("source_key") or (meta.get("started_at") or "")[:10]
+
+
+def _list_sessions_meta(
+    conn: sqlite3.Connection,
+    top_k: int,
+    has_image: bool,
+    date_from: str | None,
+    date_to: str | None,
+    date_like: str | None,
+) -> list[dict[str, Any]]:
+    """텍스트 검색 없이 메타 조건만으로 세션을 최근순 top_k 선별(표시는 시간순)."""
+    where = [
+        "EXISTS (SELECT 1 FROM diary_messages m "
+        "WHERE m.session_id = s.id AND m.role = 'user' AND m.indexed = 1)"
+    ]
+    params: list[Any] = []
+    if date_from:
+        where.append(f"{_SESSION_DATE_SQL} BETWEEN ? AND ?")
+        params += [date_from, date_to or date_from]
+    if date_like:
+        where.append(f"{_SESSION_DATE_SQL} LIKE ?")
+        params.append(date_like)
+    if has_image:
+        where.append(
+            "EXISTS (SELECT 1 FROM diary_messages mi "
+            "WHERE mi.session_id = s.id AND mi.raw_html LIKE '%<img%')"
+        )
+    rows = conn.execute(
+        f"SELECT s.id FROM diary_sessions s WHERE {' AND '.join(where)} "
+        f"ORDER BY {_SESSION_DATE_SQL} DESC, s.id DESC LIMIT ?",
+        (*params, top_k),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        tr = get_session_transcript(conn, int(r["id"]))
+        if tr:
+            out.append({"session_id": int(r["id"]), "score": 0.0, "matched": [], "transcript": tr})
+    out.sort(key=lambda x: (x["transcript"]["session"].get("started_at") or ""))
+    return out
+
+
 def recall_sessions(
     conn: sqlite3.Connection,
     query: str,
     top_k: int = 5,
     exclude_message_id: int | None = None,
     has_image: bool = False,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    date_like: str | None = None,
+    recent: bool = False,
 ) -> list[dict[str, Any]]:
     """회상 결과를 '세션 단위'로 묶어 그때 대화 전체(transcript)를 함께 반환.
 
     같은 세션의 여러 메시지가 매칭되면 한 번만(최고 점수) 표시.
     선택은 관련도(top_k) 로 하되, 일기이므로 **표시는 시간순(오래된→최근)** 으로 정렬한다.
-    has_image=True 면 사진 첨부 세션만. 이때 query 가 비면('사진 있는 일기'처럼
-    조건뿐인 질의) 텍스트 검색 없이 사진 세션을 최근순 top_k 로 반환.
+    메타 조건(chat 의 _extract_* 가 질의에서 분리):
+    - has_image: 사진 첨부(<img>) 세션만.
+    - date_from/date_to: 세션 날짜 범위. date_like: 연도 없는 날짜('____-06-09', _=한 글자).
+    - recent: '최근/요즘' — 주제 없이 최근순 나열을 허용.
+    주제(query)가 비면 텍스트 검색 없이 조건만으로 최근순 top_k 를 반환.
     반환: [{session_id, score, matched: [content...], transcript: {session, messages}}]
     """
-    if has_image and not query.strip():
-        rows = conn.execute(
-            "SELECT session_id, MAX(id) AS last_id FROM diary_messages "
-            "WHERE raw_html LIKE '%<img%' GROUP BY session_id "
-            "ORDER BY last_id DESC LIMIT ?",
-            (top_k,),
-        ).fetchall()
-        out: list[dict[str, Any]] = []
-        for r in rows:
-            tr = get_session_transcript(conn, int(r["session_id"]))
-            if tr:
-                out.append(
-                    {"session_id": int(r["session_id"]), "score": 0.0, "matched": [], "transcript": tr}
-                )
-        out.sort(key=lambda x: (x["transcript"]["session"].get("started_at") or ""))
-        return out
+    if not query.strip() and (has_image or date_from or date_like or recent):
+        return _list_sessions_meta(conn, top_k, has_image, date_from, date_to, date_like)
 
     hits = recall(conn, query, top_k=top_k * 3, exclude_message_id=exclude_message_id)
     if has_image and hits:
@@ -473,7 +514,15 @@ def recall_sessions(
                 continue
             seen[sid] = {"session_id": sid, "score": h["score"], "matched": [], "transcript": tr}
         seen[sid]["matched"].append(h["content"])
+    entries = list(seen.values())
+    # 주제 검색 결과에도 날짜 조건 적용(세션 대표 날짜 기준)
+    if date_from:
+        hi = date_to or date_from
+        entries = [e for e in entries if date_from <= _session_date(e) <= hi]
+    if date_like:
+        pat = re.compile(date_like.replace("_", "."))
+        entries = [e for e in entries if pat.fullmatch(_session_date(e))]
     # 관련도 상위 top_k 선별 → 시간순(세션 시작 시각 오름차순)으로 표시
-    top = sorted(seen.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+    top = sorted(entries, key=lambda x: x["score"], reverse=True)[:top_k]
     top.sort(key=lambda x: (x["transcript"]["session"].get("started_at") or ""))
     return top

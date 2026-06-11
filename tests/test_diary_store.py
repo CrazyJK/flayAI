@@ -283,6 +283,56 @@ def test_recall_sessions_photo_filter(conn):
     assert [r["session_id"] for r in res] == [s2]
 
 
+def test_extract_date_and_recent_cond():
+    from packages.diary.chat import _extract_date_cond, _extract_recent_cond
+
+    # ISO 날짜 / 한국어 날짜 / 연+월 / 연도 없는 월·일
+    assert _extract_date_cond("2026-06-09") == ("2026-06-09", "2026-06-09", None, "")
+    assert _extract_date_cond("2026년 6월 9일") == ("2026-06-09", "2026-06-09", None, "")
+    assert _extract_date_cond("2026년 06월") == ("2026-06-01", "2026-06-31", None, "")
+    assert _extract_date_cond("6월 9일") == (None, None, "____-06-09", "")
+    assert _extract_date_cond("6월 온천") == (None, None, "____-06-__", "온천")
+    # 날짜 표현 없으면 그대로
+    assert _extract_date_cond("온천 갔던 날") == (None, None, None, "온천 갔던 날")
+    # 잘못된 월은 무시
+    assert _extract_date_cond("13월") == (None, None, None, "13월")
+
+    assert _extract_recent_cond("최근 3개") == (True, 3, "")
+    assert _extract_recent_cond("요즘") == (True, None, "")
+    assert _extract_recent_cond("최근 온천") == (True, None, "온천")
+    assert _extract_recent_cond("온천") == (False, None, "온천")
+
+
+def test_recall_sessions_date_and_recent(conn):
+    for sk, ts, body in [
+        ("2026-05-01", "2026-05-01T10:00:00", "온천 갔다"),
+        ("2026-06-09", "2026-06-09T10:00:00", "쉬는 날"),
+        ("2026-06-15", "2026-06-15T10:00:00", "출근했다"),
+    ]:
+        s = store.create_session(conn, started_at=ts, source_key=sk)
+        store.add_message(conn, s, "user", body, created_at=ts, embed=False)
+
+    def dates(res):
+        return [r["transcript"]["session"]["source_key"] for r in res]
+
+    # 특정 일자
+    assert dates(store.recall_sessions(conn, "", date_from="2026-06-09", date_to="2026-06-09")) == ["2026-06-09"]
+    # 월 범위
+    assert dates(store.recall_sessions(conn, "", date_from="2026-06-01", date_to="2026-06-31")) == [
+        "2026-06-09",
+        "2026-06-15",
+    ]
+    # 연도 없는 월·일(date_like)
+    assert dates(store.recall_sessions(conn, "", date_like="____-05-__")) == ["2026-05-01"]
+    # 최근 N개 — 최근순 선별 후 시간순 표시
+    assert dates(store.recall_sessions(conn, "", top_k=2, recent=True)) == ["2026-06-09", "2026-06-15"]
+    # 주제 + 날짜 조건 결합
+    assert dates(store.recall_sessions(conn, "온천", date_from="2026-05-01", date_to="2026-05-31")) == [
+        "2026-05-01"
+    ]
+    assert store.recall_sessions(conn, "온천", date_from="2026-06-01", date_to="2026-06-31") == []
+
+
 def test_recall_excludes_non_indexed(conn):
     # 회상 질문(index=False)은 substr 로도 회상되지 않아야(오염 방지)
     s = store.create_session(conn)
@@ -324,13 +374,13 @@ def test_prompts_hot_reload_on_file_change(tmp_path, monkeypatch):
     prompts._cache = None
     prompts._cache_mtime = -1.0
     try:
-        f.write_text('not_found: "처음"', encoding="utf-8")
+        f.write_text('recall_not_found: "처음"', encoding="utf-8")
         os.utime(f, (1000, 1000))
-        assert prompts.not_found_message() == "처음"
+        assert prompts.recall_not_found_message() == "처음"
         # 파일 수정(mtime 변경) → 재시작 없이 다음 호출에서 반영
-        f.write_text('not_found: "바뀜"', encoding="utf-8")
+        f.write_text('recall_not_found: "바뀜"', encoding="utf-8")
         os.utime(f, (2000, 2000))
-        assert prompts.not_found_message() == "바뀜"
+        assert prompts.recall_not_found_message() == "바뀜"
     finally:
         prompts._cache = None
         prompts._cache_mtime = -1.0

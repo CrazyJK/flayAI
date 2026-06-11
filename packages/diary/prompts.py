@@ -5,8 +5,12 @@
 - repo 루트의 `diary_prompts.yaml`(gitignore 대상)이 있으면 그 값으로 덮어쓴다.
   → 개인 취향/수위 조정은 그 파일에서. 구조는 `diary_prompts.example.yaml` 참고.
 
-키: system(페르소나) / recall_answer(회상 답변 지시) / not_found(회상 실패 멘트)
+키: system(일상 대화 페르소나) / recall_system(회상 답변 페르소나 — 차분한 톤)
+    / recall_answer(회상 답변 지시) / recall_not_found(회상 실패 멘트)
     / vision_describe(첨부 사진 묘사 지시) / person_subs(사람 지칭 등 거친 치환 규칙, 선택)
+
+회상 경로는 system 이 아니라 recall_system 을 쓴다 — 일상 대화는 수위 높은 페르소나라도
+과거 기록을 보여주는 답은 톤 다운(담백)되게 분리.
 """
 
 from __future__ import annotations
@@ -27,13 +31,19 @@ _DEFAULTS: dict[str, Any] = {
         "되묻는 질문을 억지로 덧붙이지 마라.\n"
         "- 한국어로만. 한자·일본어·영어 단어 금지. 이모지·기호·마크다운 금지.\n"
     ),
+    "recall_system": (
+        "너는 사용자의 일기를 함께 들춰보는 차분한 친구다.\n"
+        "- 회상 질문에는 찾은 기록을 근거로 담백하게 답한다. 과장·거친 말·호들갑 금지.\n"
+        "- 반말로 짧게, 1~2문장.\n"
+        "- 한국어로만. 이모지·기호·마크다운 금지.\n"
+    ),
     "recall_answer": (
         "아래는 사용자의 과거 일기에서 찾은 관련 기록이다. 이걸 근거로 사용자의 질문에 "
         "반말로 짧고 따뜻하게 답해라. 날짜를 자연스럽게 언급하고, '이 날 사진:' 으로 표시된 "
         "사진이 있으면 그 사진에 보이는 모습을 직접 본 것처럼 짚어줘. 내용을 길게 나열하진 "
         "말 것(원문은 이미 화면에 보임). 한국어 문장으로만, 이모지·기호 금지."
     ),
-    "not_found": "음, 그건 일기에서 못 찾겠어. 더 구체적으로 말해줄래?",
+    "recall_not_found": "음, 그 조건으론 일기를 못 찾았어. 날짜나 키워드를 바꿔서 물어봐 줄래?",
     # 비전엔 '중립적' 묘사만 시킨다. 거친 지시를 넣으면 모델이 '사진을 첨부해주세요'로
     # 회피하므로, 거친 말투는 person_subs(_crudify) 후처리가 담당.
     "vision_describe": (
@@ -79,12 +89,16 @@ def system_prompt() -> str:
     return str(_load()["system"])
 
 
+def recall_system_prompt() -> str:
+    return str(_load()["recall_system"])
+
+
 def recall_answer_prompt() -> str:
     return str(_load()["recall_answer"])
 
 
-def not_found_message() -> str:
-    return str(_load()["not_found"])
+def recall_not_found_message() -> str:
+    return str(_load()["recall_not_found"])
 
 
 def vision_describe_prompt() -> str:

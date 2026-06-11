@@ -87,6 +87,50 @@ def _extract_photo_cond(query: str) -> tuple[bool, str]:
     topic = re.sub(r"\s+", " ", topic).strip()
     return True, topic
 
+
+# 날짜 조건: '2026-06-09'·'2026년 6월 9일'·'2026년 6월'·'6월 9일' → 세션 날짜 필터.
+_DATE_ISO_RE = re.compile(r"(\d{4})\s*[-./]\s*(\d{1,2})(?:\s*[-./]\s*(\d{1,2}))?")
+_DATE_KO_RE = re.compile(r"(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?")
+# 최근/요즘 + 'N개' — 최근순 나열 조건.
+_RECENT_RE = re.compile(r"최근|요즘")
+_COUNT_RE = re.compile(r"(\d{1,2})\s*개")
+
+
+def _extract_date_cond(query: str) -> tuple[str | None, str | None, str | None, str]:
+    """질의의 날짜 표현을 (date_from, date_to, date_like, 뗀 주제) 로 변환.
+
+    - 연+월+일 → from=to=그 날 / 연+월 → 그 달 범위(말일은 '31' 문자열 비교로 충분)
+    - 연도 없는 '6월 9일'·'6월' → date_like('____-06-09' / '____-06-__', _=한 글자)
+    """
+    m = _DATE_ISO_RE.search(query) or _DATE_KO_RE.search(query)
+    if not m:
+        return None, None, None, query
+    y, mo, d = m.group(1), int(m.group(2)), m.group(3)
+    if not (1 <= mo <= 12) or (d is not None and not (1 <= int(d) <= 31)):
+        return None, None, None, query
+    rest = re.sub(r"\s+", " ", query[: m.start()] + " " + query[m.end() :]).strip()
+    if y and d:
+        day = f"{y}-{mo:02d}-{int(d):02d}"
+        return day, day, None, rest
+    if y:
+        return f"{y}-{mo:02d}-01", f"{y}-{mo:02d}-31", None, rest
+    if d:
+        return None, None, f"____-{mo:02d}-{int(d):02d}", rest
+    return None, None, f"____-{mo:02d}-__", rest
+
+
+def _extract_recent_cond(query: str) -> tuple[bool, int | None, str]:
+    """'최근/요즘 (N개)' 조건을 (recent, n, 뗀 주제) 로 변환."""
+    if not _RECENT_RE.search(query):
+        return False, None, query
+    n: int | None = None
+    cm = _COUNT_RE.search(query)
+    if cm:
+        n = max(1, int(cm.group(1)))
+        query = query[: cm.start()] + " " + query[cm.end() :]
+    topic = re.sub(r"\s+", " ", _RECENT_RE.sub(" ", query)).strip()
+    return True, n, topic
+
 # 출력 노이즈 정리: 모델이 컨텍스트의 '[사진]' 마커를 'image1' 등으로 받아 코드스위칭하는
 # 잔재(_image1, [사진], 떠도는 밑줄, 끝의 +/· 등)와 이모지를 제거한다.
 _MARKER_RE = re.compile(r"\[\s*사진[^\]]*\]")
@@ -300,14 +344,21 @@ async def route_diary_chat(
     async with httpx.AsyncClient() as client:
         # --- 회상 경로 ---
         if recall_query:
-            # '사진이 있는 …' 류 첨부 조건은 주제 텍스트에서 분리해 필터로 적용
+            # 첨부('사진 있는')·날짜('2026-06-09'·'2026년 6월')·최근('최근 3개') 조건은
+            # 주제 텍스트에서 분리해 필터로 적용
             has_image, topic = _extract_photo_cond(recall_query)
+            date_from, date_to, date_like, topic = _extract_date_cond(topic)
+            recent, recent_n, topic = _extract_recent_cond(topic)
             sessions = store.recall_sessions(
                 conn,
                 topic,
-                top_k=top_k,
+                top_k=recent_n or top_k,
                 exclude_message_id=exclude_message_id,
                 has_image=has_image,
+                date_from=date_from,
+                date_to=date_to,
+                date_like=date_like,
+                recent=recent,
             )
             if sessions:
                 yield _recall_event(sessions)
@@ -328,13 +379,14 @@ async def route_diary_chat(
                     prompts.recall_answer_prompt()
                     + f"\n\n[질문]\n{user_query}\n\n[찾은 기록]\n{found}"
                 )
+                # 회상 답변은 일상 페르소나(system)가 아니라 차분한 톤(recall_system)으로
                 answer_msgs = [
-                    {"role": "system", "content": prompts.system_prompt()},
+                    {"role": "system", "content": prompts.recall_system_prompt()},
                     {"role": "user", "content": ctx},
                 ]
             else:
                 # 못 찾음 — 안내 후 종료
-                msg = prompts.not_found_message()
+                msg = prompts.recall_not_found_message()
                 yield {"type": "token", "text": msg}
                 yield {"type": "done", "message": msg}
                 return
