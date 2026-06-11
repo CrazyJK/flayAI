@@ -88,7 +88,7 @@ body {
   font-family: Georgia, "Noto Serif KR", "Nanum Myeongjo", Batang, serif;
 }
 .dark .diary-mood {
-  --background: #16120b; /* 난색 차콜(기본 다크는 한색) */
+  --background: #0d1117; /* 도구 화면과 동일한 다크 캔버스(난색 차콜에서 변경) */
   --card: #1e1910;
   --muted: #282115;
   --accent: #342b1c;
