@@ -413,19 +413,55 @@ def recall(
     return out
 
 
+def _photo_session_ids(conn: sqlite3.Connection, session_ids: list[int]) -> set[int]:
+    """주어진 세션 중 사진 첨부(<img> 가 든 raw_html) 메시지가 있는 세션 집합."""
+    if not session_ids:
+        return set()
+    ph = ",".join("?" * len(session_ids))
+    rows = conn.execute(
+        f"SELECT DISTINCT session_id FROM diary_messages "
+        f"WHERE session_id IN ({ph}) AND raw_html LIKE '%<img%'",
+        session_ids,
+    )
+    return {int(r["session_id"]) for r in rows}
+
+
 def recall_sessions(
     conn: sqlite3.Connection,
     query: str,
     top_k: int = 5,
     exclude_message_id: int | None = None,
+    has_image: bool = False,
 ) -> list[dict[str, Any]]:
     """회상 결과를 '세션 단위'로 묶어 그때 대화 전체(transcript)를 함께 반환.
 
     같은 세션의 여러 메시지가 매칭되면 한 번만(최고 점수) 표시.
     선택은 관련도(top_k) 로 하되, 일기이므로 **표시는 시간순(오래된→최근)** 으로 정렬한다.
+    has_image=True 면 사진 첨부 세션만. 이때 query 가 비면('사진 있는 일기'처럼
+    조건뿐인 질의) 텍스트 검색 없이 사진 세션을 최근순 top_k 로 반환.
     반환: [{session_id, score, matched: [content...], transcript: {session, messages}}]
     """
+    if has_image and not query.strip():
+        rows = conn.execute(
+            "SELECT session_id, MAX(id) AS last_id FROM diary_messages "
+            "WHERE raw_html LIKE '%<img%' GROUP BY session_id "
+            "ORDER BY last_id DESC LIMIT ?",
+            (top_k,),
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            tr = get_session_transcript(conn, int(r["session_id"]))
+            if tr:
+                out.append(
+                    {"session_id": int(r["session_id"]), "score": 0.0, "matched": [], "transcript": tr}
+                )
+        out.sort(key=lambda x: (x["transcript"]["session"].get("started_at") or ""))
+        return out
+
     hits = recall(conn, query, top_k=top_k * 3, exclude_message_id=exclude_message_id)
+    if has_image and hits:
+        with_img = _photo_session_ids(conn, sorted({h["session_id"] for h in hits if h["session_id"]}))
+        hits = [h for h in hits if h["session_id"] in with_img]
     seen: dict[int, dict[str, Any]] = {}
     for h in hits:
         sid = h["session_id"]

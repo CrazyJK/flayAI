@@ -47,9 +47,21 @@ _RECALL_RE = re.compile(
 )
 
 # 회상 검색어에서 명령·기억 표현을 떼어내 '주제'만 남긴다(검색 정확도↑).
+# '일기'도 제거 — 일기를 가리키는 자기지시어라 주제가 아닌데, 본문에 '일기'가 든
+# 무관한 글(짧을수록 BM25 가 높음)이 상위로 올라오는 오염원이 된다.
 _RECALL_STRIP = re.compile(
     r"기억(을|이|은|좀)?|보여\s*줘|보여\s*줄래|찾아\s*줘|찾아\s*봐|알려\s*줘|"
-    r"떠올려\s*줘?|꺼내\s*줘|회상(\s*해\s*줘)?|해\s*줘|좀|줘|보여"
+    r"떠올려\s*줘?|꺼내\s*줘|회상(\s*해\s*줘)?|해\s*줘|좀|줘|보여|"
+    r"일기[가은는이도를을]?(?![가-힣])"
+)
+
+# '사진이 있는/올린/찍은' 류는 주제가 아니라 첨부 여부 메타 조건 — 검색어에서 떼어내
+# has_image 필터로 변환한다(영상 RAG 라우터의 _extract_meta 와 같은 발상).
+# (?![가-힣]) 가드: '사진관'처럼 더 긴 낱말의 일부면 건드리지 않는다.
+_PHOTO_COND_RE = re.compile(
+    r"(사진|이미지|짤)(?:들)?[이가은는도을를]?"
+    r"(?:\s*(?:있는|있던|있었던|첨부된|첨부한|포함된|들어간|들어\s*있는|"
+    r"올린|올렸던|붙은|붙인|찍은|찍힌))?(?![가-힣])"
 )
 
 
@@ -61,6 +73,19 @@ def _recall_search_query(text: str) -> str:
     s = _RECALL_STRIP.sub(" ", text or "")
     s = re.sub(r"\s+", " ", s).strip()
     return s or (text or "").strip()
+
+
+def _extract_photo_cond(query: str) -> tuple[bool, str]:
+    """질의의 사진 첨부 조건을 감지해 (has_image, 조건을 뗀 주제) 반환.
+
+    주제가 빈 문자열로 남으면('사진이 있는 일기'처럼 조건뿐인 질의)
+    recall_sessions 가 텍스트 검색 없이 사진 세션을 최근순으로 돌려준다.
+    """
+    if not _PHOTO_COND_RE.search(query):
+        return False, query
+    topic = _PHOTO_COND_RE.sub(" ", query)
+    topic = re.sub(r"\s+", " ", topic).strip()
+    return True, topic
 
 # 출력 노이즈 정리: 모델이 컨텍스트의 '[사진]' 마커를 'image1' 등으로 받아 코드스위칭하는
 # 잔재(_image1, [사진], 떠도는 밑줄, 끝의 +/· 등)와 이모지를 제거한다.
@@ -275,8 +300,14 @@ async def route_diary_chat(
     async with httpx.AsyncClient() as client:
         # --- 회상 경로 ---
         if recall_query:
+            # '사진이 있는 …' 류 첨부 조건은 주제 텍스트에서 분리해 필터로 적용
+            has_image, topic = _extract_photo_cond(recall_query)
             sessions = store.recall_sessions(
-                conn, recall_query, top_k=top_k, exclude_message_id=exclude_message_id
+                conn,
+                topic,
+                top_k=top_k,
+                exclude_message_id=exclude_message_id,
+                has_image=has_image,
             )
             if sessions:
                 yield _recall_event(sessions)

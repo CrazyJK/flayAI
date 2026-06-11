@@ -236,6 +236,53 @@ def test_recall_intent_detection():
     assert _recall_search_query("회사 크리스마스 행사 기억을 보여줘") == "회사 크리스마스 행사"
 
 
+def test_extract_photo_cond():
+    from packages.diary.chat import _extract_photo_cond
+
+    # 조건뿐인 질의 → 주제 없음(빈 문자열) + 필터 on
+    assert _extract_photo_cond("사진이 있는") == (True, "")
+    # 주제 + 조건 → 주제만 남기고 필터 on ('사진을 올린', '이미지가 첨부된' 변형 포함)
+    assert _extract_photo_cond("바다 사진이 있는") == (True, "바다")
+    assert _extract_photo_cond("새 컴퓨터 사진") == (True, "새 컴퓨터")
+    assert _extract_photo_cond("이미지가 첨부된 온천") == (True, "온천")
+    # 사진 언급 없으면 그대로
+    assert _extract_photo_cond("온천 갔던 날") == (False, "온천 갔던 날")
+    # 더 긴 낱말의 일부('사진관')는 조건이 아님
+    assert _extract_photo_cond("사진관에 간 날") == (False, "사진관에 간 날")
+
+
+def test_recall_search_query_strips_diary_word():
+    from packages.diary.chat import _recall_search_query
+
+    # '일기'는 자기지시어 — 주제에서 제거(본문에 '일기'가 든 무관한 글 오염 방지)
+    assert _recall_search_query("사진이 있는 일기 보여줘") == "사진이 있는"
+    # '일기'가 낱말 일부일 땐 보존
+    assert "일기예보" in _recall_search_query("일기예보 봤던 날 찾아줘")
+
+
+def test_recall_sessions_photo_filter(conn):
+    # 사진 없는 글(본문에 '일기' 포함) vs 사진 첨부 글
+    s1 = store.create_session(conn, started_at="2022-12-12T10:00:00", source_key="2022-12-12")
+    store.add_message(
+        conn, s1, "user", "일기 개발 완료 v1.0", created_at="2022-12-12T10:00:00", embed=False
+    )
+    s2 = store.create_session(conn, started_at="2023-05-06T10:00:00", source_key="2023-05-06")
+    store.add_message(
+        conn, s2, "user", "새 컴퓨터 조립 [사진]",
+        raw_html='<p>새 컴퓨터</p><img src="/static/diary-assets/pc.jpg">',
+        created_at="2023-05-06T10:00:00", embed=False,
+    )
+    # 조건뿐인 질의(주제 없음) → 텍스트 검색 없이 사진 세션만
+    res = store.recall_sessions(conn, "", has_image=True)
+    assert [r["session_id"] for r in res] == [s2]
+    # 주제 검색 결과도 사진 없는 세션은 걸러진다
+    res = store.recall_sessions(conn, "컴퓨터 조립", has_image=True)
+    assert [r["session_id"] for r in res] == [s2]
+    # 필터 없으면 기존 동작 그대로
+    res = store.recall_sessions(conn, "컴퓨터 조립")
+    assert [r["session_id"] for r in res] == [s2]
+
+
 def test_recall_excludes_non_indexed(conn):
     # 회상 질문(index=False)은 substr 로도 회상되지 않아야(오염 방지)
     s = store.create_session(conn)

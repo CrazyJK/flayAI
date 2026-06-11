@@ -29,7 +29,13 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
 **회상 의도 감지는 코드(정규식)로 한다.** diary_llm(EXAONE 3.5)은 Ollama tool-calling 을
 지원하지 않아(`tools` 인자에 400) tool-call 라우팅이 불가능하다. `_looks_like_recall` 이
 검색/조회 명령·기억/시점 질문·명시적 회상어("보여줘/찾아줘/기억나?/언제였지?/회상")를 잡고,
-`_recall_search_query` 가 명령어를 떼어 주제만 검색어로 만든다.
+`_recall_search_query` 가 명령어를 떼어 주제만 검색어로 만든다. 자기지시어 "일기"도
+주제에서 제거한다 — 본문에 '일기'가 든 무관한 글(짧을수록 BM25 높음)이 상위로 오염되는 것 방지.
+
+**사진 첨부 조건은 메타 필터로**(영상 RAG `_extract_meta` 와 같은 발상): "사진(이미지/짤)이
+있는/올린/찍은 …" 패턴을 `_extract_photo_cond` 가 감지하면 주제 텍스트에서 떼어내고
+`recall_sessions(has_image=True)` 로 **`raw_html` 에 `<img>` 가 있는 세션만** 통과시킨다.
+주제가 비면("사진 있는 일기 보여줘") 텍스트 검색 없이 사진 세션을 최근순 top_k 로 반환.
 
 회상 검색은 영상 retriever 와 같은 **RRF(K=60)** 패턴: Qdrant 의미검색 + FTS5(BM25)
 \+ 짧은 한글 키워드용 LIKE 부분매칭 결합. Qdrant 가 없으면 FTS+LIKE 단독으로 graceful degrade.
