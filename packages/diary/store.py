@@ -149,8 +149,8 @@ def add_message(
 ) -> int:
     """메시지 저장. user 발화이고 index=True 면 FTS 인덱싱 + (embed 시) 임베딩·Qdrant upsert.
 
-    - index=False: 회상 '대상'에서 제외(예: 회상 질문 자체 — 기억이 아니라 물음이므로
-      색인하면 과거 질문이 새 질문과 매칭돼 회상을 오염시킨다). 저장은 됨(대화 연속성).
+    - index=False: 저장하되 회상 '대상'에서 제외. (회상 질문은 라우터가 아예 저장하지
+      않으므로 이 플래그는 그 외에 색인만 빼고 싶은 경우·테스트용.)
     - embed=False: 임베딩만 생략(테스트/오프라인 — FTS 경로만).
     """
     ts = created_at or _now_iso()

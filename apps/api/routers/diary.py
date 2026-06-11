@@ -98,13 +98,16 @@ async def diary_chat(req: DiaryChatRequest):
     else:
         store_content, raw_html, reply_query = text, None, text
 
-    # 회상 질문(이미지 없는 순수 회상 요청)은 '기억'이 아니라 '물음'이므로 색인 제외
-    # — 색인하면 과거 질문이 새 질문과 매칭돼 회상을 오염시킨다.
-    index = not (not req.images and _looks_like_recall(text))
-    # 사용자 메시지 저장(임베딩까지). 이미지 묘사가 content 에 합류해 회상 가능.
-    user_msg_id = store.add_message(
-        conn, session_id, "user", store_content, raw_html=raw_html, embed=True, index=index
-    )
+    # 회상 질문(이미지 없는 순수 회상 요청)은 '기억'이 아니라 '물음' — 색인은 물론
+    # 저장도 하지 않는다(질문·답이 일기 뷰와 '최근 일기' 목록을 오염). 조회는 휘발,
+    # 일기엔 기록만 남는다. 화면에는 스트림으로 평소처럼 보인다.
+    is_recall = not req.images and _looks_like_recall(text)
+    user_msg_id: int | None = None
+    if not is_recall:
+        # 사용자 메시지 저장(임베딩까지). 이미지 묘사가 content 에 합류해 회상 가능.
+        user_msg_id = store.add_message(
+            conn, session_id, "user", store_content, raw_html=raw_html, embed=True
+        )
 
     async def sse() -> AsyncGenerator[bytes, None]:
         def _emit(ev: dict[str, Any]) -> bytes:
@@ -130,9 +133,10 @@ async def diary_chat(req: DiaryChatRequest):
             log.exception("diary chat error: %s", e)
             yield _emit({"type": "error", "message": str(e)})
         finally:
-            # 어시스턴트 응답 저장 — 정리된 최종본(done) 우선(임베딩 안 함: 회상 대상은 내 말 위주)
+            # 어시스턴트 응답 저장 — 정리된 최종본(done) 우선(임베딩 안 함: 회상 대상은 내 말 위주).
+            # 회상 답은 질문과 함께 저장하지 않는다.
             saved = (final or full).strip()
-            if saved:
+            if saved and not is_recall:
                 store.add_message(conn, session_id, "assistant", saved, embed=False)
             conn.close()
 
