@@ -45,7 +45,9 @@ apps/web /diary  ──SSE──▶  POST /api/diary/chat
   `raw_html` 에 `<img>` 가 있는 세션만.
 - **날짜**(`_extract_date_cond`): "2026-06-09"·"2026년 6월 9일" → 그 날,
   "2026년 6월" → 그 달 범위, 연도 없는 "6월 9일"/"6월" → `date_like`(`____-06-09`,
-  모든 연도). 세션 대표 날짜 = `COALESCE(source_key, substr(started_at,1,10))`.
+  모든 연도). 상대 날짜 "오늘/어제/그저께/N일 전/이번·지난 주/이번·지난 달/올해/작년"도
+  범위로 환산(주는 월요일 시작). "오늘 **쓴** 일기"의 '쓴/적은' 류 자기지시 동사는
+  `_RECALL_STRIP` 이 제거. 세션 대표 날짜 = `COALESCE(source_key, substr(started_at,1,10))`.
 - **최근**(`_extract_recent_cond`): "최근/요즘 (N개)" → 최근순 나열, N 이 있으면 top_k 로.
 
 주제가 비면("사진 있는 일기"·"2026년 6월 일기"·"최근 일기 3개") 텍스트 검색 없이

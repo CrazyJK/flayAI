@@ -22,6 +22,7 @@ import random
 import re
 import sqlite3
 from collections.abc import AsyncIterator
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
@@ -52,7 +53,8 @@ _RECALL_RE = re.compile(
 _RECALL_STRIP = re.compile(
     r"기억(을|이|은|좀)?|보여\s*줘|보여\s*줄래|찾아\s*줘|찾아\s*봐|알려\s*줘|"
     r"떠올려\s*줘?|꺼내\s*줘|회상(\s*해\s*줘)?|해\s*줘|좀|줘|보여|"
-    r"일기[가은는이도를을]?(?![가-힣])"
+    r"일기[가은는이도를을]?(?![가-힣])|"
+    r"(?<![가-힣])(쓴|썼던|적은|적었던)(?![가-힣])"
 )
 
 # '사진이 있는/올린/찍은' 류는 주제가 아니라 첨부 여부 메타 조건 — 검색어에서 떼어내
@@ -91,17 +93,62 @@ def _extract_photo_cond(query: str) -> tuple[bool, str]:
 # 날짜 조건: '2026-06-09'·'2026년 6월 9일'·'2026년 6월'·'6월 9일' → 세션 날짜 필터.
 _DATE_ISO_RE = re.compile(r"(\d{4})\s*[-./]\s*(\d{1,2})(?:\s*[-./]\s*(\d{1,2}))?")
 _DATE_KO_RE = re.compile(r"(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?")
+# 상대 날짜: '오늘 쓴 일기'·'어제 일기'·'지난주'·'지난달'·'3일 전' 류. 뒤따르는
+# 조사('어제의')까지 함께 떼고, '오늘따라' 같은 합성어는 가드로 보호.
+_REL_DATE_RE = re.compile(
+    r"(?<![가-힣])(오늘|어제|그제|그저께|엊그제|"
+    r"이번\s*주|지난\s*주|저번\s*주|이번\s*달|지난\s*달|저번\s*달|올해|작년|"
+    r"(\d{1,2})\s*일\s*전)(?:의|에|에서|은|는)?(?![가-힣])"
+)
+
+
+def _rel_date_range(word: str, days_ago: str | None, today: date) -> tuple[str, str]:
+    """상대 날짜 낱말 → (date_from, date_to). 주는 월요일 시작, 달 말일은 '31'(문자열 비교용)."""
+    w = re.sub(r"\s+", "", word)
+    if days_ago:
+        d = today - timedelta(days=int(days_ago))
+        return d.isoformat(), d.isoformat()
+    if w == "오늘":
+        return today.isoformat(), today.isoformat()
+    if w == "어제":
+        d = today - timedelta(days=1)
+        return d.isoformat(), d.isoformat()
+    if w in ("그제", "그저께", "엊그제"):
+        d = today - timedelta(days=2)
+        return d.isoformat(), d.isoformat()
+    monday = today - timedelta(days=today.weekday())
+    if w == "이번주":
+        return monday.isoformat(), today.isoformat()
+    if w in ("지난주", "저번주"):
+        return (monday - timedelta(days=7)).isoformat(), (monday - timedelta(days=1)).isoformat()
+    if w == "이번달":
+        return f"{today.year}-{today.month:02d}-01", f"{today.year}-{today.month:02d}-31"
+    if w in ("지난달", "저번달"):
+        y, m = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+        return f"{y}-{m:02d}-01", f"{y}-{m:02d}-31"
+    if w == "올해":
+        return f"{today.year}-01-01", f"{today.year}-12-31"
+    # 작년
+    return f"{today.year - 1}-01-01", f"{today.year - 1}-12-31"
 # 최근/요즘 + 'N개' — 최근순 나열 조건.
 _RECENT_RE = re.compile(r"최근|요즘")
 _COUNT_RE = re.compile(r"(\d{1,2})\s*개")
 
 
-def _extract_date_cond(query: str) -> tuple[str | None, str | None, str | None, str]:
+def _extract_date_cond(
+    query: str, today: date | None = None
+) -> tuple[str | None, str | None, str | None, str]:
     """질의의 날짜 표현을 (date_from, date_to, date_like, 뗀 주제) 로 변환.
 
+    - 상대 날짜: '오늘'·'어제'·'그저께'·'N일 전'·'이번/지난 주·달'·'올해/작년' → 범위
     - 연+월+일 → from=to=그 날 / 연+월 → 그 달 범위(말일은 '31' 문자열 비교로 충분)
     - 연도 없는 '6월 9일'·'6월' → date_like('____-06-09' / '____-06-__', _=한 글자)
     """
+    rm = _REL_DATE_RE.search(query)
+    if rm:
+        d_from, d_to = _rel_date_range(rm.group(1), rm.group(2), today or date.today())
+        rest = re.sub(r"\s+", " ", query[: rm.start()] + " " + query[rm.end() :]).strip()
+        return d_from, d_to, None, rest
     m = _DATE_ISO_RE.search(query) or _DATE_KO_RE.search(query)
     if not m:
         return None, None, None, query

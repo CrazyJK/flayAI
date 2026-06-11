@@ -283,6 +283,31 @@ def test_recall_sessions_photo_filter(conn):
     assert [r["session_id"] for r in res] == [s2]
 
 
+def test_extract_relative_date_cond():
+    from datetime import date
+
+    from packages.diary.chat import _extract_date_cond, _recall_search_query
+
+    today = date(2026, 6, 11)  # 목요일
+
+    def ext(q):
+        return _extract_date_cond(q, today=today)
+
+    assert ext("오늘") == ("2026-06-11", "2026-06-11", None, "")
+    assert ext("어제") == ("2026-06-10", "2026-06-10", None, "")
+    assert ext("그저께") == ("2026-06-09", "2026-06-09", None, "")
+    assert ext("3일 전") == ("2026-06-08", "2026-06-08", None, "")
+    assert ext("이번 주") == ("2026-06-08", "2026-06-11", None, "")  # 월요일 시작
+    assert ext("지난주") == ("2026-06-01", "2026-06-07", None, "")
+    assert ext("지난달") == ("2026-05-01", "2026-05-31", None, "")
+    assert ext("작년") == ("2025-01-01", "2025-12-31", None, "")
+    # 조사 동반('어제의'), 합성어 보호('오늘따라'는 날짜 아님 → 주제 유지)
+    assert ext("어제의 온천") == ("2026-06-10", "2026-06-10", None, "온천")
+    assert ext("오늘따라 힘든 날")[0] is None
+    # '오늘 쓴 일기 보여줘' → 명령·'쓴'·'일기' 제거 후 날짜만 남는다
+    assert _recall_search_query("오늘 쓴 일기 보여줘") == "오늘"
+
+
 def test_extract_date_and_recent_cond():
     from packages.diary.chat import _extract_date_cond, _extract_recent_cond
 
