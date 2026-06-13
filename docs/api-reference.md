@@ -99,6 +99,9 @@ SSE 스트리밍. RAG + LLM 응답. UI 의 메인 흐름.
 
 응답: `{ "text": "..." }`
 
+> 일본어→한국어/영어 전용(소스는 일본어로 가정). 외부 시스템 연동 상세(계약·예시·제약·CORS)는
+> [translate-api.md](translate-api.md) 참고.
+
 ## 이미지 검색 (CLIP)
 
 ### `POST /api/image/search/text`
