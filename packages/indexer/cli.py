@@ -42,7 +42,7 @@ from packages.indexer import poster_scanner as scan_mod
 from packages.indexer import sync_payload as sync_mod
 from packages.indexer import translate as translate_mod
 from packages.indexer.db import connect, fts_rebuild, init_schema
-from packages.indexer.ollama_vram import resident_models, unload_resident_llm, warm_resident_llm
+from packages.indexer.ollama_vram import resident_models, unload_all_models, warm_resident_llm
 from packages.indexer.state import load_state
 
 app = typer.Typer(add_completion=False, help="flayAI indexer CLI")
@@ -176,7 +176,7 @@ def embed(
 ) -> None:
     """bge-m3 → Qdrant videos 컬렉션 upsert (기본 증분: 문서 변경분만)."""
     _setup_log(verbose)
-    unload_resident_llm()  # GPU 확보 — 상주 채팅 LLM 언로드
+    unload_all_models()  # GPU 확보 — 적재된 모든 Ollama 모델 언로드(전역 keep_alive=-1 대응)
     t = time.time()
     out = embed_mod.run(limit=limit or None, batch_size=batch_size or None, force=force)
     out["elapsed_sec"] = round(time.time() - t, 2)
@@ -192,7 +192,7 @@ def embed_clip(
 ) -> None:
     """OpenCLIP ViT-L/14 → Qdrant posters_clip 컬렉션 upsert (기본 증분: 신규·변경 포스터만)."""
     _setup_log(verbose)
-    unload_resident_llm()  # GPU 확보 — 상주 채팅 LLM 언로드
+    unload_all_models()  # GPU 확보 — 적재된 모든 Ollama 모델 언로드(전역 keep_alive=-1 대응)
     t = time.time()
     out = embed_clip_mod.run(limit=limit or None, batch_size=batch_size or None, force=force)
     out["elapsed_sec"] = round(time.time() - t, 2)
@@ -208,7 +208,7 @@ def extract_faces(
 ) -> None:
     """InsightFace buffalo_l → poster_faces + Qdrant faces 컬렉션."""
     _setup_log(verbose)
-    unload_resident_llm()  # GPU 확보 — 상주 채팅 LLM 언로드
+    unload_all_models()  # GPU 확보 — 적재된 모든 Ollama 모델 언로드(전역 keep_alive=-1 대응)
     t = time.time()
     out = faces_mod.run(
         limit=limit or None,
@@ -247,7 +247,7 @@ def ocr_posters(
 ) -> None:
     """RapidOCR(ONNX) → posters.ocr_text + Qdrant poster_ocr 컬렉션."""
     _setup_log(verbose)
-    unload_resident_llm()  # GPU 확보 — 상주 채팅 LLM 언로드
+    unload_all_models()  # GPU 확보 — 적재된 모든 Ollama 모델 언로드(전역 keep_alive=-1 대응)
     t = time.time()
     out = ocr_mod.run(limit=limit or None, force=force, embed_batch=embed_batch)
     out["elapsed_sec"] = round(time.time() - t, 2)
@@ -265,7 +265,7 @@ def caption_posters(
     생성된 캡션은 이후 `embed` 단계에서 videos 임베딩의 [장면] 블록으로 반영된다.
     """
     _setup_log(verbose)
-    unload_resident_llm()  # GPU 확보 — 비전 모델(gemma) 적재 자리 확보(상주 qwen 언로드)
+    unload_all_models()  # GPU 확보 — 적재된 모든 Ollama 모델 언로드(전역 keep_alive=-1 대응)
     t = time.time()
     out = caption_mod.run(limit=limit or None, force=force)
     out["elapsed_sec"] = round(time.time() - t, 2)

@@ -46,6 +46,29 @@ def unload_resident_llm() -> None:
         _set_keep_alive(m, 0)
 
 
+def unload_all_models() -> None:
+    """현재 Ollama 에 적재된 **모든** 모델을 VRAM 에서 내림(인덱싱 VRAM 최대 확보).
+
+    OLLAMA_KEEP_ALIVE=-1 전역 설정 시 채팅 qwen 뿐 아니라 caption 의 비전 모델(gemma)도
+    영구 상주하므로, GPU 중량 단계 진입 전 전부 비운다. best-effort.
+    """
+    cfg = load_config()
+    base = cfg["server"]["ollama"].rstrip("/")
+    try:
+        loaded = httpx.get(base + "/api/ps", timeout=10.0).json().get("models", [])
+    except Exception as e:  # noqa: BLE001
+        log.warning("적재 모델 조회 실패(상주 모델만 언로드): %s", e)
+        unload_resident_llm()
+        return
+    names = [m.get("name") or m.get("model") for m in loaded]
+    names = [n for n in names if n]
+    if not names:
+        return
+    for n in names:
+        log.info("VRAM 양보: Ollama 모델 언로드 %s", n)
+        _set_keep_alive(n, 0)
+
+
 def warm_resident_llm() -> None:
     """상주 채팅 모델을 keep_alive=-1 로 다시 적재. best-effort."""
     for m in resident_models():
