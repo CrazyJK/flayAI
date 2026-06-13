@@ -1165,12 +1165,27 @@ function MetricChart({
   const gidLine = base + "l";
   const gidArea = base + "a";
   const p = percent == null ? null : Math.max(0, Math.min(100, percent));
-  // 색은 "각 지점의 값(=선의 높이)"에 따라 결정 — 세로 그라데이션(userSpaceOnUse, y 0~100).
-  // y=0(위)=값100=빨강, y=40=값60=주황, y=100(아래)=값0=초록. 임계 경계는 crisp band.
-  // (이전: 현재값 하나로 선 전체를 칠해, 과거 낮았던 구간도 빨갛게 보이던 문제)
+  // 색은 "각 시점의 값"에 따라 결정 — 가로(시간축) 그라데이션의 정지점이 그 지점 값의
+  // 임계색(초록<60≤주황<85≤빨강)을 따라간다. 각 세로 슬라이스가 그 시점 값으로 단색.
+  // stepped: 정지점을 구간별로 중복 배치해 경계가 세로선으로 또렷하게.
+  const colorFor = (v: number) => {
+    const c = Math.max(0, Math.min(100, v));
+    return c >= 85 ? "#ef4444" : c >= 60 ? "#f59e0b" : "#10b981";
+  };
+  const n = data.length;
+  const xAt = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
+  // stepped 가로 정지점: i 구간의 색을 [경계_i, 경계_{i+1}] 동안 유지.
+  const colorStops: { off: number; color: string }[] = [];
+  for (let i = 0; i < n; i++) {
+    const color = colorFor(data[i]);
+    const segStart = i === 0 ? 0 : (xAt(i - 1) + xAt(i)) / 2;
+    const segEnd = i === n - 1 ? 100 : (xAt(i) + xAt(i + 1)) / 2;
+    colorStops.push({ off: segStart, color });
+    colorStops.push({ off: segEnd, color });
+  }
 
   const pts = data.map((v, i) => {
-    const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * 100;
+    const x = xAt(i);
     const y = 100 - Math.max(0, Math.min(100, v));
     return `${x.toFixed(2)} ${y.toFixed(2)}`;
   });
@@ -1193,23 +1208,16 @@ function MetricChart({
           aria-hidden
         >
           <defs>
-            {/* 선: 높이별 색 (위=빨강 → 주황 → 아래=초록), 임계 85/60 에 crisp band */}
-            <linearGradient id={gidLine} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100">
-              <stop offset="0%" stopColor="#ef4444" />
-              <stop offset="15%" stopColor="#ef4444" />
-              <stop offset="15%" stopColor="#f59e0b" />
-              <stop offset="40%" stopColor="#f59e0b" />
-              <stop offset="40%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#10b981" />
+            {/* 가로(시간축) 정지점이 각 시점 값의 임계색을 따라감 → 슬라이스별 단색 */}
+            <linearGradient id={gidLine} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">
+              {colorStops.map((s, i) => (
+                <stop key={i} offset={`${s.off.toFixed(2)}%`} stopColor={s.color} />
+              ))}
             </linearGradient>
-            {/* 면: 같은 높이별 색 + 위→아래 옅어지는 불투명도 */}
-            <linearGradient id={gidArea} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.30" />
-              <stop offset="15%" stopColor="#ef4444" stopOpacity="0.22" />
-              <stop offset="15%" stopColor="#f59e0b" stopOpacity="0.20" />
-              <stop offset="40%" stopColor="#f59e0b" stopOpacity="0.12" />
-              <stop offset="40%" stopColor="#10b981" stopOpacity="0.10" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+            <linearGradient id={gidArea} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">
+              {colorStops.map((s, i) => (
+                <stop key={i} offset={`${s.off.toFixed(2)}%`} stopColor={s.color} stopOpacity="0.5" />
+              ))}
             </linearGradient>
           </defs>
           {area && <path d={area} fill={`url(#${gidArea})`} />}
