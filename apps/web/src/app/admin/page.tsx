@@ -50,6 +50,7 @@ type OllamaModel = {
   loaded: boolean;
   size_vram?: number | null;
   expires_at?: string | null;
+  permanent?: boolean; // keep_alive=-1 영구 상주 여부
 };
 
 type OllamaData = {
@@ -416,10 +417,14 @@ function OllamaSection({ data }: { data: OllamaData }) {
               {m.loaded ? (
                 <span className="text-emerald-400">
                   로드 중 · VRAM {fmtBytes(m.size_vram)}
-                  {m.expires_at && (
-                    <span className="text-muted-foreground">
-                      {" · "}만료 {new Date(m.expires_at).toLocaleTimeString("ko-KR")}
-                    </span>
+                  {m.permanent ? (
+                    <span className="text-amber-400">{" · "}♾ 영구 상주</span>
+                  ) : (
+                    m.expires_at && (
+                      <span className="text-muted-foreground">
+                        {" · "}만료 {new Date(m.expires_at).toLocaleTimeString("ko-KR")}
+                      </span>
+                    )
                   )}
                 </span>
               ) : (

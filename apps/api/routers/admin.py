@@ -500,6 +500,16 @@ def _sqlite_stats() -> dict[str, Any]:
 _OLLAMA_CAPS: dict[str, list[str]] = {}
 
 
+def _is_permanent(expires_at: str | None) -> bool:
+    """expires_at(ISO) 의 연도가 먼 미래(>=2100)면 keep_alive=-1 영구 상주로 간주."""
+    if not expires_at or len(expires_at) < 4:
+        return False
+    try:
+        return int(expires_at[:4]) >= 2100
+    except ValueError:
+        return False
+
+
 async def _ollama_stats() -> dict[str, Any]:
     """Ollama REST API로 설치된 모델 목록과 현재 로드된 모델을 조회한다.
 
@@ -550,6 +560,7 @@ async def _ollama_stats() -> dict[str, Any]:
             mname: str = m.get("name", "")
             details: dict = m.get("details", {})
             run_info = running_map.get(mname)
+            expires_at = run_info.get("expires_at") if run_info else None
             slim_models.append(
                 {
                     "name": mname,
@@ -563,7 +574,9 @@ async def _ollama_stats() -> dict[str, Any]:
                     # VRAM 로드 상태 (정확한 이름 매칭)
                     "loaded": run_info is not None,
                     "size_vram": run_info.get("size_vram") if run_info else None,
-                    "expires_at": run_info.get("expires_at") if run_info else None,
+                    "expires_at": expires_at,
+                    # keep_alive=-1(영구 상주)이면 Ollama 가 만료를 먼 미래(예: 2318)로 설정.
+                    "permanent": _is_permanent(expires_at),
                 }
             )
         return {"available": True, "models": slim_models, "running_count": len(running)}
