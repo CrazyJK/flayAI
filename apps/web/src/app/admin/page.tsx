@@ -1161,10 +1161,13 @@ function MetricChart({
   data: number[];
 }) {
   const uid = useId();
-  const gid = "mc" + uid.replace(/:/g, "");
+  const base = "mc" + uid.replace(/:/g, "");
+  const gidLine = base + "l";
+  const gidArea = base + "a";
   const p = percent == null ? null : Math.max(0, Math.min(100, percent));
-  // 현재값 임계로 색 결정 (emerald < 60 ≤ amber < 85 ≤ red)
-  const stroke = p == null ? "#525252" : p >= 85 ? "#ef4444" : p >= 60 ? "#f59e0b" : "#10b981";
+  // 색은 "각 지점의 값(=선의 높이)"에 따라 결정 — 세로 그라데이션(userSpaceOnUse, y 0~100).
+  // y=0(위)=값100=빨강, y=40=값60=주황, y=100(아래)=값0=초록. 임계 경계는 crisp band.
+  // (이전: 현재값 하나로 선 전체를 칠해, 과거 낮았던 구간도 빨갛게 보이던 문제)
 
   const pts = data.map((v, i) => {
     const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * 100;
@@ -1190,17 +1193,31 @@ function MetricChart({
           aria-hidden
         >
           <defs>
-            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={stroke} stopOpacity="0.02" />
+            {/* 선: 높이별 색 (위=빨강 → 주황 → 아래=초록), 임계 85/60 에 crisp band */}
+            <linearGradient id={gidLine} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100">
+              <stop offset="0%" stopColor="#ef4444" />
+              <stop offset="15%" stopColor="#ef4444" />
+              <stop offset="15%" stopColor="#f59e0b" />
+              <stop offset="40%" stopColor="#f59e0b" />
+              <stop offset="40%" stopColor="#10b981" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+            {/* 면: 같은 높이별 색 + 위→아래 옅어지는 불투명도 */}
+            <linearGradient id={gidArea} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.30" />
+              <stop offset="15%" stopColor="#ef4444" stopOpacity="0.22" />
+              <stop offset="15%" stopColor="#f59e0b" stopOpacity="0.20" />
+              <stop offset="40%" stopColor="#f59e0b" stopOpacity="0.12" />
+              <stop offset="40%" stopColor="#10b981" stopOpacity="0.10" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
             </linearGradient>
           </defs>
-          {area && <path d={area} fill={`url(#${gid})`} />}
+          {area && <path d={area} fill={`url(#${gidArea})`} />}
           {pts.length >= 2 && (
             <path
               d={line}
               fill="none"
-              stroke={stroke}
+              stroke={`url(#${gidLine})`}
               strokeWidth="1.5"
               strokeLinejoin="round"
               strokeLinecap="round"
