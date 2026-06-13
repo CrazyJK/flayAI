@@ -1166,23 +1166,15 @@ function MetricChart({
   const gidArea = base + "a";
   const p = percent == null ? null : Math.max(0, Math.min(100, percent));
   // 색은 "각 시점의 값"에 따라 결정 — 가로(시간축) 그라데이션의 정지점이 그 지점 값의
-  // 임계색(초록<60≤주황<85≤빨강)을 따라간다. 각 세로 슬라이스가 그 시점 값으로 단색.
-  // stepped: 정지점을 구간별로 중복 배치해 경계가 세로선으로 또렷하게.
+  // 임계색(초록<60≤주황<85≤빨강)을 따라간다. 지점마다 정지점 1개라 색 경계가 인접
+  // 구간에서 자연스럽게 보간(부드럽게)된다.
   const colorFor = (v: number) => {
     const c = Math.max(0, Math.min(100, v));
     return c >= 85 ? "#ef4444" : c >= 60 ? "#f59e0b" : "#10b981";
   };
   const n = data.length;
   const xAt = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
-  // stepped 가로 정지점: i 구간의 색을 [경계_i, 경계_{i+1}] 동안 유지.
-  const colorStops: { off: number; color: string }[] = [];
-  for (let i = 0; i < n; i++) {
-    const color = colorFor(data[i]);
-    const segStart = i === 0 ? 0 : (xAt(i - 1) + xAt(i)) / 2;
-    const segEnd = i === n - 1 ? 100 : (xAt(i) + xAt(i + 1)) / 2;
-    colorStops.push({ off: segStart, color });
-    colorStops.push({ off: segEnd, color });
-  }
+  const colorStops = data.map((v, i) => ({ off: xAt(i), color: colorFor(v) }));
 
   const pts = data.map((v, i) => {
     const x = xAt(i);
