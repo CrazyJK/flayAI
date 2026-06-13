@@ -596,8 +596,9 @@ def _system_stats() -> dict[str, Any]:
         r = subprocess.run(
             [
                 "nvidia-smi",
-                # power.draw 추가 — 동일 nvidia-smi 1회 호출에 필드만 더해 부하 영향 없음
-                "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,name",
+                # power.draw/limit 추가 — 동일 nvidia-smi 1회 호출에 필드만 더해 부하 영향 없음
+                "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,"
+                "power.draw,power.limit,name",
                 "--format=csv,noheader,nounits",
             ],
             capture_output=True,
@@ -612,13 +613,19 @@ def _system_stats() -> dict[str, Any]:
                 out["vram_used_mib"] = float(parts[1])
                 out["vram_total_mib"] = float(parts[2])
                 out["gpu_temp"] = float(parts[3])
+                # 일부 GPU 는 [N/A] 일 수 있음 → 개별 try
                 if len(parts) >= 5:
                     try:
-                        out["gpu_power_w"] = float(parts[4])  # 일부 GPU 는 [N/A] 일 수 있음
+                        out["gpu_power_w"] = float(parts[4])
                     except ValueError:
                         pass
                 if len(parts) >= 6:
-                    out["gpu_name"] = parts[5]
+                    try:
+                        out["gpu_power_limit_w"] = float(parts[5])  # 전력 제한(TDP)
+                    except ValueError:
+                        pass
+                if len(parts) >= 7:
+                    out["gpu_name"] = parts[6]
     except Exception as e:
         out["gpu_error"] = str(e)
     return out

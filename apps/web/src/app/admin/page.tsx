@@ -1139,6 +1139,7 @@ type SystemData = {
   vram_total_mib?: number;
   gpu_temp?: number;
   gpu_power_w?: number;
+  gpu_power_limit_w?: number;
   gpu_name?: string;
 };
 
@@ -1262,7 +1263,11 @@ function SystemMonitor({ sys, history }: { sys?: SystemData; history: MetricHist
             percent={sys.gpu_percent}
             sub={[
               sys.gpu_temp != null ? `${sys.gpu_temp}°C` : null,
-              sys.gpu_power_w != null ? `${sys.gpu_power_w.toFixed(0)}W` : null,
+              sys.gpu_power_w != null
+                ? sys.gpu_power_limit_w != null
+                  ? `${sys.gpu_power_w.toFixed(0)}/${sys.gpu_power_limit_w.toFixed(0)}W`
+                  : `${sys.gpu_power_w.toFixed(0)}W`
+                : null,
             ]
               .filter(Boolean)
               .join(" · ") || undefined}
