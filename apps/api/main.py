@@ -129,18 +129,8 @@ async def _lifespan(app: FastAPI):
         log.warning("diary 초기화 건너뜀(첫 요청 때 재시도): %s", e)
     # 백그라운드 워밍업 — 기동을 막지 않음
     asyncio.create_task(_warmup_face_model())
-
-    # 상주 채팅 LLM(config.models.llm, 예: qwen) 워밍 — VRAM 에 미리 올려 콜드 로딩 제거.
-    # 인덱싱 단계가 진입 시 언로드하고 작업 후 재워밍한다(packages.indexer.ollama_vram).
-    async def _warm_llm() -> None:
-        try:
-            from packages.indexer.ollama_vram import warm_resident_llm
-
-            await asyncio.to_thread(warm_resident_llm)
-        except Exception as e:  # noqa: BLE001
-            log.warning("상주 LLM 워밍 실패(무시): %s", e)
-
-    asyncio.create_task(_warm_llm())
+    # 채팅 LLM(qwen)은 상주시키지 않는다 — 첫 사용 시 로드되고 Ollama 기본(5분) 유휴 후 해제.
+    # (영상 시청 등 다른 GPU 작업에 VRAM 양보. 인덱싱 진입 시엔 ollama_vram 훅이 언로드.)
     yield
 
 

@@ -311,63 +311,52 @@ def _run_pipeline_sync(job: str, venv_python: str, start_step: int = 0) -> None:
     """
     info = _running_jobs[job]
     steps = info["steps"]
-    try:
-        for i in range(start_step, len(steps)):
-            st = steps[i]
-            # 단계 시작 전 일시정지 확인 (직전 단계 사이의 깨끗한 체크포인트)
+    for i in range(start_step, len(steps)):
+        st = steps[i]
+        # 단계 시작 전 일시정지 확인 (직전 단계 사이의 깨끗한 체크포인트)
+        if info.get("pause_requested"):
+            _mark_paused(job, i)
+            return
+        info["current"] = i
+        st["status"] = "running"
+        st["started_at"] = time.time()
+        st.pop("finished_at", None)
+        try:
+            proc = subprocess.Popen(
+                [venv_python, "-m", "packages.indexer.cli", st["step"], *st["args"]],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(REPO_ROOT),
+            )
+            _pipeline_procs[job] = proc
+            out, err = proc.communicate()
+            _pipeline_procs.pop(job, None)
+            st["finished_at"] = time.time()
+            st["returncode"] = proc.returncode
+            st["stdout"] = out.decode("utf-8", errors="replace")[-2000:]
+            # 일시정지 요청으로 terminate 되어 빠져나온 경우 → 이 단계를 paused 로, 재개 시 재실행
             if info.get("pause_requested"):
+                st["status"] = "paused"
                 _mark_paused(job, i)
                 return
-            info["current"] = i
-            st["status"] = "running"
-            st["started_at"] = time.time()
-            st.pop("finished_at", None)
-            try:
-                proc = subprocess.Popen(
-                    [venv_python, "-m", "packages.indexer.cli", st["step"], *st["args"]],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    cwd=str(REPO_ROOT),
-                )
-                _pipeline_procs[job] = proc
-                out, err = proc.communicate()
-                _pipeline_procs.pop(job, None)
-                st["finished_at"] = time.time()
-                st["returncode"] = proc.returncode
-                st["stdout"] = out.decode("utf-8", errors="replace")[-2000:]
-                # 일시정지 요청으로 terminate 되어 빠져나온 경우 → 이 단계를 paused 로, 재개 시 재실행
-                if info.get("pause_requested"):
-                    st["status"] = "paused"
-                    _mark_paused(job, i)
-                    return
-                if proc.returncode == 0:
-                    st["status"] = "done"
-                else:
-                    st["status"] = "failed"
-                    st["stderr"] = err.decode("utf-8", errors="replace")[-2000:]
-                    info["status"] = "failed"
-                    info["finished_at"] = time.time()
-                    return
-            except Exception as e:
-                _pipeline_procs.pop(job, None)
-                st["status"] = "error"
-                info["status"] = "error"
-                info["error"] = str(e)
+            if proc.returncode == 0:
+                st["status"] = "done"
+            else:
+                st["status"] = "failed"
+                st["stderr"] = err.decode("utf-8", errors="replace")[-2000:]
+                info["status"] = "failed"
                 info["finished_at"] = time.time()
                 return
-        info["status"] = "done"
-        info["paused_step"] = None
-        info["finished_at"] = time.time()
-    finally:
-        # 인덱싱이 GPU 확보용으로 언로드한 상주 채팅 LLM 을 재워밍.
-        # 일시정지(곧 재개 → 다시 언로드)면 건너뛴다. best-effort.
-        if info.get("status") != "paused":
-            try:
-                from packages.indexer.ollama_vram import warm_resident_llm
-
-                warm_resident_llm()
-            except Exception as e:  # noqa: BLE001
-                log.warning("상주 LLM 재워밍 실패(무시): %s", e)
+        except Exception as e:
+            _pipeline_procs.pop(job, None)
+            st["status"] = "error"
+            info["status"] = "error"
+            info["error"] = str(e)
+            info["finished_at"] = time.time()
+            return
+    info["status"] = "done"
+    info["paused_step"] = None
+    info["finished_at"] = time.time()
 
 
 # ---------------------------------------------------------------------------

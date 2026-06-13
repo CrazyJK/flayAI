@@ -1,12 +1,14 @@
-"""Ollama 상주 채팅 LLM 의 VRAM 적재/해제 — 인덱싱과 GPU 공존 조율.
+"""Ollama 채팅 LLM 의 VRAM 적재/해제 — 인덱싱과 GPU 공존 조율.
 
-정책: config.models.llm(예: qwen) 1개를 keep_alive=-1 로 **상주**시켜 채팅(mcp-nexus·
-flayAI /api/chat·translate LLM 폴백)의 콜드 로딩을 없앤다. 단 GPU 를 크게 쓰는 인덱싱
-단계(embed/embed-clip/extract-faces/ocr-posters/caption-posters) 진입 시 **언로드**해
-VRAM 을 양보하고, 작업이 끝나면 **재워밍**한다.
+정책: 채팅 LLM(config.models.llm, 예: qwen)은 **상주시키지 않는다**. Ollama 기본
+keep_alive(5분 유휴 후 해제)를 따라 첫 사용 시 로드되고 안 쓰면 자동 하차한다 →
+영상 시청 등 다른 GPU 작업에 VRAM 을 양보. 단 GPU 를 크게 쓰는 인덱싱 단계
+(embed/embed-clip/extract-faces/ocr-posters/caption-posters) 진입 시 적재된 Ollama
+모델을 **전부 언로드**해 VRAM 을 최대 확보한다.
 
-모두 best-effort — Ollama 가 꺼져 있거나 실패해도 인덱싱/서버 진행을 막지 않는다.
-번역(translate)은 LLM 폴백에 이 모델을 쓰므로 언로드 대상에서 제외한다.
+- unload_all_models(): 인덱싱 진입 훅(cli) 에서 호출 — 자동.
+- warm_resident_llm(): keep_alive=-1 로 핀. **자동 호출 안 함** — cli warm-llm 수동 전용.
+모두 best-effort. 번역(translate)은 LLM 폴백에 qwen 을 쓰므로 언로드 대상에서 제외.
 """
 
 from __future__ import annotations
