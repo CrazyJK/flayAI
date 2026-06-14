@@ -53,6 +53,7 @@ dependencies = [
 [project.scripts]
 flay-api    = "apps.api.main:main"
 flay-index  = "packages.indexer.cli:app"
+flay-stab   = "packages.stabilizer.cli:main"
 
 [build-system]
 requires = ["hatchling"]

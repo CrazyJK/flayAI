@@ -128,6 +128,26 @@ diary:
   # 높일수록 엄격(무관한 일기 덜 나옴), 낮출수록 관대. 0~1.
   recall_min_semantic: 0.5
 
+stabilize:
+  # 영상 안정화 (docs/video-stabilization-plan.md). 잡 산출물은 data/stabilize/ (.gitignore).
+  work_dir:        "data/stabilize"
+  ffmpeg:          "ffmpeg"          # 바이너리(PATH). vidstab/NVENC 빌드 필요
+  ffprobe:         "ffprobe"
+  max_height:      1920              # 처리/출력 세로 상한(4K 입력은 다운스케일). 0=원본유지
+  max_input_seconds: 120
+  background_engine: "vidstab"       # v1=vidstab(robust, 군중·저텍스처 검증). raft=후속
+  default_mode:    "background"      # background | person(SAM2 클릭 지정, 후속)
+  default_strength: "smooth"         # dejitter(흔들림만) | smooth | lock(완전고정) | auto
+  edge:            "black"           # 무크롭 여백 처리: black | (후속: pad, temporal)
+  encoder:         "h264_nvenc"      # 폴백 libx264
+  retain_hours:    48
+  concurrency:     1                 # 12GB GPU 공유 → 동시 1잡 + 인덱싱과 상호배제
+  # 강도 프리셋 → vidstab smoothing(프레임 수). 클수록 강하게 고정.
+  smoothing_presets:
+    dejitter: 12
+    smooth:   40
+    lock:     250
+
 logging:
   log_dir:        "logs"
   log_file:       "logs/flayai.log"

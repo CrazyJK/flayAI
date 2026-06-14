@@ -265,6 +265,11 @@ def create_app() -> FastAPI:
 
     app.include_router(diary_router)
 
+    # ---- 영상 안정화 ----
+    from apps.api.routers.stabilize import router as stabilize_router
+
+    app.include_router(stabilize_router)
+
     # ---- 일기 첨부 이미지 서빙 (레거시 base64 추출분) ----
     @app.get("/static/diary-assets/{name}")
     def diary_asset(name: str):
