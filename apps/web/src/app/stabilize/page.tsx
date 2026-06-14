@@ -319,7 +319,8 @@ export default function StabilizePage() {
   const doneJob = status && status.status === "done" ? status : null;
   const resultUrl = jobId ? `${API_BASE}/api/stabilize/jobs/${jobId}/result` : null;
   const metrics = status?.outputs?.[0]?.metrics;
-  const canCompare = done && !!resultUrl && !!previewUrl;
+  const isImage = !!file && file.type.startsWith("image"); // gif 등 — 원본을 img 로
+  const canCompare = done && !!resultUrl && !!previewUrl && !isImage;
 
   return (
     <div className="relative flex-1 flex flex-col">
@@ -487,17 +488,26 @@ export default function StabilizePage() {
                   {previewUrl && (
                     <figure className="space-y-1 min-w-0">
                       <figcaption className="text-xs text-muted-foreground">원본</figcaption>
-                      <video
-                        ref={origRef}
-                        src={previewUrl}
-                        controls
-                        muted={muted}
-                        onTimeUpdate={onOrigTime}
-                        onPause={() => syncPlaying && stabRef.current?.pause()}
-                        onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
-                        onEnded={() => setSyncPlaying(false)}
-                        className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
-                      />
+                      {isImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={previewUrl}
+                          alt="원본"
+                          className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
+                        />
+                      ) : (
+                        <video
+                          ref={origRef}
+                          src={previewUrl}
+                          controls
+                          muted={muted}
+                          onTimeUpdate={onOrigTime}
+                          onPause={() => syncPlaying && stabRef.current?.pause()}
+                          onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
+                          onEnded={() => setSyncPlaying(false)}
+                          className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
+                        />
+                      )}
                     </figure>
                   )}
                   <figure className="space-y-1 min-w-0">
@@ -568,12 +578,21 @@ export default function StabilizePage() {
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
                 {/* 비디오 본래 비율 유지(검은 여백 없음), 세로=높이·가로=폭 기준으로 화면 안에 맞춤 */}
                 <div className="relative mx-auto w-fit max-w-full">
-                  <video
-                    ref={pickVideoRef}
-                    src={previewUrl}
-                    controls
-                    className="block max-h-[64vh] max-w-full rounded bg-black"
-                  />
+                  {isImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={previewUrl}
+                      alt="원본"
+                      className="block max-h-[64vh] max-w-full rounded bg-black"
+                    />
+                  ) : (
+                    <video
+                      ref={pickVideoRef}
+                      src={previewUrl}
+                      controls
+                      className="block max-h-[64vh] max-w-full rounded bg-black"
+                    />
+                  )}
                   {mode === "person" && pickMode && (
                     <div
                       className="absolute inset-0 cursor-crosshair"
