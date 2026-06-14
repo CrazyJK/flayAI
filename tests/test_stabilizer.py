@@ -38,3 +38,36 @@ def test_job_status_roundtrip(tmp_path, monkeypatch):
 def test_get_status_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(J, "_work_root", lambda: tmp_path)
     assert J.get_status("nope") is None
+
+
+def test_cleanup_old_jobs(tmp_path, monkeypatch):
+    import time
+
+    monkeypatch.setattr(J, "_work_root", lambda: tmp_path)
+
+    def backdate(job_id, hours):
+        st = J.get_status(job_id)
+        st["updated_at"] = time.time() - hours * 3600
+        J._write(job_id, st)
+
+    old = J.new_job("background", "smooth")
+    J.set_status(old, status="done")
+    backdate(old, 100)
+
+    recent = J.new_job("background", "smooth")
+    J.set_status(recent, status="done")  # 방금 → 보존
+
+    running = J.new_job("background", "smooth")
+    J.set_status(running, status="running")
+    backdate(running, 100)  # 오래됐지만 진행 중 → 보존
+
+    removed = J.cleanup_old_jobs(retain_hours=48)
+    assert removed == 1
+    assert J.get_status(old) is None
+    assert J.get_status(recent) is not None
+    assert J.get_status(running) is not None
+
+    # _analysis 같은 status.json 없는 디렉토리는 건드리지 않음
+    (tmp_path / "_analysis").mkdir()
+    assert J.cleanup_old_jobs(retain_hours=48) == 0
+    assert (tmp_path / "_analysis").exists()

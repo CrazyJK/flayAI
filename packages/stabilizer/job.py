@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -89,3 +90,28 @@ def list_jobs() -> list[dict[str, Any]]:
                 out.append(st)
     out.sort(key=lambda s: s.get("created_at", 0), reverse=True)
     return out
+
+
+def cleanup_old_jobs(retain_hours: float | None = None) -> int:
+    """보존기간 지난 완료/실패/취소 잡 디렉토리를 삭제. 삭제 개수 반환.
+
+    - status.json 없는 디렉토리(_analysis 등)·파일(sample.mp4)은 건드리지 않는다.
+    - 진행 중(queued/running)은 나이와 무관하게 보존.
+    best-effort — 디렉토리 잠김 등은 무시.
+    """
+    if retain_hours is None:
+        retain_hours = float(stabilize_config().get("retain_hours", 48) or 0)
+    if retain_hours <= 0:
+        return 0
+    cutoff = time.time() - retain_hours * 3600
+    removed = 0
+    for d in _work_root().iterdir():
+        if not d.is_dir():
+            continue
+        st = get_status(d.name)
+        if st is None or st.get("status") not in ("done", "failed", "canceled"):
+            continue
+        if st.get("updated_at", 0) < cutoff:
+            shutil.rmtree(d, ignore_errors=True)
+            removed += 1
+    return removed

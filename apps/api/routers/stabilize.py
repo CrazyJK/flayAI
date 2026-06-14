@@ -79,6 +79,12 @@ async def create_job(
     if busy:
         raise HTTPException(409, busy)
 
+    # 보존기간 지난 잡 정리(기회적 — 새 잡 받을 때마다)
+    try:
+        J.cleanup_old_jobs()
+    except Exception:  # noqa: BLE001 — 정리 실패가 잡 생성을 막지 않게
+        pass
+
     options: dict[str, Any] = {}
     if subject:
         options["subject"] = subject

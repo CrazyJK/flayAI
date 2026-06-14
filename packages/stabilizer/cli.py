@@ -21,7 +21,12 @@ def main(argv: list[str] | None = None) -> None:
         from packages.stabilizer.pipeline import run_job
         run_job(argv[1])
         return
-    sys.stderr.write("usage: python -m packages.stabilizer.cli run <job_id>\n")
+    if argv and argv[0] == "cleanup":
+        from packages.stabilizer.job import cleanup_old_jobs
+        n = cleanup_old_jobs()
+        sys.stderr.write(f"removed {n} old job(s)\n")
+        return
+    sys.stderr.write("usage: python -m packages.stabilizer.cli run <job_id> | cleanup\n")
     sys.exit(2)
 
 
