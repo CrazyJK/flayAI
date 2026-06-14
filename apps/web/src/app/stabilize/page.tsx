@@ -258,6 +258,18 @@ export default function StabilizePage() {
     loadJobs();
   }
 
+  async function removeAllJobs() {
+    if (!jobs.length || !window.confirm("최근 작업을 모두 삭제할까요?")) return;
+    await Promise.all(
+      jobs.map((j) =>
+        fetch(`${API_BASE}/api/stabilize/jobs/${j.job_id}`, { method: "DELETE" }).catch(() => {}),
+      ),
+    );
+    setJobId(null);
+    setStatus(null);
+    loadJobs();
+  }
+
   function backToSetup() {
     setStatus(null);
     setJobId(null);
@@ -316,7 +328,7 @@ export default function StabilizePage() {
 
       {/* 가로 모니터에선 폭을 넓게(32"/24" 멀티모니터), 세로는 자연히 좁아짐 */}
       <div className="mx-auto w-full max-w-[2400px] px-4 py-4">
-        <div className="grid gap-4 landscape:grid-cols-[minmax(300px,340px)_1fr_minmax(220px,300px)] items-start">
+        <div className="grid gap-4 landscape:grid-cols-[minmax(380px,440px)_1fr_minmax(220px,300px)] items-start">
           {/* ===== 좌: 옵션 + 처리중 ===== */}
           <div className="space-y-4 landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4 space-y-4">
@@ -363,12 +375,12 @@ export default function StabilizePage() {
 
               <div className="space-y-1.5">
                 <span className="text-sm font-medium">고정 강도</span>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-nowrap gap-1.5">
                   {STRENGTHS.map((s) => (
                     <button
                       key={s.key}
                       onClick={() => setStrength(s.key)}
-                      className={`px-3 py-1.5 rounded text-sm ${
+                      className={`px-2.5 py-1.5 rounded text-sm whitespace-nowrap ${
                         strength === s.key ? "bg-primary text-primary-foreground" : "bg-muted"
                       }`}
                     >
@@ -445,7 +457,7 @@ export default function StabilizePage() {
                         onPause={() => syncPlaying && stabRef.current?.pause()}
                         onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
                         onEnded={() => setSyncPlaying(false)}
-                        className="w-full h-[68vh] object-contain rounded border border-border bg-black"
+                        className="block mx-auto max-h-[72vh] max-w-full rounded border border-border bg-black"
                       />
                     </figure>
                   )}
@@ -456,7 +468,7 @@ export default function StabilizePage() {
                       src={resultUrl}
                       controls
                       muted
-                      className="w-full h-[68vh] object-contain rounded border border-border bg-black"
+                      className="block mx-auto max-h-[72vh] max-w-full rounded border border-border bg-black"
                     />
                   </figure>
                 </div>
@@ -509,12 +521,13 @@ export default function StabilizePage() {
             ) : previewUrl ? (
               // 설정: 비디오 맨 위, 부가 정보(주인공 지정 등) 하단
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="relative mx-auto h-[64vh] aspect-[9/16] bg-black rounded overflow-hidden">
+                {/* 비디오 본래 비율 유지(검은 여백 없음), 세로=높이·가로=폭 기준으로 화면 안에 맞춤 */}
+                <div className="relative mx-auto w-fit max-w-full">
                   <video
                     ref={pickVideoRef}
                     src={previewUrl}
                     controls
-                    className="w-full h-full object-cover"
+                    className="block max-h-[64vh] max-w-full rounded bg-black"
                   />
                   {mode === "person" && pickMode && (
                     <div
@@ -610,7 +623,17 @@ export default function StabilizePage() {
           {/* ===== 우: 최근 작업 ===== */}
           <div className="landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4">
-              <h2 className="text-sm font-medium mb-2">최근 작업</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-medium">최근 작업</h2>
+                {jobs.length > 0 && (
+                  <button
+                    onClick={removeAllJobs}
+                    className="text-[11px] text-muted-foreground hover:text-destructive"
+                  >
+                    전체 삭제
+                  </button>
+                )}
+              </div>
               {jobs.length === 0 ? (
                 <p className="text-xs text-muted-foreground">아직 작업이 없습니다.</p>
               ) : (
