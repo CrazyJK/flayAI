@@ -329,11 +329,12 @@ export default function StabilizePage() {
       {/* 가로 모니터에선 폭을 넓게(32"/24" 멀티모니터), 세로는 자연히 좁아짐 */}
       <div className="mx-auto w-full max-w-[2400px] px-4 py-4">
         <div
-          className={`grid gap-4 items-start ${
+          className={`grid gap-4 items-start landscape:justify-center ${
             doneJob
-              ? // 결과 화면: 메인을 영상 너비에 맞춰(auto) 줄이고 전체를 가운데 정렬 → 영상이 핏하게
-                "landscape:grid-cols-[minmax(350px,365px)_auto_minmax(350px,365px)] landscape:justify-center"
-              : "landscape:grid-cols-[minmax(350px,365px)_1fr_minmax(350px,365px)]"
+              ? // 결과: 메인을 영상 너비에 맞춰(auto) — 영상이 핏하게
+                "landscape:grid-cols-[minmax(350px,365px)_auto_minmax(350px,365px)]"
+              : // 설정·업로드: 결과와 같은 폭으로 고정(~1261px) → 전환 시 폭이 흔들리지 않게
+                "landscape:grid-cols-[minmax(350px,365px)_minmax(0,1261px)_minmax(350px,365px)]"
           }`}
         >
           {/* ===== 좌: 옵션 + 처리중 ===== */}
