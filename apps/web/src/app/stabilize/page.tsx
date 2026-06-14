@@ -381,8 +381,9 @@ export default function StabilizePage() {
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  영상을 원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 인물을 클릭하세요.
-                  미지정 시 화면 중앙의 인물을 자동 추적합니다.
+                  영상을 원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 인물에서 고정할
+                  지점(얼굴/몸통 등)을 클릭하세요 — 그 지점이 화면에 고정됩니다. 미지정 시 화면
+                  중앙의 인물을 자동 추적합니다.
                 </p>
                 <div className="relative mx-auto h-[62vh] aspect-[9/16] bg-black rounded overflow-hidden">
                   <video

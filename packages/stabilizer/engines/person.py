@@ -126,6 +126,15 @@ def _build_track(dets: list[np.ndarray], W: int, H: int, fps: float,
     track: list[np.ndarray | None] = [None] * n
     track[start] = seed_box(start)
 
+    # 클릭 앵커: 시드 박스 안에서 클릭한 상대 위치(예: 위 15%=얼굴)를 고정점으로.
+    # 매 프레임 박스가 커지거나 움직여도 같은 상대 위치를 따라간다. 미지정이면 박스 중심(0.5,0.5).
+    sb = track[start]
+    if px is not None and sb is not None:
+        relx = float(np.clip((px - sb[0]) / max(sb[2] - sb[0], 1.0), 0.0, 1.0))
+        rely = float(np.clip((py - sb[1]) / max(sb[3] - sb[1], 1.0), 0.0, 1.0))
+    else:
+        relx = rely = 0.5
+
     def assoc(ref, cand):
         """직전 known 박스 ref 에 맞는 검출(없거나 너무 멀면 None=미검출 처리)."""
         if ref is None or not len(cand):
@@ -151,9 +160,9 @@ def _build_track(dets: list[np.ndarray], W: int, H: int, fps: float,
         if m is not None:
             last = m
 
-    # 미검출/불확실 프레임은 '유지(얼어붙음)'가 아니라 NaN → 선형 보간 (재검출 스냅 방지)
-    raw = np.array([[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] if b is not None else [np.nan, np.nan]
-                    for b in track], float)
+    # 프레임별 앵커 = 박스 안 (relx,rely) 상대 위치. 미검출/불확실 프레임은 NaN → 보간(스냅 방지)
+    raw = np.array([[b[0] + relx * (b[2] - b[0]), b[1] + rely * (b[3] - b[1])]
+                    if b is not None else [np.nan, np.nan] for b in track], float)
     idx = np.arange(n)
     for j in (0, 1):
         ok = ~np.isnan(raw[:, j])
@@ -170,7 +179,7 @@ def _build_track(dets: list[np.ndarray], W: int, H: int, fps: float,
     med = np.stack([_medfilt(raw[:, 0]), _medfilt(raw[:, 1])], 1)
     bad = np.hypot(raw[:, 0] - med[:, 0], raw[:, 1] - med[:, 1]) > 0.06 * W
     raw[bad] = med[bad]
-    return raw.astype(np.float32)
+    return raw.astype(np.float32), (round(relx, 3), round(rely, 3))
 
 
 def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
@@ -216,7 +225,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
             subject = json.loads(subject)
         except json.JSONDecodeError:
             subject = None
-    cen = _build_track(dets, W, H, fps, subject)
+    cen, anchor = _build_track(dets, W, H, fps, subject)
 
     # 3) 평활 → 평행이동 shift = target - 실제
     set_status(stage="transform", progress=55)
@@ -286,6 +295,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         "canvas_expand_h": round(Hout / H, 3),
         "output_wh": [Wout, Hout],
         "subject_seeded": bool(subject),
+        "anchor": list(anchor),
         "frames": nframes,
     }
     set_status(status="done", stage="encode", progress=100,
