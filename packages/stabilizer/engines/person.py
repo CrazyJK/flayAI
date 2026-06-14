@@ -222,8 +222,12 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     set_status(stage="transform", progress=55)
     presets = cfg.get("smoothing_presets", {})
     sigma = float(presets.get("smooth", 40) if strength == "auto" else presets.get(strength, 40))
-    tx = _gauss(cen[:, 0], sigma) - cen[:, 0]
-    ty = _gauss(cen[:, 1], sigma) - cen[:, 1]
+    # shift = gauss(궤적,σ_강도) − gauss(궤적,σ_denoise) (밴드패스).
+    # σ_denoise 보다 빠른 떨림은 보정 대상에서 제외 → 추적 노이즈가 배경 미세 튐으로 새지 않게.
+    sden = min(float(cfg.get("track_denoise_sigma", 4)), sigma)
+    refx, refy = _gauss(cen[:, 0], sden), _gauss(cen[:, 1], sden)
+    tx = _gauss(cen[:, 0], sigma) - refx
+    ty = _gauss(cen[:, 1], sigma) - refy
     minx, maxx = int(np.floor(tx.min())), int(np.ceil(tx.max()))
     miny, maxy = int(np.floor(ty.min())), int(np.ceil(ty.max()))
     Wout = (W + (maxx - minx) + 1) & ~1  # 짝수

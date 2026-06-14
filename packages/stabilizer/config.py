@@ -25,6 +25,8 @@ _DEFAULTS: dict[str, Any] = {
     "background_engine": "vidstab",  # vidstab(v1) | raft(후속)
     "segment_model": "yolo11x-seg.pt",  # 인물 모드 검출/추적용(YOLO11-seg). 클릭 시드 그리디 추적
     "segment_imgsz": 640,            # YOLO 추론 입력 긴변 px
+    "track_denoise_sigma": 4,        # 인물 추적 측정노이즈 제거(프레임). 이보다 빠른 떨림은 보정 안 함
+    #                                  → 추적 노이즈가 배경 미세 튐으로 새는 것 방지
     "default_mode": "background",    # background | person
     "default_strength": "smooth",    # dejitter | smooth | lock | auto
     "edge": "black",              # black | (후속: pad, temporal)
