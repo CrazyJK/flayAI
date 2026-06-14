@@ -68,6 +68,7 @@ cd apps/web && npm run dev   # https://ai.kamoru.jk:3000
 
 ## 절대 잊지 말 것
 
+- **대화 어투**: 사용자와 대화할 때 사용자를 지칭하는 2인칭은 '당신'('님' 쓰지 말 것), 말투는 사무적이고 정중한 표현으로.
 - **Python 실행**: `.\.venv\Scripts\python.exe` (Python 3.11). `python`/`uv run` 은 PATH 부재·torch DLL 잠금 위험.
 - **API 재시작은 수동**: FastAPI 자동 reload 없음 → 코드 변경 시 인앱 백그라운드 프로세스를 종료(8000 포트 PID `taskkill /F`) 후 다시 띄운다. **`uvicorn --reload` 는 쓰지 말 것** — torch 무거운 import 로 reload 가 멈추고 WatchFiles 가 편집을 놓치며 워커 고아 소켓으로 포트 정리가 꼬인다(검증됨). 대신 백엔드 변경을 모아 재시작 1회로 최소화. (인앱 프로세스를 `taskkill /F` 하면 그 백그라운드 작업이 'exit 1 실패'로 뜨는데, 시작 실패가 아니라 강제종료 흔적이다.) 인앱 프로세스는 클로드 앱 종료/업데이트 시 함께 죽는다 → 독립 유지는 `bin\prod.bat`.
 - **Git**: `main` 에서 직접 작업, **작업 완료 시 묻지 말고 자동으로 커밋**(Conventional Commits, 제목·본문 한국어). 피처 브랜치·PR 금지. **`git push`·배포는 사용자가 직접** — 에이전트는 로컬 커밋까지만.
