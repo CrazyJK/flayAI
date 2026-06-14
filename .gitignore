@@ -157,6 +157,7 @@ data/qdrant/
 data/sqlite/
 data/state.json
 data/diary_assets/
+data/stabilize/
 
 # 일기 프롬프트(개인 취향·수위 조정) — git 에 올리지 않음. 예시는 diary_prompts.example.yaml
 diary_prompts.yaml
