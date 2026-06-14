@@ -67,7 +67,7 @@ export default function StabilizePage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<"background" | "person">("background");
-  const [strength, setStrength] = useState<string>("smooth");
+  const [strength, setStrength] = useState<string>("auto");
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus | null>(null);
@@ -243,6 +243,7 @@ export default function StabilizePage() {
 
   const running = status && !TERMINAL.has(status.status);
   const done = status?.status === "done";
+  const doneJob = status && status.status === "done" ? status : null;
   const resultUrl = jobId ? `${API_BASE}/api/stabilize/jobs/${jobId}/result` : null;
   const metrics = status?.outputs?.[0]?.metrics;
   const canCompare = done && !!resultUrl && !!previewUrl;
@@ -259,8 +260,8 @@ export default function StabilizePage() {
       />
 
       <div className="mx-auto w-full max-w-[1600px] px-4 py-4">
-        {/* 모니터 방향 기준 반응형: 가로(landscape)=좌측 옵션+우측 큰 영역, 세로(portrait)=세로 스택 */}
-        <div className="grid gap-4 landscape:grid-cols-[minmax(340px,400px)_1fr] items-start">
+        {/* 모니터 방향 기준 반응형: 가로(landscape)=옵션·메인·최근작업 3단, 세로(portrait)=세로 스택 */}
+        <div className="grid gap-4 landscape:grid-cols-[minmax(300px,340px)_1fr_minmax(220px,280px)] items-start">
           {/* ===== 사이드바: 옵션 + 최근 잡 ===== */}
           <div className="space-y-4 landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4 space-y-4">
@@ -337,197 +338,110 @@ export default function StabilizePage() {
               </p>
               {err && <p className="text-sm text-destructive whitespace-pre-wrap">{err}</p>}
             </section>
-
-            {jobs.length > 0 && (
-              <section className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-sm font-medium mb-2">최근 작업</h2>
-                <ul className="divide-y divide-border">
-                  {jobs.map((j) => (
-                    <li key={j.job_id} className="flex items-center gap-2 py-2">
-                      <button
-                        onClick={() => {
-                          setSyncPlaying(false);
-                          setJobId(j.job_id);
-                          setStatus(j);
-                        }}
-                        className="text-left min-w-0 flex-1"
-                      >
-                        <div className={`text-xs ${j.job_id === jobId ? "text-foreground" : ""}`}>
-                          {MODE_LABEL[j.mode] ?? j.mode} · {STRENGTH_LABEL[j.strength] ?? j.strength}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          <span
-                            className={
-                              j.status === "done"
-                                ? "text-success"
-                                : j.status === "failed"
-                                  ? "text-destructive"
-                                  : ""
-                            }
-                          >
-                            {STATUS_LABEL[j.status] ?? j.status}
-                          </span>
-                          {j.created_at ? ` · ${relTime(j.created_at)}` : ""}
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => removeJob(j.job_id)}
-                        className="shrink-0 text-xs text-muted-foreground hover:text-destructive"
-                      >
-                        삭제
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
           </div>
 
           {/* ===== 메인 ===== */}
-          <div className="min-w-0">
-            {status ? (
+          <div className="min-w-0 space-y-3">
+            {doneJob && resultUrl ? (
+              // 결과: 전/후 비교
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h2 className="text-sm font-medium">
-                    {MODE_LABEL[status.mode] ?? status.mode} ·{" "}
-                    {STRENGTH_LABEL[status.strength] ?? status.strength}
-                    <span
-                      className={`ml-2 text-xs ${
-                        done
-                          ? "text-success"
-                          : status.status === "failed"
-                            ? "text-destructive"
-                            : "text-muted-foreground"
-                      }`}
-                    >
-                      {STATUS_LABEL[status.status] ?? status.status}
-                    </span>
+                    {MODE_LABEL[doneJob.mode] ?? doneJob.mode} ·{" "}
+                    {STRENGTH_LABEL[doneJob.strength] ?? doneJob.strength}
+                    <span className="ml-2 text-xs text-success">완료</span>
                   </h2>
-                  {status.input && (
+                  {doneJob.input && (
                     <span className="text-xs text-muted-foreground">
-                      입력 {status.input.width}×{status.input.height} · {status.input.fps}fps ·{" "}
-                      {status.input.duration}s
+                      입력 {doneJob.input.width}×{doneJob.input.height} · {doneJob.input.fps}fps ·{" "}
+                      {doneJob.input.duration}s
                     </span>
                   )}
-                  {running ? (
-                    <button onClick={cancelJob} className="px-2 py-1 rounded text-xs bg-muted">
-                      취소
-                    </button>
-                  ) : (
-                    <button
-                      onClick={backToSetup}
-                      className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
-                      title="설정으로 돌아가 주인공·강도를 바꿔 다시 안정화"
-                    >
-                      ↩ 다시 설정
-                    </button>
-                  )}
+                  <button
+                    onClick={backToSetup}
+                    className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
+                    title="설정으로 돌아가 주인공·강도를 바꿔 다시 안정화"
+                  >
+                    ↩ 다시 설정
+                  </button>
                 </div>
-
-                {running && (
-                  <div className="space-y-1.5">
-                    <div className="h-2 rounded bg-muted overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${status.progress ?? 0}%` }}
+                {doneJob.note && (
+                  <p className="text-xs text-muted-foreground">참고: {doneJob.note}</p>
+                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {canCompare && (
+                    <>
+                      <button
+                        onClick={syncToggle}
+                        className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        {syncPlaying ? "⏸ 동시 정지" : "▶ 동시 재생"}
+                      </button>
+                      <button
+                        onClick={syncRestart}
+                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                      >
+                        ↺ 처음부터
+                      </button>
+                      <button
+                        onClick={() => setMuted((m) => !m)}
+                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                        title="동시 재생 시 소리 끄기/켜기"
+                      >
+                        {muted ? "🔇 음소거" : "🔊 소리"}
+                      </button>
+                    </>
+                  )}
+                  <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+                    {metrics?.tracker === "sam2" && <span>추적 SAM2</span>}
+                    {metrics?.canvas_expand_w && (
+                      <span>
+                        캔버스 ×{metrics.canvas_expand_w}/{metrics.canvas_expand_h}
+                      </span>
+                    )}
+                    <a
+                      href={resultUrl}
+                      download
+                      className="px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      다운로드
+                    </a>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {previewUrl && (
+                    <figure className="space-y-1 min-w-0">
+                      <figcaption className="text-xs text-muted-foreground">원본</figcaption>
+                      <video
+                        ref={origRef}
+                        src={previewUrl}
+                        controls
+                        muted={muted}
+                        onTimeUpdate={onOrigTime}
+                        onPause={() => syncPlaying && stabRef.current?.pause()}
+                        onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
+                        onEnded={() => setSyncPlaying(false)}
+                        className="w-full h-[68vh] object-contain rounded border border-border bg-black"
                       />
-                    </div>
-                    <div className="flex gap-1.5 text-[11px] text-muted-foreground">
-                      {STAGES.map((st) => (
-                        <span
-                          key={st}
-                          className={status.stage === st ? "text-foreground font-medium" : ""}
-                        >
-                          {st}
-                        </span>
-                      ))}
-                      <span className="ml-auto tabular-nums">{status.progress ?? 0}%</span>
-                    </div>
-                  </div>
-                )}
-
-                {status.note && <p className="text-xs text-muted-foreground">참고: {status.note}</p>}
-                {status.status === "failed" && (
-                  <p className="text-sm text-destructive whitespace-pre-wrap">{status.error}</p>
-                )}
-
-                {done && resultUrl && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {canCompare && (
-                        <>
-                          <button
-                            onClick={syncToggle}
-                            className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
-                          >
-                            {syncPlaying ? "⏸ 동시 정지" : "▶ 동시 재생"}
-                          </button>
-                          <button
-                            onClick={syncRestart}
-                            className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
-                          >
-                            ↺ 처음부터
-                          </button>
-                          <button
-                            onClick={() => setMuted((m) => !m)}
-                            className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
-                            title="동시 재생 시 소리 끄기/켜기"
-                          >
-                            {muted ? "🔇 음소거" : "🔊 소리"}
-                          </button>
-                        </>
-                      )}
-                      <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-                        {metrics?.tracker === "sam2" && <span>추적 SAM2</span>}
-                        {metrics?.canvas_expand_w && (
-                          <span>
-                            캔버스 ×{metrics.canvas_expand_w}/{metrics.canvas_expand_h}
-                          </span>
-                        )}
-                        <a
-                          href={resultUrl}
-                          download
-                          className="px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                        >
-                          다운로드
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      {previewUrl && (
-                        <figure className="space-y-1 min-w-0">
-                          <figcaption className="text-xs text-muted-foreground">원본</figcaption>
-                          <video
-                            ref={origRef}
-                            src={previewUrl}
-                            controls
-                            muted={muted}
-                            onTimeUpdate={onOrigTime}
-                            onPause={() => syncPlaying && stabRef.current?.pause()}
-                            onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
-                            onEnded={() => setSyncPlaying(false)}
-                            className="w-full h-[68vh] object-contain rounded border border-border bg-black"
-                          />
-                        </figure>
-                      )}
-                      <figure className={`space-y-1 min-w-0 ${previewUrl ? "" : "col-span-2"}`}>
-                        <figcaption className="text-xs text-success">안정화</figcaption>
-                        <video
-                          ref={stabRef}
-                          src={resultUrl}
-                          controls
-                          muted
-                          className="w-full h-[68vh] object-contain rounded border border-border bg-black"
-                        />
-                      </figure>
-                    </div>
-                  </div>
-                )}
+                    </figure>
+                  )}
+                  <figure className={`space-y-1 min-w-0 ${previewUrl ? "" : "col-span-2"}`}>
+                    <figcaption className="text-xs text-success">안정화</figcaption>
+                    <video
+                      ref={stabRef}
+                      src={resultUrl}
+                      controls
+                      muted
+                      className="w-full h-[68vh] object-contain rounded border border-border bg-black"
+                    />
+                  </figure>
+                </div>
               </section>
-            ) : previewUrl ? (
-              // 설정 화면: 큰 영상 미리보기 + (인물) 주인공 지정
-              <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+            ) : (
+              <>
+                {previewUrl ? (
+                  // 설정 화면: 큰 영상 미리보기 + (인물) 주인공 지정 (처리 중에도 유지)
+                  <section className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h2 className="text-sm font-medium">
                     {mode === "person" ? "주인공 지정 & 미리보기" : "미리보기"}
@@ -617,7 +531,115 @@ export default function StabilizePage() {
                 </button>
                 <p className="text-xs text-muted-foreground">흔들린 짧은 영상 (mp4 등)</p>
               </div>
+                )}
+                {/* 진행/실패 표시 — 미리보기 유지한 채 메인 하단에 */}
+                {status && !done && (
+                  <section className="rounded-lg border border-border bg-card p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h2 className="text-sm font-medium">
+                        {MODE_LABEL[status.mode] ?? status.mode} ·{" "}
+                        {STRENGTH_LABEL[status.strength] ?? status.strength}
+                        <span
+                          className={`ml-2 text-xs ${
+                            status.status === "failed" ? "text-destructive" : "text-muted-foreground"
+                          }`}
+                        >
+                          {STATUS_LABEL[status.status] ?? status.status}
+                        </span>
+                      </h2>
+                      {running ? (
+                        <button onClick={cancelJob} className="px-2 py-1 rounded text-xs bg-muted">
+                          취소
+                        </button>
+                      ) : (
+                        <button
+                          onClick={backToSetup}
+                          className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
+                        >
+                          ↩ 다시 설정
+                        </button>
+                      )}
+                    </div>
+                    {running && (
+                      <div className="space-y-1.5">
+                        <div className="h-2 rounded bg-muted overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{ width: `${status.progress ?? 0}%` }}
+                          />
+                        </div>
+                        <div className="flex gap-1.5 text-[11px] text-muted-foreground">
+                          {STAGES.map((st) => (
+                            <span
+                              key={st}
+                              className={status.stage === st ? "text-foreground font-medium" : ""}
+                            >
+                              {st}
+                            </span>
+                          ))}
+                          <span className="ml-auto tabular-nums">{status.progress ?? 0}%</span>
+                        </div>
+                      </div>
+                    )}
+                    {status.note && (
+                      <p className="text-xs text-muted-foreground">참고: {status.note}</p>
+                    )}
+                    {status.status === "failed" && (
+                      <p className="text-sm text-destructive whitespace-pre-wrap">{status.error}</p>
+                    )}
+                  </section>
+                )}
+              </>
             )}
+          </div>
+
+          {/* ===== 최근 작업 (3번째 컬럼) ===== */}
+          <div className="landscape:sticky landscape:top-4">
+            <section className="rounded-lg border border-border bg-card p-4">
+              <h2 className="text-sm font-medium mb-2">최근 작업</h2>
+              {jobs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">아직 작업이 없습니다.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {jobs.map((j) => (
+                    <li key={j.job_id} className="flex items-center gap-2 py-2">
+                      <button
+                        onClick={() => {
+                          setSyncPlaying(false);
+                          setJobId(j.job_id);
+                          setStatus(j);
+                        }}
+                        className="text-left min-w-0 flex-1"
+                      >
+                        <div className={`text-xs ${j.job_id === jobId ? "text-foreground" : ""}`}>
+                          {MODE_LABEL[j.mode] ?? j.mode} · {STRENGTH_LABEL[j.strength] ?? j.strength}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          <span
+                            className={
+                              j.status === "done"
+                                ? "text-success"
+                                : j.status === "failed"
+                                  ? "text-destructive"
+                                  : ""
+                            }
+                          >
+                            {STATUS_LABEL[j.status] ?? j.status}
+                          </span>
+                          {j.created_at ? ` · ${relTime(j.created_at)}` : ""}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => removeJob(j.job_id)}
+                        className="shrink-0 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        삭제
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
         </div>
       </div>
