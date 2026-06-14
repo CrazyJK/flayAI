@@ -280,6 +280,75 @@ function ToolCallChip({ ev }: { ev: ToolEvent }) {
   );
 }
 
+// 말풍선 아래 보조 액션 버튼 공통 스타일 (작고 은은하게)
+const ACTION_BTN =
+  "flex items-center gap-1 px-1.5 py-0.5 text-xs rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors";
+
+// 질문 복사 — 클릭 시 클립보드에 쓰고 잠시 '복사됨' 으로 표시
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      title="질문 복사"
+      className={ACTION_BTN}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // 클립보드 접근 실패(비보안 컨텍스트 등) 무시 — 앱은 HTTPS 라 정상 동작
+        }
+      }}
+    >
+      {copied ? (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          복사됨
+        </>
+      ) : (
+        <>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          복사
+        </>
+      )}
+    </button>
+  );
+}
+
+// 질문 말풍선 + 호버/포커스 시 나타나는 액션(복사·다시 묻기).
+// '다시 묻기' 는 자동 전송하지 않고 입력창에 내용만 채운다(편집 후 직접 전송).
+function UserBubble({ text, onReask }: { text: string; onReask: (t: string) => void }) {
+  return (
+    <div className="group flex flex-col items-end gap-1 max-w-[80%]">
+      <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm whitespace-pre-wrap break-words">
+        {text}
+      </div>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <CopyButton text={text} />
+        <button
+          type="button"
+          title="이 질문을 입력창에 채우기"
+          className={ACTION_BTN}
+          onClick={() => onReask(text)}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+          다시 묻기
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AssistantBlock({ msg }: { msg: Message }) {
   // 채택 이유(키워드 매칭)용 — 실제 search_videos 에 넘어간 질의어
   const searchQuery = String(
@@ -506,6 +575,21 @@ export default function ChatPage() {
 
   const abort = useCallback(() => {
     abortRef.current?.abort();
+  }, []);
+
+  // 질문 말풍선의 '다시 묻기' — 입력창에 내용을 채우고 포커스(자동 전송 X, 편집 가능)
+  const fillInput = useCallback((text: string) => {
+    setInput(text);
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.focus();
+    // 값이 DOM 에 반영된 다음 프레임에 높이 재계산 + 커서를 끝으로
+    requestAnimationFrame(() => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+      const len = ta.value.length;
+      ta.setSelectionRange(len, len);
+    });
   }, []);
 
   // 아직 대화가 없는 첫 로딩 상태 — 입력창을 화면 중앙에 크고 밝게 배치
@@ -775,9 +859,7 @@ export default function ChatPage() {
             {messages.map((m) =>
               m.role === "user" ? (
                 <div key={m.id} className="flex justify-end">
-                  <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm max-w-[80%]">
-                    {m.text}
-                  </div>
+                  <UserBubble text={m.text} onReask={fillInput} />
                 </div>
               ) : (
                 <div key={m.id} className="flex justify-start">
