@@ -188,7 +188,7 @@ def _build_track(dets: list[np.ndarray], W: int, H: int, fps: float,
 
 
 def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
-               set_status: Callable[..., Any]) -> None:
+               set_status: Callable[..., Any], out_name: str = "out.mp4") -> dict:
     ff, fp = cfg["ffmpeg"], cfg["ffprobe"]
     inp = jdir / "in.mp4"
     work = jdir / "work"
@@ -299,7 +299,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     set_status(stage="warp", progress=70)
     import cv2
 
-    out = jdir / "out.mp4"
+    out = jdir / out_name
     encoder = cfg.get("encoder", "h264_nvenc")
 
     def _encode(enc_name):
@@ -382,5 +382,5 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     }
     if auto_info:
         metrics["auto"] = auto_info
-    set_status(status="done", stage="encode", progress=100,
-               outputs=[{"variant": "person", "file": "out.mp4", "metrics": metrics}])
+    set_status(stage="encode", progress=100)
+    return {"variant": "person", "file": out_name, "metrics": metrics}

@@ -14,7 +14,10 @@ def build_work(ff: str, inp: Path, work_mp4: Path, meta: dict, cfg: dict, option
     - decode_hwaccel: cuda(기본, NVDEC) | none
     - max_height 초과면 다운스케일
     - options.interpolate + 입력 fps < interpolate_fps 면 minterpolate 로 보간(저fps gif 부드럽게)
+    - 이미 있으면 재사용('둘 다' 모드에서 앞 엔진이 만든 work 를 뒷 엔진이 재사용 → 디코딩 1회)
     """
+    if work_mp4.exists() and work_mp4.stat().st_size > 0:
+        return
     max_height = cfg.get("max_height") or 0
     hwaccel = cfg.get("decode_hwaccel", "cuda")
     target_fps = int(cfg.get("interpolate_fps", 30) or 0)

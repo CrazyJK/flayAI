@@ -138,8 +138,8 @@ def _metrics(out_mp4: Path, smoothing: int) -> dict[str, Any]:
 
 
 def run_background(jdir: Path, strength: str, options: dict, cfg: dict,
-                   set_status: Callable[..., Any]) -> None:
-    """배경 안정화 잡 본체. set_status(**kw) 로 진행상황을 status.json 에 반영."""
+                   set_status: Callable[..., Any], out_name: str = "out.mp4") -> dict:
+    """배경 안정화 잡 본체. 출력 dict 반환(done 상태는 파이프라인이 설정 — '둘 다' 모드 누적용)."""
     ff, fp = cfg["ffmpeg"], cfg["ffprobe"]
     inp = jdir / "in.mp4"
     work = jdir / "work"
@@ -184,7 +184,7 @@ def run_background(jdir: Path, strength: str, options: dict, cfg: dict,
     set_status(stage="transform", progress=55)
     smoothing = _smoothing(cfg, eff_strength)
     edge = (options or {}).get("edge") or cfg.get("edge", "blur")
-    out = jdir / "out.mp4"
+    out = jdir / out_name
     zoom = "optzoom=1" if edge == "crop" else "optzoom=0:crop=black"
     vf = (f"vidstabtransform=input={_rel(trf)}:smoothing={smoothing}"
           f":{zoom}:maxshift=-1:maxangle=-1")
@@ -208,5 +208,5 @@ def run_background(jdir: Path, strength: str, options: dict, cfg: dict,
     metrics["edge"] = edge
     if auto_info:
         metrics["auto"] = auto_info
-    set_status(status="done", stage="encode", progress=100,
-               outputs=[{"variant": "background", "file": "out.mp4", "metrics": metrics}])
+    set_status(stage="encode", progress=100)
+    return {"variant": "background", "file": out_name, "metrics": metrics}

@@ -12,7 +12,12 @@ const STRENGTHS = [
   { key: "auto", label: "자동", desc: "영상의 카메라/인물 이동량을 보고 강도를 자동 선택 (기본)" },
 ] as const;
 
-const MODE_LABEL: Record<string, string> = { background: "배경 고정", person: "인물 고정" };
+const MODE_LABEL: Record<string, string> = {
+  background: "배경 고정",
+  person: "인물 고정",
+  both: "둘 다",
+};
+const VARIANT_LABEL: Record<string, string> = { background: "배경", person: "인물" };
 const STRENGTH_LABEL: Record<string, string> = {
   dejitter: "흔들림만",
   smooth: "부분 고정",
@@ -43,6 +48,8 @@ const STAGE_FLOW: Record<string, { key: string; label: string; match: string[] }
     { key: "encode", label: "인코딩", match: ["encode"] },
   ],
 };
+// '둘 다'는 인물 플로우로 표시(배경 단계도 분석/보정/인코딩으로 매핑됨)
+STAGE_FLOW.both = STAGE_FLOW.person;
 
 type Metrics = {
   smoothing?: number;
@@ -50,6 +57,7 @@ type Metrics = {
   canvas_expand_h?: number;
   tracker?: string;
   edge?: string;
+  scale_lock?: boolean;
 };
 type JobOutput = { variant: string; file: string; metrics?: Metrics };
 type JobStatus = {
@@ -124,7 +132,8 @@ function StageLights({ status }: { status: JobStatus }) {
 export default function StabilizePage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [mode, setMode] = useState<"background" | "person">("background");
+  const [mode, setMode] = useState<"background" | "person" | "both">("background");
+  const [resultVariant, setResultVariant] = useState<string>("");
   const [strength, setStrength] = useState<string>("auto");
   const [edge, setEdge] = useState<"blur" | "crop">("blur");
   const [interpolate, setInterpolate] = useState(false);
@@ -241,8 +250,8 @@ export default function StabilizePage() {
       fd.append("strength", strength);
       fd.append("edge", edge);
       if (interpolate) fd.append("interpolate", "1");
-      if (mode === "person" && scaleLock) fd.append("scale_lock", "1");
-      if (mode === "person" && subject) fd.append("subject", JSON.stringify(subject));
+      if (personish && scaleLock) fd.append("scale_lock", "1");
+      if (personish && subject) fd.append("subject", JSON.stringify(subject));
       const r = await fetch(`${API_BASE}/api/stabilize/jobs`, { method: "POST", body: fd });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
@@ -324,7 +333,12 @@ export default function StabilizePage() {
   const resultUrl = jobId ? `${API_BASE}/api/stabilize/jobs/${jobId}/result` : null;
   const metrics = status?.outputs?.[0]?.metrics;
   const isImage = !!file && file.type.startsWith("image"); // gif 등 — 원본을 img 로
+  const personish = mode === "person" || mode === "both"; // 주인공 지정이 필요한 모드
   const canCompare = done && !!resultUrl && !!previewUrl && !isImage;
+  const outs = doneJob?.outputs ?? [];
+  const activeVariant = outs.find((o) => o.variant === resultVariant)?.variant ?? outs[0]?.variant ?? "";
+  const stabUrl = resultUrl ? `${resultUrl}${activeVariant ? `?variant=${activeVariant}` : ""}` : null;
+  const activeMetrics = outs.find((o) => o.variant === activeVariant)?.metrics ?? metrics;
 
   return (
     <div className="relative flex-1 flex flex-col">
@@ -373,7 +387,7 @@ export default function StabilizePage() {
               <div className="space-y-1.5">
                 <span className="text-sm font-medium">안정화 기준</span>
                 <div className="flex gap-2">
-                  {(["background", "person"] as const).map((mk) => (
+                  {(["background", "person", "both"] as const).map((mk) => (
                     <button
                       key={mk}
                       onClick={() => setMode(mk)}
@@ -388,7 +402,9 @@ export default function StabilizePage() {
                 <p className="text-xs text-muted-foreground">
                   {mode === "background"
                     ? "배경(문·벽 등)을 기준으로 카메라 흔들림을 제거합니다."
-                    : "지정한 인물(주인공)을 화면에 고정합니다. 가운데 영상에서 주인공을 클릭해 지정하세요."}
+                    : mode === "person"
+                      ? "지정한 인물(주인공)을 화면에 고정합니다. 가운데 영상에서 주인공을 클릭해 지정하세요."
+                      : "배경·인물 두 결과를 모두 만들어 비교합니다. 주인공도 클릭해 지정하세요."}
                 </p>
               </div>
 
@@ -439,7 +455,7 @@ export default function StabilizePage() {
                 </p>
               </div>
 
-              {mode === "person" && (
+              {personish && (
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <input
                     type="checkbox"
@@ -536,10 +552,30 @@ export default function StabilizePage() {
                     </figure>
                   )}
                   <figure className="space-y-1 min-w-0">
-                    <figcaption className="text-xs text-success">안정화</figcaption>
+                    <figcaption className="flex items-center gap-2 text-xs">
+                      <span className="text-success">안정화</span>
+                      {outs.length > 1 &&
+                        outs.map((o) => (
+                          <button
+                            key={o.variant}
+                            onClick={() => {
+                              setResultVariant(o.variant);
+                              setSyncPlaying(false);
+                            }}
+                            className={`px-1.5 py-0.5 rounded ${
+                              activeVariant === o.variant
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {VARIANT_LABEL[o.variant] ?? o.variant}
+                          </button>
+                        ))}
+                    </figcaption>
                     <video
+                      key={activeVariant}
                       ref={stabRef}
-                      src={resultUrl}
+                      src={stabUrl ?? undefined}
                       controls
                       muted
                       className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
@@ -573,7 +609,8 @@ export default function StabilizePage() {
                   <span className="text-xs text-muted-foreground">
                     {MODE_LABEL[doneJob.mode] ?? doneJob.mode} ·{" "}
                     {STRENGTH_LABEL[doneJob.strength] ?? doneJob.strength}
-                    {metrics?.tracker === "sam2" ? " · SAM2" : ""}
+                    {activeMetrics?.tracker === "sam2" ? " · SAM2" : ""}
+                    {activeMetrics?.scale_lock ? " · 크기고정" : ""}
                   </span>
                   <div className="ml-auto flex items-center gap-3">
                     <button
@@ -589,7 +626,7 @@ export default function StabilizePage() {
                       ↩ 다시 설정
                     </button>
                     <a
-                      href={resultUrl}
+                      href={stabUrl ?? "#"}
                       download
                       className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
                     >
@@ -618,14 +655,14 @@ export default function StabilizePage() {
                       className="block max-h-[64vh] max-w-full rounded bg-black"
                     />
                   )}
-                  {mode === "person" && pickMode && (
+                  {personish && pickMode && (
                     <div
                       className="absolute inset-0 cursor-crosshair"
                       onClick={onPickClick}
                       aria-label="주인공 클릭"
                     />
                   )}
-                  {mode === "person" && subject && (
+                  {personish && subject && (
                     <div
                       className="absolute h-5 w-5 -ml-2.5 -mt-2.5 rounded-full border-2 border-success bg-success/30 pointer-events-none"
                       style={{ left: `${subject.x * 100}%`, top: `${subject.y * 100}%` }}
@@ -635,18 +672,18 @@ export default function StabilizePage() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <h2 className="text-sm font-medium">
-                      {mode === "person" ? "주인공 지정 & 미리보기" : "미리보기"}
+                      {personish ? "주인공 지정 & 미리보기" : "미리보기"}
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {mode === "person"
+                      {personish
                         ? "원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 고정할 지점(얼굴/몸통)을 클릭. 미지정 시 중앙 인물 자동."
                         : "배경 기준으로 흔들림을 제거합니다. 왼쪽에서 강도를 고르고 “안정화 시작”을 누르세요."}
-                      {mode === "person" && subject
+                      {personish && subject
                         ? ` · 지정됨(${(subject.x * 100).toFixed(0)}%, ${(subject.y * 100).toFixed(0)}%, t=${subject.t.toFixed(1)}s)`
                         : ""}
                     </p>
                   </div>
-                  {mode === "person" && (
+                  {personish && (
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => setPickMode((v) => !v)}

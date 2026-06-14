@@ -76,8 +76,8 @@ async def create_job(
     scale_lock: str | None = Form(None),  # 인물 모드 — 주인공 크기까지 고정
 ) -> dict[str, Any]:
     _localhost_only(request)
-    if mode not in ("background", "person"):
-        raise HTTPException(400, "mode 는 background | person")
+    if mode not in ("background", "person", "both"):
+        raise HTTPException(400, "mode 는 background | person | both")
     busy = _busy()
     if busy:
         raise HTTPException(409, busy)
@@ -95,7 +95,7 @@ async def create_job(
         options["edge"] = edge
     if interpolate and interpolate not in ("0", "false", "False"):
         options["interpolate"] = True
-    if mode == "person" and scale_lock and scale_lock not in ("0", "false", "False"):
+    if mode in ("person", "both") and scale_lock and scale_lock not in ("0", "false", "False"):
         options["scale_lock"] = True
     job_id = J.new_job(mode, strength, options)
 
@@ -132,14 +132,23 @@ def job_status(job_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.api_route("/jobs/{job_id}/result", methods=["GET", "HEAD"])
-def job_result(job_id: str, request: Request) -> FileResponse:
+def job_result(job_id: str, request: Request, variant: str | None = None) -> FileResponse:
     _localhost_only(request)
     st = J.get_status(job_id)
     if not st:
         raise HTTPException(404, "job not found")
-    out = J.job_path(job_id) / "out.mp4"
-    if st.get("status") != "done" or not out.exists():
+    if st.get("status") != "done":
         raise HTTPException(409, "아직 결과가 준비되지 않았습니다")
+    # variant 로 출력 선택('둘 다' 모드의 out_background/out_person). 없으면 첫 출력 또는 out.mp4
+    outs = st.get("outputs") or []
+    fname = None
+    if variant:
+        fname = next((o.get("file") for o in outs if o.get("variant") == variant), None)
+    if not fname:
+        fname = outs[0].get("file") if outs else "out.mp4"
+    out = J.job_path(job_id) / fname
+    if not out.exists():
+        raise HTTPException(409, "결과 파일 없음")
     return FileResponse(str(out), media_type="video/mp4", filename=f"stabilized_{job_id}.mp4")
 
 
