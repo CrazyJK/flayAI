@@ -159,6 +159,9 @@ data/state.json
 data/diary_assets/
 data/stabilize/
 
+# 다운로드된 모델 가중치 (YOLO11-seg 등) — 재생성 가능, git 제외
+yolo*.pt
+
 # 일기 프롬프트(개인 취향·수위 조정) — git 에 올리지 않음. 예시는 diary_prompts.example.yaml
 diary_prompts.yaml
 *.sqlite
