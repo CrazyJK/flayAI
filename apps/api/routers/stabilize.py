@@ -139,6 +139,13 @@ def job_result(job_id: str, request: Request, variant: str | None = None) -> Fil
         raise HTTPException(404, "job not found")
     if st.get("status") != "done":
         raise HTTPException(409, "아직 결과가 준비되지 않았습니다")
+    # 원본(작업본 h264) — 최근 작업에서 다시 열 때 비교용. work.mp4 없으면 업로드 원본
+    if variant == "original":
+        wm = J.job_path(job_id) / "work" / "work.mp4"
+        src = wm if wm.exists() else J.input_path(job_id)
+        if not src.exists():
+            raise HTTPException(409, "원본 없음")
+        return FileResponse(str(src), media_type="video/mp4", filename=f"original_{job_id}.mp4")
     # variant 로 출력 선택('둘 다' 모드의 out_background/out_person). 없으면 첫 출력 또는 out.mp4
     outs = st.get("outputs") or []
     fname = None

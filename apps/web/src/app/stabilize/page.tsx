@@ -133,7 +133,6 @@ export default function StabilizePage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<"background" | "person" | "both">("background");
-  const [resultVariant, setResultVariant] = useState<string>("");
   const [strength, setStrength] = useState<string>("auto");
   const [edge, setEdge] = useState<"blur" | "crop">("blur");
   const [interpolate, setInterpolate] = useState(false);
@@ -148,7 +147,7 @@ export default function StabilizePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const origRef = useRef<HTMLVideoElement>(null);
-  const stabRef = useRef<HTMLVideoElement>(null);
+  const stabRefs = useRef<Record<string, HTMLVideoElement | null>>({}); // variant별 결과 영상
   const [syncPlaying, setSyncPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
 
@@ -295,50 +294,57 @@ export default function StabilizePage() {
     setSyncPlaying(false);
   }
 
+  // 원본 + 모든 결과 영상을 함께 제어(동시 재생). 원본을 마스터로(없으면 첫 결과).
+  function _vids(): HTMLVideoElement[] {
+    return [origRef.current, ...Object.values(stabRefs.current)].filter(Boolean) as HTMLVideoElement[];
+  }
   function syncToggle() {
-    const o = origRef.current;
-    const s = stabRef.current;
-    if (!o || !s) return;
+    const vids = _vids();
+    if (vids.length < 2) return;
     if (syncPlaying) {
-      o.pause();
-      s.pause();
+      vids.forEach((v) => v.pause());
       setSyncPlaying(false);
     } else {
-      s.currentTime = o.currentTime;
-      o.play().catch(() => {});
-      s.play().catch(() => {});
+      const m = origRef.current ?? vids[0];
+      vids.forEach((v) => {
+        if (v !== m) v.currentTime = m.currentTime;
+      });
+      vids.forEach((v) => v.play().catch(() => {}));
       setSyncPlaying(true);
     }
   }
   function syncRestart() {
-    const o = origRef.current;
-    const s = stabRef.current;
-    if (!o || !s) return;
-    o.currentTime = 0;
-    s.currentTime = 0;
-    o.play().catch(() => {});
-    s.play().catch(() => {});
+    const vids = _vids();
+    if (!vids.length) return;
+    vids.forEach((v) => {
+      v.currentTime = 0;
+    });
+    vids.forEach((v) => v.play().catch(() => {}));
     setSyncPlaying(true);
   }
-  function onOrigTime() {
+  function onMasterTime() {
     if (!syncPlaying) return;
-    const o = origRef.current;
-    const s = stabRef.current;
-    if (o && s && Math.abs(s.currentTime - o.currentTime) > 0.3) s.currentTime = o.currentTime;
+    const m = origRef.current ?? Object.values(stabRefs.current).find(Boolean) ?? null;
+    if (!m) return;
+    _vids().forEach((v) => {
+      if (v !== m && Math.abs(v.currentTime - m.currentTime) > 0.3) v.currentTime = m.currentTime;
+    });
   }
 
   const running = status && !TERMINAL.has(status.status);
   const done = status?.status === "done";
   const doneJob = status && status.status === "done" ? status : null;
   const resultUrl = jobId ? `${API_BASE}/api/stabilize/jobs/${jobId}/result` : null;
-  const metrics = status?.outputs?.[0]?.metrics;
   const isImage = !!file && file.type.startsWith("image"); // gif 등 — 원본을 img 로
   const personish = mode === "person" || mode === "both"; // 주인공 지정이 필요한 모드
-  const canCompare = done && !!resultUrl && !!previewUrl && !isImage;
   const outs = doneJob?.outputs ?? [];
-  const activeVariant = outs.find((o) => o.variant === resultVariant)?.variant ?? outs[0]?.variant ?? "";
-  const stabUrl = resultUrl ? `${resultUrl}${activeVariant ? `?variant=${activeVariant}` : ""}` : null;
-  const activeMetrics = outs.find((o) => o.variant === activeVariant)?.metrics ?? metrics;
+  // 원본: 방금 올린 파일(previewUrl) 우선, 최근작업에서 열면 서버 작업본(?variant=original)
+  const origIsImage = isImage && !!previewUrl;
+  const origSrc = previewUrl ?? (done && resultUrl ? `${resultUrl}?variant=original` : null);
+  // 원본 + 각 결과를 한 줄에 같이 띄우고 동시 재생(둘 다 모드는 원본·배경·인물 3개). 폭은 개수로 분배.
+  const vidCount = (origSrc && !origIsImage ? 1 : 0) + outs.length;
+  const maxVw = `${Math.floor(94 / Math.max(vidCount, 1))}vw`;
+  const canSync = !!done && vidCount >= 2;
 
   return (
     <div className="relative flex-1 flex flex-col">
@@ -524,66 +530,73 @@ export default function StabilizePage() {
             {doneJob && resultUrl ? (
               // 결과: 전/후 비교
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                {/* 두 영상을 가운데로 붙여 크게 — 좌우 여백 최소화 */}
-                <div className="flex justify-center items-start gap-2">
-                  {previewUrl && (
+                {/* 원본 + 각 결과를 한 줄에 같이(둘 다 모드는 원본·배경·인물) — 동시 재생 비교 */}
+                <div className="flex justify-center items-start gap-2 flex-wrap">
+                  {origSrc && (
                     <figure className="space-y-1 min-w-0">
                       <figcaption className="text-xs text-muted-foreground">원본</figcaption>
-                      {isImage ? (
+                      {origIsImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={previewUrl}
+                          src={origSrc}
                           alt="원본"
-                          className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
+                          style={{ maxWidth: maxVw }}
+                          className="block max-h-[80vh] rounded border border-border bg-black"
                         />
                       ) : (
                         <video
                           ref={origRef}
-                          src={previewUrl}
+                          src={origSrc}
                           controls
                           muted={muted}
-                          onTimeUpdate={onOrigTime}
-                          onPause={() => syncPlaying && stabRef.current?.pause()}
-                          onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
+                          onTimeUpdate={onMasterTime}
+                          onPause={() => {
+                            if (syncPlaying)
+                              _vids().forEach((v) => v !== origRef.current && v.pause());
+                          }}
+                          onPlay={() => {
+                            if (syncPlaying)
+                              _vids().forEach(
+                                (v) => v !== origRef.current && v.play().catch(() => {}),
+                              );
+                          }}
                           onEnded={() => setSyncPlaying(false)}
-                          className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
+                          style={{ maxWidth: maxVw }}
+                          className="block max-h-[80vh] rounded border border-border bg-black"
                         />
                       )}
                     </figure>
                   )}
-                  <figure className="space-y-1 min-w-0">
-                    <figcaption className="flex items-center gap-2 text-xs">
-                      <span className="text-success">안정화</span>
-                      {outs.length > 1 &&
-                        outs.map((o) => (
-                          <button
-                            key={o.variant}
-                            onClick={() => {
-                              setResultVariant(o.variant);
-                              setSyncPlaying(false);
-                            }}
-                            className={`px-1.5 py-0.5 rounded ${
-                              activeVariant === o.variant
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {VARIANT_LABEL[o.variant] ?? o.variant}
-                          </button>
-                        ))}
-                    </figcaption>
-                    <video
-                      key={activeVariant}
-                      ref={stabRef}
-                      src={stabUrl ?? undefined}
-                      controls
-                      muted
-                      className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
-                    />
-                  </figure>
+                  {outs.map((o) => (
+                    <figure key={o.variant} className="space-y-1 min-w-0">
+                      <figcaption className="flex items-center gap-2 text-xs">
+                        <span className="text-success">
+                          {outs.length > 1 ? `${VARIANT_LABEL[o.variant] ?? o.variant} 안정화` : "안정화"}
+                        </span>
+                        <a
+                          href={`${resultUrl}?variant=${o.variant}`}
+                          download
+                          className="text-muted-foreground hover:text-foreground"
+                          title="다운로드"
+                        >
+                          ⬇
+                        </a>
+                      </figcaption>
+                      <video
+                        ref={(el) => {
+                          stabRefs.current[o.variant] = el;
+                        }}
+                        src={`${resultUrl}?variant=${o.variant}`}
+                        controls
+                        muted
+                        style={{ maxWidth: maxVw }}
+                        className="block max-h-[80vh] rounded border border-border bg-black"
+                      />
+                    </figure>
+                  ))}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {canCompare && (
+                  {canSync && (
                     <>
                       <button
                         onClick={syncToggle}
@@ -609,8 +622,6 @@ export default function StabilizePage() {
                   <span className="text-xs text-muted-foreground">
                     {MODE_LABEL[doneJob.mode] ?? doneJob.mode} ·{" "}
                     {STRENGTH_LABEL[doneJob.strength] ?? doneJob.strength}
-                    {activeMetrics?.tracker === "sam2" ? " · SAM2" : ""}
-                    {activeMetrics?.scale_lock ? " · 크기고정" : ""}
                   </span>
                   <div className="ml-auto flex items-center gap-3">
                     <button
@@ -625,13 +636,6 @@ export default function StabilizePage() {
                     >
                       ↩ 다시 설정
                     </button>
-                    <a
-                      href={stabUrl ?? "#"}
-                      download
-                      className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      다운로드
-                    </a>
                   </div>
                 </div>
               </section>
