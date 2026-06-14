@@ -153,16 +153,14 @@ def run_background(jdir: Path, strength: str, options: dict, cfg: dict,
     if max_s and meta["duration"] > max_s:
         raise ValueError(f"입력이 너무 김: {meta['duration']}s > {max_s}s")
 
-    # 1) 작업본 생성(필요시 다운스케일, 오디오 보존)
-    mh = cfg.get("max_height") or 0
+    # 1) 작업본 생성(NVDEC 디코딩·다운스케일·저fps 보간·오디오 보존)
+    from ._ffwork import build_work, lowfps_note
+
     work_mp4 = work / "work.mp4"
-    cmd = [ff, "-hide_banner", "-v", "error", "-y", "-i", str(inp)]
-    if mh and meta["height"] > mh:
-        cmd += ["-vf", f"scale=-2:{mh}"]
-    cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "copy", str(work_mp4)]
-    rc, err = _run(cmd)
-    if rc != 0:
-        raise RuntimeError(f"디코딩/스케일 실패: {err}")
+    build_work(ff, inp, work_mp4, meta, cfg, options)
+    note = lowfps_note(meta)
+    if note:
+        set_status(note=note)
 
     # 강도 자동 선택(auto): 카메라 이동량을 측정해 lock/smooth/dejitter 결정
     eff_strength = strength

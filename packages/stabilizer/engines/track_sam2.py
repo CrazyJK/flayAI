@@ -104,6 +104,7 @@ def build_track_sam2(work_mp4: Path, W: int, H: int, fps: float, subject: dict,
                 state, frame_idx=seed, obj_id=1,
                 points=np.array([[px, py]], dtype=np.float32),
                 labels=np.array([1], dtype=np.int32))
+            done_ct = 0
             for reverse in (False, True):
                 for fidx, _oids, mlog in predictor.propagate_in_video(
                         state, start_frame_idx=seed, reverse=reverse):
@@ -115,6 +116,9 @@ def build_track_sam2(work_mp4: Path, W: int, H: int, fps: float, subject: dict,
                         tops[fidx] = ys.min().item() / mh
                         ws[fidx] = (xs.max() - xs.min()).item() / mw
                         hs[fidx] = (ys.max() - ys.min()).item() / mh
+                    done_ct += 1
+                    if done_ct % 15 == 0:
+                        set_status(stage="track", progress=min(30 + int(22 * done_ct / max(n, 1)), 52))
     finally:
         shutil.rmtree(fdir, ignore_errors=True)
 

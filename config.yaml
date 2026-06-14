@@ -134,6 +134,8 @@ stabilize:
   ffmpeg:          "ffmpeg"          # 바이너리(PATH). vidstab/NVENC 빌드 필요
   ffprobe:         "ffprobe"
   max_height:      1920              # 처리/출력 세로 상한(4K 입력은 다운스케일). 0=원본유지
+  decode_hwaccel:  "cuda"            # 디코딩 가속: cuda(NVDEC) | none. 실패 시 소프트웨어 폴백
+  interpolate_fps: 30                # 저fps 입력 보간 목표(잡 옵션 interpolate 켤 때만). 0=비활성
   max_input_seconds: 120
   background_engine: "vidstab"       # v1=vidstab(robust, 군중·저텍스처 검증). raft=후속
   segment_model:   "yolo11x-seg.pt"  # 인물 모드 검출/추적(YOLO11-seg, 클릭 시드 그리디). SAM2=후속

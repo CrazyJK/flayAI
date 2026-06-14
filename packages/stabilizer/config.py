@@ -21,6 +21,8 @@ _DEFAULTS: dict[str, Any] = {
     "ffmpeg": "ffmpeg",
     "ffprobe": "ffprobe",
     "max_height": 1920,           # 처리/출력 세로 상한(4K 입력은 다운스케일). 0=원본유지
+    "decode_hwaccel": "cuda",     # 디코딩 가속: cuda(NVDEC, 4K AV1 2배+) | none. 실패 시 SW 폴백
+    "interpolate_fps": 30,        # 저fps 입력 보간 목표(옵션 interpolate 켤 때만). 0=비활성
     "max_input_seconds": 120,
     "background_engine": "vidstab",  # vidstab(v1) | raft(후속)
     "segment_model": "yolo11x-seg.pt",  # 인물 모드 그리디 추적용(YOLO11-seg) 검출

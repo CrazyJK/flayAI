@@ -198,16 +198,14 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     if max_s and meta["duration"] > max_s:
         raise ValueError(f"입력이 너무 김: {meta['duration']}s > {max_s}s")
 
-    # 1) work.mp4 (다운스케일 + 오디오)
-    mh = cfg.get("max_height") or 0
+    # 1) work.mp4 (NVDEC 디코딩·다운스케일·저fps 보간·오디오)
+    from ._ffwork import build_work, lowfps_note
+
     work_mp4 = work / "work.mp4"
-    cmd = [ff, "-hide_banner", "-v", "error", "-y", "-i", str(inp)]
-    if mh and meta["height"] > mh:
-        cmd += ["-vf", f"scale=-2:{mh}"]
-    cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "copy", str(work_mp4)]
-    rc, err = _run(cmd)
-    if rc != 0:
-        raise RuntimeError(f"디코딩/스케일 실패: {err}")
+    build_work(ff, inp, work_mp4, meta, cfg, options)
+    note = lowfps_note(meta)
+    if note:
+        set_status(note=note)
     wmeta = _probe(fp, work_mp4)
     W, H, rate, fps = wmeta["width"], wmeta["height"], wmeta["rate"], wmeta["fps"]
 
@@ -323,6 +321,8 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
                     canvas[oy:oy + H, ox:ox + W] = frame
                 proc.stdin.write(np.ascontiguousarray(canvas).tobytes())
                 f += 1
+                if f % 30 == 0:
+                    set_status(stage="warp", progress=min(70 + int(28 * f / max(n, 1)), 98))
         finally:
             cap.release()
             if proc.stdin:

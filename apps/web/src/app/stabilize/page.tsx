@@ -127,6 +127,7 @@ export default function StabilizePage() {
   const [mode, setMode] = useState<"background" | "person">("background");
   const [strength, setStrength] = useState<string>("auto");
   const [edge, setEdge] = useState<"blur" | "crop">("blur");
+  const [interpolate, setInterpolate] = useState(false);
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus | null>(null);
@@ -238,6 +239,7 @@ export default function StabilizePage() {
       fd.append("mode", mode);
       fd.append("strength", strength);
       fd.append("edge", edge);
+      if (interpolate) fd.append("interpolate", "1");
       if (mode === "person" && subject) fd.append("subject", JSON.stringify(subject));
       const r = await fetch(`${API_BASE}/api/stabilize/jobs`, { method: "POST", body: fd });
       if (!r.ok) throw new Error(await r.text());
@@ -434,6 +436,16 @@ export default function StabilizePage() {
                     : "안정화 여백을 잘라내 깔끔하게(영상 크기는 줄어듭니다)."}
                 </p>
               </div>
+
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={interpolate}
+                  onChange={(e) => setInterpolate(e.target.checked)}
+                  className="accent-primary"
+                />
+                부드럽게(저fps 보간) — gif 등 끊김 완화. 흔들림 자체는 개선 안 됨
+              </label>
 
               <button
                 onClick={submit}
