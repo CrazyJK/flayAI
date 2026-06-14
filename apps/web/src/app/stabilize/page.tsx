@@ -12,6 +12,15 @@ const STRENGTHS = [
   { key: "auto", label: "자동", desc: "영상의 카메라/인물 이동량을 보고 강도를 자동 선택 (기본)" },
 ] as const;
 
+// 목표 중심 프리셋 — 누르면 기준·강도·여백을 한 번에. 인물 계열은 미리보기에서 클릭 안내.
+const PRESETS = [
+  { key: "shake", label: "흔들림 제거", mode: "background", strength: "auto", edge: "blur", scaleLock: false, hint: "" },
+  { key: "bglock", label: "배경 완전 고정", mode: "background", strength: "lock", edge: "blur", scaleLock: false, hint: "" },
+  { key: "face", label: "얼굴 고정", mode: "person", strength: "lock", edge: "blur", scaleLock: false, hint: "미리보기에서 얼굴을 클릭하세요" },
+  { key: "follow", label: "인물 따라가기", mode: "person", strength: "dejitter", edge: "blur", scaleLock: false, hint: "미리보기에서 주인공을 클릭하세요" },
+  { key: "compare", label: "배경·인물 비교", mode: "both", strength: "auto", edge: "blur", scaleLock: false, hint: "미리보기에서 주인공을 클릭하세요" },
+] as const;
+
 const MODE_LABEL: Record<string, string> = {
   background: "배경 고정",
   person: "인물 고정",
@@ -294,6 +303,13 @@ export default function StabilizePage() {
     setSyncPlaying(false);
   }
 
+  function applyPreset(p: (typeof PRESETS)[number]) {
+    setMode(p.mode);
+    setStrength(p.strength);
+    setEdge(p.edge);
+    setScaleLock(p.scaleLock);
+  }
+
   // 원본 + 모든 결과 영상을 함께 제어(동시 재생). 원본을 마스터로(없으면 첫 결과).
   function _vids(): HTMLVideoElement[] {
     return [origRef.current, ...Object.values(stabRefs.current)].filter(Boolean) as HTMLVideoElement[];
@@ -337,6 +353,9 @@ export default function StabilizePage() {
   const resultUrl = jobId ? `${API_BASE}/api/stabilize/jobs/${jobId}/result` : null;
   const isImage = !!file && file.type.startsWith("image"); // gif 등 — 원본을 img 로
   const personish = mode === "person" || mode === "both"; // 주인공 지정이 필요한 모드
+  const activePreset = PRESETS.find(
+    (p) => p.mode === mode && p.strength === strength && p.edge === edge && p.scaleLock === scaleLock,
+  );
   const outs = doneJob?.outputs ?? [];
   // 원본: 방금 올린 파일(previewUrl) 우선, 최근작업에서 열면 서버 작업본(?variant=original)
   const origIsImage = isImage && !!previewUrl;
@@ -390,6 +409,28 @@ export default function StabilizePage() {
                   영상 파일 선택
                 </button>
               )}
+
+              <div className="space-y-1.5">
+                <span className="text-sm font-medium">프리셋</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.key}
+                      onClick={() => applyPreset(p)}
+                      className={`px-2 py-1 rounded text-xs ${
+                        activePreset?.key === p.key
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted hover:bg-muted/80"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                {activePreset?.hint && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">→ {activePreset.hint}</p>
+                )}
+              </div>
 
               <div className="space-y-1.5">
                 <span className="text-sm font-medium">안정화 기준</span>
