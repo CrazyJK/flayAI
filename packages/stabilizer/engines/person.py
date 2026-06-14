@@ -274,6 +274,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
 
     out = jdir / "out.mp4"
     encoder = cfg.get("encoder", "h264_nvenc")
+    edge = cfg.get("edge", "blur")  # 무크롭 여백 처리: blur(흐린 확대 채움) | black
 
     def _encode(enc_name):
         enc_cmd = [ff, "-hide_banner", "-v", "error", "-y",
@@ -293,9 +294,15 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
                 if not ok:
                     break
                 k = min(f, n - 1)
-                canvas = np.zeros((Hout, Wout, 3), np.uint8)
                 oy, ox = offy[k], offx[k]
-                canvas[oy:oy + H, ox:ox + W] = frame
+                if edge == "blur":
+                    # 여백 = 프레임 자체를 흐리게 확대해 채움(인스타/틱톡식). 다운스케일 블러로 빠르게.
+                    sm = cv2.resize(frame, (max(Wout // 8, 1), max(Hout // 8, 1)))
+                    sm = cv2.GaussianBlur(sm, (0, 0), max(sm.shape[1] * 0.06, 1.0))
+                    canvas = (cv2.resize(sm, (Wout, Hout)).astype(np.float32) * 0.6).astype(np.uint8)
+                else:
+                    canvas = np.zeros((Hout, Wout, 3), np.uint8)
+                canvas[oy:oy + H, ox:ox + W] = frame  # 가운데에 선명한 프레임 덮어쓰기
                 proc.stdin.write(canvas.tobytes())
                 f += 1
         finally:
@@ -321,6 +328,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         "subject_seeded": bool(subject),
         "anchor": list(anchor),
         "tracker": tracker_used,
+        "edge": edge,
         "frames": nframes,
     }
     if auto_info:

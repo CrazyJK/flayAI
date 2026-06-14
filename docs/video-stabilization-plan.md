@@ -49,8 +49,12 @@
   + σ5 평활. 검증: **정체성 점프 greedy 12→SAM2 0**(군중 가림 튐 제거), 출력 미세튐 동급.
   체크포인트는 별도 다운로드: `data/stabilize/_models/sam2.1_hiera_tiny.pt`
   (dl.fbaipublicfiles.com/segment_anything_2/092824/), gitignore.
+- **여백 채움(blur)**: 인물 모드 무크롭 여백을 검은 띠 대신 프레임을 흐리게 확대한 것으로 채움
+  (인스타식, 가운데에 선명한 프레임 덮어쓰기). config `edge: blur|black`.
+- **보존기간 정리**: `cleanup_old_jobs()` — retain_hours 지난 잡 자동 삭제(새 잡 시 + CLI `cleanup`).
 
-**남음 ⬜** — RAFT+마스킹 배경 엔진, 인물 스케일 고정 토글, 여백 채움(temporal/pad), UI/UX 다듬기.
+**남음 ⬜** — RAFT+마스킹 배경 엔진, **여백 temporal 모자이크**(배경 모드용 — 인물 모드는
+주인공 고정이라 이웃 배경 비정렬 → blur 채택), 인물 스케일 고정 토글, UI/UX 다듬기.
 
 ---
 

@@ -35,7 +35,7 @@ _DEFAULTS: dict[str, Any] = {
     "sam2_frame_height": 720,        # SAM2 입력 프레임 세로 px (다운스케일, VRAM/디스크 절약)
     "default_mode": "background",    # background | person
     "default_strength": "smooth",    # dejitter | smooth | lock | auto
-    "edge": "black",              # black | (후속: pad, temporal)
+    "edge": "blur",               # 무크롭 여백: blur(흐린 확대 채움, 인물 모드) | black
     "encoder": "h264_nvenc",      # 폴백 libx264
     "retain_hours": 48,
     "concurrency": 1,
