@@ -5,10 +5,8 @@ import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
-// 잡 처리 단계(진행바). vidstab 엔진 기준.
-const STAGES = ["decode", "detect", "transform", "encode"] as const;
+const STAGES = ["decode", "track", "detect", "transform", "warp", "encode"] as const;
 
-// 안정화 강도 프리셋 — 백엔드 smoothing_presets 와 대응(docs/video-stabilization-plan.md §9).
 const STRENGTHS = [
   { key: "dejitter", label: "흔들림만", desc: "이동·추종은 보존하고 떨림만 제거 (트래블 샷)" },
   { key: "smooth", label: "부분 고정", desc: "떨림 + 느린 움직임 일부 정리 (기본)" },
@@ -16,12 +14,28 @@ const STRENGTHS = [
   { key: "auto", label: "자동", desc: "영상의 카메라/인물 이동량을 보고 강도를 자동 선택" },
 ] as const;
 
+const MODE_LABEL: Record<string, string> = { background: "배경 고정", person: "인물 고정" };
+const STRENGTH_LABEL: Record<string, string> = {
+  dejitter: "흔들림만",
+  smooth: "부분 고정",
+  lock: "완전 고정",
+  auto: "자동",
+};
+const STATUS_LABEL: Record<string, string> = {
+  queued: "대기 중",
+  running: "처리 중",
+  done: "완료",
+  failed: "실패",
+  canceled: "취소됨",
+};
+
 type Metrics = {
   smoothing?: number;
   canvas_expand_w?: number;
   canvas_expand_h?: number;
-  output_wh?: number[];
-  metrics_error?: string;
+  tracker?: string;
+  edge?: string;
+  auto?: { chosen?: string };
 };
 type JobOutput = { variant: string; file: string; metrics?: Metrics };
 type JobStatus = {
@@ -40,6 +54,15 @@ type JobStatus = {
 
 const TERMINAL = new Set(["done", "failed", "canceled"]);
 
+function relTime(ts?: number): string {
+  if (!ts) return "";
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return "방금";
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
+  return `${Math.floor(s / 86400)}일 전`;
+}
+
 export default function StabilizePage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -51,13 +74,16 @@ export default function StabilizePage() {
   const [jobs, setJobs] = useState<JobStatus[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 전/후 동시 재생용
+  // 전/후 동시 재생
   const origRef = useRef<HTMLVideoElement>(null);
   const stabRef = useRef<HTMLVideoElement>(null);
   const [syncPlaying, setSyncPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
 
-  // 인물 모드 주인공 지정(클릭)
+  // 인물 주인공 지정
   const pickVideoRef = useRef<HTMLVideoElement>(null);
   const [subject, setSubject] = useState<{ t: number; x: number; y: number } | null>(null);
   const [pickMode, setPickMode] = useState(false);
@@ -68,6 +94,13 @@ export default function StabilizePage() {
     setPickMode(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(f ? URL.createObjectURL(f) : null);
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f && f.type.startsWith("video")) onPick(f);
   }
 
   function onPickClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -87,7 +120,6 @@ export default function StabilizePage() {
     }
   }, []);
 
-  // 마운트 시 잡 목록
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -103,7 +135,6 @@ export default function StabilizePage() {
     };
   }, []);
 
-  // 현재 잡 폴링 (종료 상태까지)
   useEffect(() => {
     if (!jobId) return;
     let alive = true;
@@ -171,7 +202,13 @@ export default function StabilizePage() {
     loadJobs();
   }
 
-  // --- 전/후 동시 재생 ---
+  function backToSetup() {
+    setStatus(null);
+    setJobId(null);
+    setSyncPlaying(false);
+  }
+
+  // --- 전/후 동시 재생 (음소거는 video muted prop 으로 제어) ---
   function syncToggle() {
     const o = origRef.current;
     const s = stabRef.current;
@@ -181,38 +218,27 @@ export default function StabilizePage() {
       s.pause();
       setSyncPlaying(false);
     } else {
-      s.currentTime = o.currentTime; // 안정화본을 원본 위치에 맞춤
-      s.muted = true; // 오디오 중복 방지(원본만 소리)
+      s.currentTime = o.currentTime;
       o.play().catch(() => {});
       s.play().catch(() => {});
       setSyncPlaying(true);
     }
   }
-
   function syncRestart() {
     const o = origRef.current;
     const s = stabRef.current;
     if (!o || !s) return;
     o.currentTime = 0;
     s.currentTime = 0;
-    s.muted = true;
     o.play().catch(() => {});
     s.play().catch(() => {});
     setSyncPlaying(true);
   }
-
-  // 원본을 마스터로 — 재생 중 드리프트 보정 + 원본 일시정지/종료 시 동기화
   function onOrigTime() {
     if (!syncPlaying) return;
     const o = origRef.current;
     const s = stabRef.current;
     if (o && s && Math.abs(s.currentTime - o.currentTime) > 0.3) s.currentTime = o.currentTime;
-  }
-  function onOrigPause() {
-    if (syncPlaying) stabRef.current?.pause();
-  }
-  function onOrigPlay() {
-    if (syncPlaying) stabRef.current?.play().catch(() => {});
   }
 
   const running = status && !TERMINAL.has(status.status);
@@ -224,56 +250,53 @@ export default function StabilizePage() {
   return (
     <div className="relative flex-1 flex flex-col">
       <AppHeader active="stabilize" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/mp4,video/*"
+        className="hidden"
+        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+      />
 
       <div className="mx-auto w-full max-w-[1600px] px-4 py-4">
-        {/* 가로 모니터: 좌측 옵션 사이드바 + 우측 넓은 비교 영역. 좁은 화면에선 세로 스택. */}
-        <div className="grid gap-4 lg:grid-cols-[minmax(340px,380px)_1fr] items-start">
-          {/* ===== 사이드바: 업로드 + 옵션 + 최근 잡 ===== */}
-          <div className="space-y-4 lg:sticky lg:top-4">
+        {/* 모니터 방향 기준 반응형: 가로(landscape)=좌측 옵션+우측 큰 영역, 세로(portrait)=세로 스택 */}
+        <div className="grid gap-4 landscape:grid-cols-[minmax(340px,400px)_1fr] items-start">
+          {/* ===== 사이드바: 옵션 + 최근 잡 ===== */}
+          <div className="space-y-4 landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4 space-y-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">영상 업로드</label>
-                <input
-                  type="file"
-                  accept="video/mp4,video/*"
-                  onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-                  className="block w-full text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:text-sm hover:file:bg-primary/90"
-                />
-                {file && (
-                  <div className="flex items-center gap-3">
-                    {previewUrl && (
-                      <video
-                        src={previewUrl}
-                        className="w-16 rounded border border-border bg-black aspect-[9/16] object-cover shrink-0"
-                        muted
-                      />
-                    )}
-                    <p className="text-xs text-muted-foreground break-all">
-                      {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB
-                    </p>
-                  </div>
-                )}
-              </div>
+              {file ? (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="truncate">📹 {file.name} · {(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="ml-auto shrink-0 px-2 py-1 rounded bg-muted hover:bg-muted/80"
+                  >
+                    변경
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full px-4 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  영상 파일 선택
+                </button>
+              )}
 
               <div className="space-y-1.5">
                 <span className="text-sm font-medium">안정화 기준</span>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setMode("background")}
-                    className={`px-3 py-1.5 rounded text-sm ${
-                      mode === "background" ? "bg-primary text-primary-foreground" : "bg-muted"
-                    }`}
-                  >
-                    배경 고정
-                  </button>
-                  <button
-                    onClick={() => setMode("person")}
-                    className={`px-3 py-1.5 rounded text-sm ${
-                      mode === "person" ? "bg-primary text-primary-foreground" : "bg-muted"
-                    }`}
-                  >
-                    인물 고정
-                  </button>
+                  {(["background", "person"] as const).map((mk) => (
+                    <button
+                      key={mk}
+                      onClick={() => setMode(mk)}
+                      className={`px-3 py-1.5 rounded text-sm ${
+                        mode === mk ? "bg-primary text-primary-foreground" : "bg-muted"
+                      }`}
+                    >
+                      {MODE_LABEL[mk]}
+                    </button>
+                  ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {mode === "background"
@@ -302,59 +325,54 @@ export default function StabilizePage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <button
-                  onClick={submit}
-                  disabled={!file || submitting || !!running}
-                  className="w-full px-4 py-2 rounded text-sm bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground"
-                >
-                  {submitting ? "업로드 중…" : running ? "처리 중…" : "안정화 시작"}
-                </button>
-                <p className="text-xs text-muted-foreground">
-                  결과는 자르지 않고 캔버스를 확장합니다(검은 여백 허용).
-                </p>
-              </div>
+              <button
+                onClick={submit}
+                disabled={!file || submitting || !!running}
+                className="w-full px-4 py-2 rounded text-sm bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground"
+              >
+                {submitting ? "업로드 중…" : running ? "처리 중…" : "안정화 시작"}
+              </button>
+              <p className="text-xs text-muted-foreground">
+                결과는 자르지 않고 캔버스를 확장합니다(여백은 블러로 채움).
+              </p>
               {err && <p className="text-sm text-destructive whitespace-pre-wrap">{err}</p>}
             </section>
 
             {jobs.length > 0 && (
               <section className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-sm font-medium mb-2">최근 잡</h2>
+                <h2 className="text-sm font-medium mb-2">최근 작업</h2>
                 <ul className="divide-y divide-border">
                   {jobs.map((j) => (
-                    <li
-                      key={j.job_id}
-                      className={`flex items-center gap-2 py-1.5 text-xs ${
-                        j.job_id === jobId ? "text-foreground" : ""
-                      }`}
-                    >
+                    <li key={j.job_id} className="flex items-center gap-2 py-2">
                       <button
                         onClick={() => {
                           setSyncPlaying(false);
                           setJobId(j.job_id);
                           setStatus(j);
                         }}
-                        className="font-mono text-muted-foreground hover:text-foreground"
+                        className="text-left min-w-0 flex-1"
                       >
-                        {j.job_id.slice(0, 8)}
+                        <div className={`text-xs ${j.job_id === jobId ? "text-foreground" : ""}`}>
+                          {MODE_LABEL[j.mode] ?? j.mode} · {STRENGTH_LABEL[j.strength] ?? j.strength}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          <span
+                            className={
+                              j.status === "done"
+                                ? "text-success"
+                                : j.status === "failed"
+                                  ? "text-destructive"
+                                  : ""
+                            }
+                          >
+                            {STATUS_LABEL[j.status] ?? j.status}
+                          </span>
+                          {j.created_at ? ` · ${relTime(j.created_at)}` : ""}
+                        </div>
                       </button>
-                      <span className="text-muted-foreground">
-                        {j.mode}/{j.strength}
-                      </span>
-                      <span
-                        className={
-                          j.status === "done"
-                            ? "text-success"
-                            : j.status === "failed"
-                              ? "text-destructive"
-                              : "text-muted-foreground"
-                        }
-                      >
-                        {j.status}
-                      </span>
                       <button
                         onClick={() => removeJob(j.job_id)}
-                        className="ml-auto text-muted-foreground hover:text-destructive"
+                        className="shrink-0 text-xs text-muted-foreground hover:text-destructive"
                       >
                         삭제
                       </button>
@@ -365,70 +383,14 @@ export default function StabilizePage() {
             )}
           </div>
 
-          {/* ===== 메인: 진행 / 결과 비교 / 주인공 지정 ===== */}
+          {/* ===== 메인 ===== */}
           <div className="min-w-0">
-            {!status && mode === "person" && previewUrl ? (
-              <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h2 className="text-sm font-medium">주인공 지정</h2>
-                  <button
-                    onClick={() => setPickMode((v) => !v)}
-                    className={`px-3 py-1.5 rounded text-sm ${
-                      pickMode ? "bg-primary text-primary-foreground" : "bg-muted"
-                    }`}
-                  >
-                    {pickMode ? "인물을 클릭…" : subject ? "다시 지정" : "주인공 클릭 지정"}
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  영상을 원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 인물에서 고정할
-                  지점(얼굴/몸통 등)을 클릭하세요 — 그 지점이 화면에 고정됩니다. 미지정 시 화면
-                  중앙의 인물을 자동 추적합니다.
-                </p>
-                <div className="relative mx-auto h-[62vh] aspect-[9/16] bg-black rounded overflow-hidden">
-                  <video
-                    ref={pickVideoRef}
-                    src={previewUrl}
-                    controls
-                    className="w-full h-full object-cover"
-                  />
-                  {pickMode && (
-                    <div
-                      className="absolute inset-0 cursor-crosshair"
-                      onClick={onPickClick}
-                      aria-label="주인공 클릭"
-                    />
-                  )}
-                  {subject && (
-                    <div
-                      className="absolute h-5 w-5 -ml-2.5 -mt-2.5 rounded-full border-2 border-success bg-success/30 pointer-events-none"
-                      style={{ left: `${subject.x * 100}%`, top: `${subject.y * 100}%` }}
-                    />
-                  )}
-                </div>
-                {subject && (
-                  <p className="text-xs text-muted-foreground">
-                    지정됨 · t={subject.t.toFixed(1)}s ({(subject.x * 100).toFixed(0)}%,{" "}
-                    {(subject.y * 100).toFixed(0)}%)
-                    <button
-                      onClick={() => setSubject(null)}
-                      className="ml-2 hover:text-destructive"
-                    >
-                      지우기
-                    </button>
-                  </p>
-                )}
-              </section>
-            ) : !status ? (
-              <div className="rounded-lg border border-dashed border-border bg-card/50 p-10 text-center text-sm text-muted-foreground">
-                영상을 올리고 <span className="text-foreground">안정화 시작</span>을 누르면
-                여기에 진행과 결과(전/후 비교)가 표시됩니다.
-              </div>
-            ) : (
+            {status ? (
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h2 className="text-sm font-medium">
-                    잡 <span className="font-mono text-xs text-muted-foreground">{status.job_id}</span>
+                    {MODE_LABEL[status.mode] ?? status.mode} ·{" "}
+                    {STRENGTH_LABEL[status.strength] ?? status.strength}
                     <span
                       className={`ml-2 text-xs ${
                         done
@@ -438,13 +400,13 @@ export default function StabilizePage() {
                             : "text-muted-foreground"
                       }`}
                     >
-                      {status.status}
+                      {STATUS_LABEL[status.status] ?? status.status}
                     </span>
                   </h2>
                   {status.input && (
                     <span className="text-xs text-muted-foreground">
                       입력 {status.input.width}×{status.input.height} · {status.input.fps}fps ·{" "}
-                      {status.input.duration}s · {status.input.codec}
+                      {status.input.duration}s
                     </span>
                   )}
                   {running ? (
@@ -453,11 +415,7 @@ export default function StabilizePage() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => {
-                        setStatus(null);
-                        setJobId(null);
-                        setSyncPlaying(false);
-                      }}
+                      onClick={backToSetup}
                       className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
                       title="설정으로 돌아가 주인공·강도를 바꿔 다시 안정화"
                     >
@@ -495,7 +453,6 @@ export default function StabilizePage() {
 
                 {done && resultUrl && (
                   <div className="space-y-3">
-                    {/* 비교 컨트롤 */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {canCompare && (
                         <>
@@ -511,18 +468,22 @@ export default function StabilizePage() {
                           >
                             ↺ 처음부터
                           </button>
-                          <span className="text-xs text-muted-foreground">
-                            (원본 기준으로 동기화 · 안정화본 음소거)
-                          </span>
+                          <button
+                            onClick={() => setMuted((m) => !m)}
+                            className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                            title="동시 재생 시 소리 끄기/켜기"
+                          >
+                            {muted ? "🔇 음소거" : "🔊 소리"}
+                          </button>
                         </>
                       )}
                       <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+                        {metrics?.tracker === "sam2" && <span>추적 SAM2</span>}
                         {metrics?.canvas_expand_w && (
                           <span>
                             캔버스 ×{metrics.canvas_expand_w}/{metrics.canvas_expand_h}
                           </span>
                         )}
-                        {metrics?.smoothing && <span>smoothing {metrics.smoothing}</span>}
                         <a
                           href={resultUrl}
                           download
@@ -533,7 +494,6 @@ export default function StabilizePage() {
                       </div>
                     </div>
 
-                    {/* 전/후 — 9:16 세로 영상 2개 나란히, 뷰포트 높이에 맞춤 */}
                     <div className="grid grid-cols-2 gap-3">
                       {previewUrl && (
                         <figure className="space-y-1 min-w-0">
@@ -542,9 +502,10 @@ export default function StabilizePage() {
                             ref={origRef}
                             src={previewUrl}
                             controls
+                            muted={muted}
                             onTimeUpdate={onOrigTime}
-                            onPause={onOrigPause}
-                            onPlay={onOrigPlay}
+                            onPause={() => syncPlaying && stabRef.current?.pause()}
+                            onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
                             onEnded={() => setSyncPlaying(false)}
                             className="w-full h-[68vh] object-contain rounded border border-border bg-black"
                           />
@@ -556,6 +517,7 @@ export default function StabilizePage() {
                           ref={stabRef}
                           src={resultUrl}
                           controls
+                          muted
                           className="w-full h-[68vh] object-contain rounded border border-border bg-black"
                         />
                       </figure>
@@ -563,6 +525,98 @@ export default function StabilizePage() {
                   </div>
                 )}
               </section>
+            ) : previewUrl ? (
+              // 설정 화면: 큰 영상 미리보기 + (인물) 주인공 지정
+              <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-sm font-medium">
+                    {mode === "person" ? "주인공 지정 & 미리보기" : "미리보기"}
+                  </h2>
+                  {mode === "person" && (
+                    <button
+                      onClick={() => setPickMode((v) => !v)}
+                      className={`px-3 py-1.5 rounded text-sm ${
+                        pickMode ? "bg-primary text-primary-foreground" : "bg-muted"
+                      }`}
+                    >
+                      {pickMode ? "인물을 클릭…" : subject ? "다시 지정" : "주인공 클릭 지정"}
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {mode === "person"
+                    ? "영상을 원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 고정할 지점(얼굴/몸통)을 클릭하세요. 미지정 시 화면 중앙의 인물을 자동 추적합니다."
+                    : "배경 기준으로 흔들림을 제거합니다. 왼쪽에서 강도를 고르고 “안정화 시작”을 누르세요."}
+                </p>
+                <div className="relative mx-auto h-[64vh] aspect-[9/16] bg-black rounded overflow-hidden">
+                  <video
+                    ref={pickVideoRef}
+                    src={previewUrl}
+                    controls
+                    className="w-full h-full object-cover"
+                  />
+                  {mode === "person" && pickMode && (
+                    <div
+                      className="absolute inset-0 cursor-crosshair"
+                      onClick={onPickClick}
+                      aria-label="주인공 클릭"
+                    />
+                  )}
+                  {mode === "person" && subject && (
+                    <div
+                      className="absolute h-5 w-5 -ml-2.5 -mt-2.5 rounded-full border-2 border-success bg-success/30 pointer-events-none"
+                      style={{ left: `${subject.x * 100}%`, top: `${subject.y * 100}%` }}
+                    />
+                  )}
+                </div>
+                {mode === "person" && subject && (
+                  <p className="text-xs text-muted-foreground">
+                    지정됨 · t={subject.t.toFixed(1)}s ({(subject.x * 100).toFixed(0)}%,{" "}
+                    {(subject.y * 100).toFixed(0)}%)
+                    <button onClick={() => setSubject(null)} className="ml-2 hover:text-destructive">
+                      지우기
+                    </button>
+                  </p>
+                )}
+              </section>
+            ) : (
+              // 업로드 화면: 크게, 드래그&드롭
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed min-h-[64vh] text-center p-10 transition-colors ${
+                  dragOver ? "border-primary bg-primary/5" : "border-border bg-card/40"
+                }`}
+              >
+                <svg
+                  width="44"
+                  height="44"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-muted-foreground"
+                  aria-hidden
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <p className="text-lg font-medium">영상을 여기에 끌어다 놓으세요</p>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  또는 파일 선택
+                </button>
+                <p className="text-xs text-muted-foreground">흔들린 짧은 영상 (mp4 등)</p>
+              </div>
             )}
           </div>
         </div>
