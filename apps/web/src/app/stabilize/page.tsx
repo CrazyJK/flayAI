@@ -446,9 +446,21 @@ export default function StabilizePage() {
                       {status.input.duration}s · {status.input.codec}
                     </span>
                   )}
-                  {running && (
+                  {running ? (
                     <button onClick={cancelJob} className="px-2 py-1 rounded text-xs bg-muted">
                       취소
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setStatus(null);
+                        setJobId(null);
+                        setSyncPlaying(false);
+                      }}
+                      className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
+                      title="설정으로 돌아가 주인공·강도를 바꿔 다시 안정화"
+                    >
+                      ↩ 다시 설정
                     </button>
                   )}
                 </div>

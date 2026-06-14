@@ -126,42 +126,51 @@ def _build_track(dets: list[np.ndarray], W: int, H: int, fps: float,
     track: list[np.ndarray | None] = [None] * n
     track[start] = seed_box(start)
 
-    # 앞으로
-    for f in range(start + 1, n):
-        prev = track[f - 1]
-        cand = dets[f]
-        if len(cand):
-            best = max(cand, key=lambda b: _iou(prev, b))
-            if _iou(prev, best) < 0.05:  # 겹침이 거의 없으면 중심거리로
-                pc = ((prev[0] + prev[2]) / 2, (prev[1] + prev[3]) / 2)
-                best = min(cand, key=lambda b: np.hypot((b[0] + b[2]) / 2 - pc[0],
-                                                        (b[1] + b[3]) / 2 - pc[1]))
-                # 너무 멀면(점프) 유지
-                bc = ((best[0] + best[2]) / 2, (best[1] + best[3]) / 2)
-                if np.hypot(bc[0] - pc[0], bc[1] - pc[1]) > 0.25 * W:
-                    best = prev
-            track[f] = best
-        else:
-            track[f] = prev
-    # 뒤로
-    for f in range(start - 1, -1, -1):
-        nxt = track[f + 1]
-        cand = dets[f]
-        if len(cand):
-            best = max(cand, key=lambda b: _iou(nxt, b))
-            if _iou(nxt, best) < 0.05:
-                nc = ((nxt[0] + nxt[2]) / 2, (nxt[1] + nxt[3]) / 2)
-                best = min(cand, key=lambda b: np.hypot((b[0] + b[2]) / 2 - nc[0],
-                                                        (b[1] + b[3]) / 2 - nc[1]))
-                bc = ((best[0] + best[2]) / 2, (best[1] + best[3]) / 2)
-                if np.hypot(bc[0] - nc[0], bc[1] - nc[1]) > 0.25 * W:
-                    best = nxt
-            track[f] = best
-        else:
-            track[f] = nxt
+    def assoc(ref, cand):
+        """직전 known 박스 ref 에 맞는 검출(없거나 너무 멀면 None=미검출 처리)."""
+        if ref is None or not len(cand):
+            return None
+        best = max(cand, key=lambda b: _iou(ref, b))
+        if _iou(ref, best) >= 0.05:
+            return best
+        rc = ((ref[0] + ref[2]) / 2, (ref[1] + ref[3]) / 2)
+        c2 = min(cand, key=lambda b: np.hypot((b[0] + b[2]) / 2 - rc[0], (b[1] + b[3]) / 2 - rc[1]))
+        cc = ((c2[0] + c2[2]) / 2, (c2[1] + c2[3]) / 2)
+        return c2 if np.hypot(cc[0] - rc[0], cc[1] - rc[1]) <= 0.25 * W else None
 
-    cen = np.array([[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] for b in track], np.float32)
-    return cen
+    last = track[start]  # 앞으로 — 마지막 확신 박스 기준
+    for f in range(start + 1, n):
+        m = assoc(last, dets[f])
+        track[f] = m
+        if m is not None:
+            last = m
+    last = track[start]  # 뒤로
+    for f in range(start - 1, -1, -1):
+        m = assoc(last, dets[f])
+        track[f] = m
+        if m is not None:
+            last = m
+
+    # 미검출/불확실 프레임은 '유지(얼어붙음)'가 아니라 NaN → 선형 보간 (재검출 스냅 방지)
+    raw = np.array([[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] if b is not None else [np.nan, np.nan]
+                    for b in track], float)
+    idx = np.arange(n)
+    for j in (0, 1):
+        ok = ~np.isnan(raw[:, j])
+        if ok.sum() >= 2:
+            raw[:, j] = np.interp(idx, idx[ok], raw[ok, j])
+        elif ok.sum() == 1:
+            raw[:, j] = raw[ok, j][0]
+
+    # 이상치(추적이 다른 사람으로 튄 프레임) 제거: 롤링 median 에서 크게 벗어나면 median 으로 대체
+    def _medfilt(a, k=7):
+        r = k // 2
+        return np.array([np.median(a[max(0, i - r):i + r + 1]) for i in range(len(a))])
+
+    med = np.stack([_medfilt(raw[:, 0]), _medfilt(raw[:, 1])], 1)
+    bad = np.hypot(raw[:, 0] - med[:, 0], raw[:, 1] - med[:, 1]) > 0.06 * W
+    raw[bad] = med[bad]
+    return raw.astype(np.float32)
 
 
 def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
