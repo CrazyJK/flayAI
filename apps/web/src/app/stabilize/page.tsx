@@ -57,10 +57,25 @@ export default function StabilizePage() {
   const stabRef = useRef<HTMLVideoElement>(null);
   const [syncPlaying, setSyncPlaying] = useState(false);
 
+  // 인물 모드 주인공 지정(클릭)
+  const pickVideoRef = useRef<HTMLVideoElement>(null);
+  const [subject, setSubject] = useState<{ t: number; x: number; y: number } | null>(null);
+  const [pickMode, setPickMode] = useState(false);
+
   function onPick(f: File | null) {
     setFile(f);
+    setSubject(null);
+    setPickMode(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(f ? URL.createObjectURL(f) : null);
+  }
+
+  function onPickClick(e: React.MouseEvent<HTMLDivElement>) {
+    const box = e.currentTarget.getBoundingClientRect();
+    const x = Math.min(Math.max((e.clientX - box.left) / box.width, 0), 1);
+    const y = Math.min(Math.max((e.clientY - box.top) / box.height, 0), 1);
+    setSubject({ t: pickVideoRef.current?.currentTime ?? 0, x, y });
+    setPickMode(false);
   }
 
   const loadJobs = useCallback(async () => {
@@ -130,6 +145,7 @@ export default function StabilizePage() {
       fd.append("file", file);
       fd.append("mode", mode);
       fd.append("strength", strength);
+      if (mode === "person" && subject) fd.append("subject", JSON.stringify(subject));
       const r = await fetch(`${API_BASE}/api/stabilize/jobs`, { method: "POST", body: fd });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
@@ -251,15 +267,18 @@ export default function StabilizePage() {
                     배경 고정
                   </button>
                   <button
-                    disabled
-                    title="SAM2 클릭 지정 연동 예정"
-                    className="px-3 py-1.5 rounded text-sm bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
+                    onClick={() => setMode("person")}
+                    className={`px-3 py-1.5 rounded text-sm ${
+                      mode === "person" ? "bg-primary text-primary-foreground" : "bg-muted"
+                    }`}
                   >
-                    인물 고정 · 준비중
+                    인물 고정
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  배경(문·벽 등)을 기준으로 카메라 흔들림을 제거합니다. 인물 기준은 곧 추가됩니다.
+                  {mode === "background"
+                    ? "배경(문·벽 등)을 기준으로 카메라 흔들림을 제거합니다."
+                    : "지정한 인물(주인공)을 화면에 고정합니다. 우측에서 주인공을 클릭해 지정하세요."}
                 </p>
               </div>
 
@@ -346,9 +365,60 @@ export default function StabilizePage() {
             )}
           </div>
 
-          {/* ===== 메인: 진행 / 결과 비교 ===== */}
+          {/* ===== 메인: 진행 / 결과 비교 / 주인공 지정 ===== */}
           <div className="min-w-0">
-            {!status ? (
+            {!status && mode === "person" && previewUrl ? (
+              <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-sm font-medium">주인공 지정</h2>
+                  <button
+                    onClick={() => setPickMode((v) => !v)}
+                    className={`px-3 py-1.5 rounded text-sm ${
+                      pickMode ? "bg-primary text-primary-foreground" : "bg-muted"
+                    }`}
+                  >
+                    {pickMode ? "인물을 클릭…" : subject ? "다시 지정" : "주인공 클릭 지정"}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  영상을 원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 인물을 클릭하세요.
+                  미지정 시 화면 중앙의 인물을 자동 추적합니다.
+                </p>
+                <div className="relative mx-auto h-[62vh] aspect-[9/16] bg-black rounded overflow-hidden">
+                  <video
+                    ref={pickVideoRef}
+                    src={previewUrl}
+                    controls
+                    className="w-full h-full object-cover"
+                  />
+                  {pickMode && (
+                    <div
+                      className="absolute inset-0 cursor-crosshair"
+                      onClick={onPickClick}
+                      aria-label="주인공 클릭"
+                    />
+                  )}
+                  {subject && (
+                    <div
+                      className="absolute h-5 w-5 -ml-2.5 -mt-2.5 rounded-full border-2 border-success bg-success/30 pointer-events-none"
+                      style={{ left: `${subject.x * 100}%`, top: `${subject.y * 100}%` }}
+                    />
+                  )}
+                </div>
+                {subject && (
+                  <p className="text-xs text-muted-foreground">
+                    지정됨 · t={subject.t.toFixed(1)}s ({(subject.x * 100).toFixed(0)}%,{" "}
+                    {(subject.y * 100).toFixed(0)}%)
+                    <button
+                      onClick={() => setSubject(null)}
+                      className="ml-2 hover:text-destructive"
+                    >
+                      지우기
+                    </button>
+                  </p>
+                )}
+              </section>
+            ) : !status ? (
               <div className="rounded-lg border border-dashed border-border bg-card/50 p-10 text-center text-sm text-muted-foreground">
                 영상을 올리고 <span className="text-foreground">안정화 시작</span>을 누르면
                 여기에 진행과 결과(전/후 비교)가 표시됩니다.

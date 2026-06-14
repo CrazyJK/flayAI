@@ -27,8 +27,8 @@ def run_job(job_id: str) -> None:
             from .engines.vidstab import run_background
             run_background(J.job_path(job_id), strength, cfg, _set)
         elif mode == "person":
-            # API/잡 모델은 준비됨. 엔진은 SAM2(클릭→전파) 연동 예정.
-            raise NotImplementedError("인물 모드는 아직 미구현(SAM2 클릭 지정 연동 예정)")
+            from .engines.person import run_person
+            run_person(J.job_path(job_id), strength, st.get("options") or {}, cfg, _set)
         else:
             raise ValueError(f"알 수 없는 mode: {mode}")
     except Exception as e:  # noqa: BLE001 — 실패를 status 에 남기고 종료

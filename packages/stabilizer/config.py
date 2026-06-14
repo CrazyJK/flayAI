@@ -23,6 +23,8 @@ _DEFAULTS: dict[str, Any] = {
     "max_height": 1920,           # 처리/출력 세로 상한(4K 입력은 다운스케일). 0=원본유지
     "max_input_seconds": 120,
     "background_engine": "vidstab",  # vidstab(v1) | raft(후속)
+    "segment_model": "yolo11x-seg.pt",  # 인물 모드 검출/추적용(YOLO11-seg). 클릭 시드 그리디 추적
+    "segment_imgsz": 640,            # YOLO 추론 입력 긴변 px
     "default_mode": "background",    # background | person
     "default_strength": "smooth",    # dejitter | smooth | lock | auto
     "edge": "black",              # black | (후속: pad, temporal)

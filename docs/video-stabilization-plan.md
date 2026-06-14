@@ -32,13 +32,17 @@
 | vidstab 배경고정 무크롭 캔버스 | 첫15초(정지형) lock ×1.20 / 전체 soft ×1.12 |
 | 한계 | 카메라 전진(시차)이 크면 2D 한계 — 완전 락은 B경로(3D) 필요 |
 
-**구현됨 ✅** (`packages/stabilizer` + `apps/api/routers/stabilize.py`)
+**구현됨 ✅** (`packages/stabilizer` + `apps/api/routers/stabilize.py` + `apps/web/stabilize`)
 - 잡 모델(status.json 원자적), 서브프로세스 워커(cli), localhost+동시1+인덱싱 상호배제
 - 배경 모드 vidstab 엔진(강도 프리셋·무크롭·NVENC+libx264 폴백·캔버스 확장 지표)
-- API: POST/GET jobs, result, cancel, delete · config `stabilize:` 블록 · 단위 테스트
+- **인물 모드 v1**(`engines/person.py`): 클릭 시드 그리디 추적(YOLO11-seg) → 피사체 락(평행이동
+  target=gauss(traj,sigma)) → 무크롭 캔버스 확장 워프 → NVENC 인코딩. 주인공=클릭 1점(없으면 자동)
+- 프론트: 업로드·기준(배경/인물)·강도·진행·전후 동시재생 + **인물 모드 클릭 지정 UI**, 가로 반응형
+- API: POST/GET jobs, result(GET+HEAD), cancel, delete · config `stabilize:` 블록 · 단위 테스트
 
-**남음 ⬜** — 인물 모드(SAM2 클릭 지정), 프론트(`apps/web/stabilize` §11), RAFT+마스킹 엔진,
-auto 강도(드리프트 측정), 여백 채움(temporal/pad), retain_hours 정리잡.
+**남음 ⬜** — 인물 추적 **SAM2 업그레이드**(밀집 군중 가림에 강건, 클릭→메모리 전파; v1 그리디는
+드리프트 가능), RAFT+마스킹 배경 엔진, auto 강도(드리프트 자동판정), 인물 스케일 고정 토글,
+여백 채움(temporal/pad), retain_hours 정리잡.
 
 ---
 

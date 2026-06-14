@@ -29,6 +29,10 @@ dependencies = [
     "rapidocr-onnxruntime>=1.4",
     "Pillow>=10.3",
 
+    # 영상 안정화 인물 모드 — YOLO11-seg 주인공 추적 (opencv 는 rapidocr 가 이미 끌어옴)
+    # 추가 후 lock 동기화: `uv lock` (torch cu124 는 [tool.uv.sources] 로 고정 유지)
+    "ultralytics>=8.4",
+
     # Translation
     "sentencepiece>=0.2",
     "sacremoses>=0.1",

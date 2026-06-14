@@ -136,7 +136,9 @@ stabilize:
   max_height:      1920              # 처리/출력 세로 상한(4K 입력은 다운스케일). 0=원본유지
   max_input_seconds: 120
   background_engine: "vidstab"       # v1=vidstab(robust, 군중·저텍스처 검증). raft=후속
-  default_mode:    "background"      # background | person(SAM2 클릭 지정, 후속)
+  segment_model:   "yolo11x-seg.pt"  # 인물 모드 검출/추적(YOLO11-seg, 클릭 시드 그리디). SAM2=후속
+  segment_imgsz:   640               # YOLO 추론 입력 긴변 px
+  default_mode:    "background"      # background | person
   default_strength: "smooth"         # dejitter(흔들림만) | smooth | lock(완전고정) | auto
   edge:            "black"           # 무크롭 여백 처리: black | (후속: pad, temporal)
   encoder:         "h264_nvenc"      # 폴백 libx264
