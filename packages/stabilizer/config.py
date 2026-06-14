@@ -23,10 +23,16 @@ _DEFAULTS: dict[str, Any] = {
     "max_height": 1920,           # 처리/출력 세로 상한(4K 입력은 다운스케일). 0=원본유지
     "max_input_seconds": 120,
     "background_engine": "vidstab",  # vidstab(v1) | raft(후속)
-    "segment_model": "yolo11x-seg.pt",  # 인물 모드 검출/추적용(YOLO11-seg). 클릭 시드 그리디 추적
+    "segment_model": "yolo11x-seg.pt",  # 인물 모드 그리디 추적용(YOLO11-seg) 검출
     "segment_imgsz": 640,            # YOLO 추론 입력 긴변 px
     "track_denoise_sigma": 4,        # 인물 추적 측정노이즈 제거(프레임). 이보다 빠른 떨림은 보정 안 함
     #                                  → 추적 노이즈가 배경 미세 튐으로 새는 것 방지
+    # 인물 추적 백엔드: sam2(클릭→메모리 전파, 군중 가림 강건) | greedy(YOLO IoU).
+    # sam2 는 클릭 지정 + 체크포인트 존재 시 사용, 아니면/실패 시 greedy 로 폴백.
+    "person_tracker": "sam2",
+    "sam2_config": "configs/sam2.1/sam2.1_hiera_t.yaml",
+    "sam2_checkpoint": "data/stabilize/_models/sam2.1_hiera_tiny.pt",
+    "sam2_frame_height": 720,        # SAM2 입력 프레임 세로 px (다운스케일, VRAM/디스크 절약)
     "default_mode": "background",    # background | person
     "default_strength": "smooth",    # dejitter | smooth | lock | auto
     "edge": "black",              # black | (후속: pad, temporal)

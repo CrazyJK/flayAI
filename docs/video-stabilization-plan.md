@@ -42,12 +42,15 @@
 
 - **auto 강도**: 배경=카메라 이동량(ORB drift) · 인물=주인공 화면 이동량으로 lock/smooth/dejitter
   자동 선택(결과 note·metrics.auto 표시). 검증: seg15 정지형→lock, 전체 트래블→dejitter
-- **인물 클릭 앵커**: 클릭 지점의 박스 내 상대 위치를 고정점으로(얼굴/몸통 구분) · **추적 후처리**
-  (미검출 보간 + 이상치 median 대체) + **밴드패스 보정**(배경 미세 튐 34~47%↓)
+- **인물 클릭 앵커**: 클릭 지점을 고정점으로(얼굴/몸통 구분) · **추적 후처리**(미검출 보간 +
+  이상치 median 대체) + **밴드패스 보정**(배경 미세 튐 34~47%↓)
+- **SAM2 추적**(`engines/track_sam2.py`): 클릭→메모리 전파(tiny+CPU오프로드, VRAM~0.7GB·24fps).
+  클릭 시 기본, 체크포인트 없거나 실패 시 그리디 폴백. x=마스크 중심·y=마스크 상단(머리, 가림 강건)
+  + σ5 평활. 검증: **정체성 점프 greedy 12→SAM2 0**(군중 가림 튐 제거), 출력 미세튐 동급.
+  체크포인트는 별도 다운로드: `data/stabilize/_models/sam2.1_hiera_tiny.pt`
+  (dl.fbaipublicfiles.com/segment_anything_2/092824/), gitignore.
 
-**남음 ⬜** — 인물 추적 **SAM2 업그레이드**(밀집 군중 가림에 강건, 클릭→메모리 전파; v1 그리디는
-중주파 드리프트 가능), RAFT+마스킹 배경 엔진, 인물 스케일 고정 토글, 여백 채움(temporal/pad),
-retain_hours 정리잡, UI/UX 다듬기.
+**남음 ⬜** — RAFT+마스킹 배경 엔진, 인물 스케일 고정 토글, 여백 채움(temporal/pad), UI/UX 다듬기.
 
 ---
 

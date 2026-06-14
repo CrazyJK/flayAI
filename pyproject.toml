@@ -29,9 +29,11 @@ dependencies = [
     "rapidocr-onnxruntime>=1.4",
     "Pillow>=10.3",
 
-    # 영상 안정화 인물 모드 — YOLO11-seg 주인공 추적 (opencv 는 rapidocr 가 이미 끌어옴)
-    # 추가 후 lock 동기화: `uv lock` (torch cu124 는 [tool.uv.sources] 로 고정 유지)
+    # 영상 안정화 인물 모드 — 주인공 추적. SAM2(클릭→메모리 전파, 기본) + YOLO11-seg(폴백).
+    # opencv 는 rapidocr 가 이미 끌어옴. 추가 후 lock 동기화: `uv lock`
+    # (torch cu124 는 [tool.uv.sources] 로 고정 유지). SAM2 체크포인트는 별도 다운로드(gitignore).
     "ultralytics>=8.4",
+    "sam2>=1.1",
 
     # Translation
     "sentencepiece>=0.2",

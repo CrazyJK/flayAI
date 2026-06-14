@@ -211,21 +211,35 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     wmeta = _probe(fp, work_mp4)
     W, H, rate, fps = wmeta["width"], wmeta["height"], wmeta["rate"], wmeta["fps"]
 
-    # 2) 검출 + 주인공 추적
+    # 2) 주인공 추적 — 클릭이 있으면 SAM2(메모리 전파, 군중 가림 강건), 아니면/실패 시 YOLO 그리디
     set_status(stage="detect", progress=25)
-    try:
-        dets, dW, dH = _detect(work_mp4, cfg)
-    except ImportError:
-        raise RuntimeError("ultralytics 미설치 — 인물 모드를 쓰려면 설치가 필요합니다.")
-    if dW and (dW != W or dH != H):
-        W, H = dW, dH
     subject = options.get("subject")
     if isinstance(subject, str):
         try:
             subject = json.loads(subject)
         except json.JSONDecodeError:
             subject = None
-    cen, anchor = _build_track(dets, W, H, fps, subject)
+
+    cen = anchor = None
+    if cfg.get("person_tracker", "sam2") == "sam2" and subject and "t" in subject:
+        try:
+            from .track_sam2 import build_track_sam2, sam2_available
+            if sam2_available(cfg):
+                cen, anchor = build_track_sam2(work_mp4, W, H, fps, subject, cfg, set_status)
+        except Exception as e:  # noqa: BLE001 — SAM2 실패 시 그리디로 폴백
+            log.warning("SAM2 추적 실패 → 그리디 폴백: %s", e)
+            set_status(note="SAM2 추적 실패 → 기본 추적으로 폴백")
+            cen = None
+
+    tracker_used = "sam2" if cen is not None else "greedy"
+    if cen is None:  # 그리디(YOLO) 추적
+        try:
+            dets, dW, dH = _detect(work_mp4, cfg)
+        except ImportError:
+            raise RuntimeError("ultralytics 미설치 — 인물 모드를 쓰려면 설치가 필요합니다.")
+        if dW and (dW != W or dH != H):
+            W, H = dW, dH
+        cen, anchor = _build_track(dets, W, H, fps, subject)
 
     # 3) 평활 → 평행이동 shift = target - 실제
     set_status(stage="transform", progress=55)
@@ -306,6 +320,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         "output_wh": [Wout, Hout],
         "subject_seeded": bool(subject),
         "anchor": list(anchor),
+        "tracker": tracker_used,
         "frames": nframes,
     }
     if auto_info:
