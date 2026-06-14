@@ -5,13 +5,11 @@ import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 
-const STAGES = ["decode", "track", "detect", "transform", "warp", "encode"] as const;
-
 const STRENGTHS = [
   { key: "dejitter", label: "흔들림만", desc: "이동·추종은 보존하고 떨림만 제거 (트래블 샷)" },
-  { key: "smooth", label: "부분 고정", desc: "떨림 + 느린 움직임 일부 정리 (기본)" },
+  { key: "smooth", label: "부분 고정", desc: "떨림 + 느린 움직임 일부 정리" },
   { key: "lock", label: "완전 고정", desc: "느린 드리프트까지 평탄화 (정지형 구간)" },
-  { key: "auto", label: "자동", desc: "영상의 카메라/인물 이동량을 보고 강도를 자동 선택" },
+  { key: "auto", label: "자동", desc: "영상의 카메라/인물 이동량을 보고 강도를 자동 선택 (기본)" },
 ] as const;
 
 const MODE_LABEL: Record<string, string> = { background: "배경 고정", person: "인물 고정" };
@@ -29,13 +27,29 @@ const STATUS_LABEL: Record<string, string> = {
   canceled: "취소됨",
 };
 
+// 모드별 처리 단계(원형 불빛). detect/track 은 한 '추적' 단계로 묶는다.
+const STAGE_FLOW: Record<string, { key: string; label: string; match: string[] }[]> = {
+  background: [
+    { key: "decode", label: "디코딩", match: ["decode"] },
+    { key: "detect", label: "분석", match: ["detect"] },
+    { key: "transform", label: "보정", match: ["transform"] },
+    { key: "encode", label: "인코딩", match: ["encode"] },
+  ],
+  person: [
+    { key: "decode", label: "디코딩", match: ["decode"] },
+    { key: "track", label: "추적", match: ["track", "detect"] },
+    { key: "transform", label: "보정", match: ["transform"] },
+    { key: "warp", label: "합성", match: ["warp"] },
+    { key: "encode", label: "인코딩", match: ["encode"] },
+  ],
+};
+
 type Metrics = {
   smoothing?: number;
   canvas_expand_w?: number;
   canvas_expand_h?: number;
   tracker?: string;
   edge?: string;
-  auto?: { chosen?: string };
 };
 type JobOutput = { variant: string; file: string; metrics?: Metrics };
 type JobStatus = {
@@ -63,6 +77,50 @@ function relTime(ts?: number): string {
   return `${Math.floor(s / 86400)}일 전`;
 }
 
+// 단계별 원형 불빛 — 대기(회색)·진행중(주황 점멸)·완료(초록)·실패(빨강)
+function StageLights({ status }: { status: JobStatus }) {
+  const flow = STAGE_FLOW[status.mode] ?? STAGE_FLOW.background;
+  const cur = status.stage ?? "";
+  const curIdx = flow.findIndex((d) => d.match.includes(cur));
+  const isDone = status.status === "done";
+  const isFailed = status.status === "failed";
+  return (
+    <ul className="space-y-2">
+      {flow.map((d, i) => {
+        let dot = "bg-muted";
+        let txt = "text-muted-foreground";
+        let pulse = false;
+        if (isDone || (curIdx >= 0 && i < curIdx)) {
+          dot = "bg-success";
+          txt = "";
+        } else if (curIdx === i) {
+          if (isFailed) {
+            dot = "bg-destructive";
+            txt = "text-destructive";
+          } else {
+            dot = "bg-amber-500";
+            txt = "text-foreground";
+            pulse = true;
+          }
+        }
+        return (
+          <li key={d.key} className="flex items-center gap-2 text-xs">
+            <span
+              className={`h-3 w-3 shrink-0 rounded-full ${dot} ${pulse ? "animate-pulse" : ""}`}
+            />
+            <span className={txt}>{d.label}</span>
+            {curIdx === i && !isFailed && (
+              <span className="ml-auto tabular-nums text-muted-foreground">
+                {status.progress ?? 0}%
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export default function StabilizePage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -77,13 +135,11 @@ export default function StabilizePage() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 전/후 동시 재생
   const origRef = useRef<HTMLVideoElement>(null);
   const stabRef = useRef<HTMLVideoElement>(null);
   const [syncPlaying, setSyncPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
 
-  // 인물 주인공 지정
   const pickVideoRef = useRef<HTMLVideoElement>(null);
   const [subject, setSubject] = useState<{ t: number; x: number; y: number } | null>(null);
   const [pickMode, setPickMode] = useState(false);
@@ -208,7 +264,6 @@ export default function StabilizePage() {
     setSyncPlaying(false);
   }
 
-  // --- 전/후 동시 재생 (음소거는 video muted prop 으로 제어) ---
   function syncToggle() {
     const o = origRef.current;
     const s = stabRef.current;
@@ -259,10 +314,10 @@ export default function StabilizePage() {
         onChange={(e) => onPick(e.target.files?.[0] ?? null)}
       />
 
-      <div className="mx-auto w-full max-w-[1600px] px-4 py-4">
-        {/* 모니터 방향 기준 반응형: 가로(landscape)=옵션·메인·최근작업 3단, 세로(portrait)=세로 스택 */}
-        <div className="grid gap-4 landscape:grid-cols-[minmax(300px,340px)_1fr_minmax(220px,280px)] items-start">
-          {/* ===== 사이드바: 옵션 + 최근 잡 ===== */}
+      {/* 가로 모니터에선 폭을 넓게(32"/24" 멀티모니터), 세로는 자연히 좁아짐 */}
+      <div className="mx-auto w-full max-w-[2400px] px-4 py-4">
+        <div className="grid gap-4 landscape:grid-cols-[minmax(300px,340px)_1fr_minmax(220px,300px)] items-start">
+          {/* ===== 좌: 옵션 + 처리중 ===== */}
           <div className="space-y-4 landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4 space-y-4">
               {file ? (
@@ -302,7 +357,7 @@ export default function StabilizePage() {
                 <p className="text-xs text-muted-foreground">
                   {mode === "background"
                     ? "배경(문·벽 등)을 기준으로 카메라 흔들림을 제거합니다."
-                    : "지정한 인물(주인공)을 화면에 고정합니다. 우측에서 주인공을 클릭해 지정하세요."}
+                    : "지정한 인물(주인공)을 화면에 고정합니다. 가운데 영상에서 주인공을 클릭해 지정하세요."}
                 </p>
               </div>
 
@@ -338,76 +393,45 @@ export default function StabilizePage() {
               </p>
               {err && <p className="text-sm text-destructive whitespace-pre-wrap">{err}</p>}
             </section>
+
+            {/* 처리중/실패 — 단계별 원형 불빛 */}
+            {status && !done && (
+              <section className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-medium">
+                    <span
+                      className={status.status === "failed" ? "text-destructive" : "text-foreground"}
+                    >
+                      {STATUS_LABEL[status.status] ?? status.status}
+                    </span>
+                  </h2>
+                  {running ? (
+                    <button onClick={cancelJob} className="px-2 py-1 rounded text-xs bg-muted">
+                      취소
+                    </button>
+                  ) : (
+                    <button
+                      onClick={backToSetup}
+                      className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
+                    >
+                      ↩ 다시 설정
+                    </button>
+                  )}
+                </div>
+                <StageLights status={status} />
+                {status.note && <p className="text-xs text-muted-foreground">참고: {status.note}</p>}
+                {status.status === "failed" && (
+                  <p className="text-sm text-destructive whitespace-pre-wrap">{status.error}</p>
+                )}
+              </section>
+            )}
           </div>
 
-          {/* ===== 메인 ===== */}
-          <div className="min-w-0 space-y-3">
+          {/* ===== 가운데: 미리보기/결과 ===== */}
+          <div className="min-w-0">
             {doneJob && resultUrl ? (
               // 결과: 전/후 비교
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <h2 className="text-sm font-medium">
-                    {MODE_LABEL[doneJob.mode] ?? doneJob.mode} ·{" "}
-                    {STRENGTH_LABEL[doneJob.strength] ?? doneJob.strength}
-                    <span className="ml-2 text-xs text-success">완료</span>
-                  </h2>
-                  {doneJob.input && (
-                    <span className="text-xs text-muted-foreground">
-                      입력 {doneJob.input.width}×{doneJob.input.height} · {doneJob.input.fps}fps ·{" "}
-                      {doneJob.input.duration}s
-                    </span>
-                  )}
-                  <button
-                    onClick={backToSetup}
-                    className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
-                    title="설정으로 돌아가 주인공·강도를 바꿔 다시 안정화"
-                  >
-                    ↩ 다시 설정
-                  </button>
-                </div>
-                {doneJob.note && (
-                  <p className="text-xs text-muted-foreground">참고: {doneJob.note}</p>
-                )}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {canCompare && (
-                    <>
-                      <button
-                        onClick={syncToggle}
-                        className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
-                      >
-                        {syncPlaying ? "⏸ 동시 정지" : "▶ 동시 재생"}
-                      </button>
-                      <button
-                        onClick={syncRestart}
-                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
-                      >
-                        ↺ 처음부터
-                      </button>
-                      <button
-                        onClick={() => setMuted((m) => !m)}
-                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
-                        title="동시 재생 시 소리 끄기/켜기"
-                      >
-                        {muted ? "🔇 음소거" : "🔊 소리"}
-                      </button>
-                    </>
-                  )}
-                  <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-                    {metrics?.tracker === "sam2" && <span>추적 SAM2</span>}
-                    {metrics?.canvas_expand_w && (
-                      <span>
-                        캔버스 ×{metrics.canvas_expand_w}/{metrics.canvas_expand_h}
-                      </span>
-                    )}
-                    <a
-                      href={resultUrl}
-                      download
-                      className="px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      다운로드
-                    </a>
-                  </div>
-                </div>
                 <div className="grid grid-cols-2 gap-3">
                   {previewUrl && (
                     <figure className="space-y-1 min-w-0">
@@ -436,32 +460,55 @@ export default function StabilizePage() {
                     />
                   </figure>
                 </div>
-              </section>
-            ) : (
-              <>
-                {previewUrl ? (
-                  // 설정 화면: 큰 영상 미리보기 + (인물) 주인공 지정 (처리 중에도 유지)
-                  <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h2 className="text-sm font-medium">
-                    {mode === "person" ? "주인공 지정 & 미리보기" : "미리보기"}
-                  </h2>
-                  {mode === "person" && (
-                    <button
-                      onClick={() => setPickMode((v) => !v)}
-                      className={`px-3 py-1.5 rounded text-sm ${
-                        pickMode ? "bg-primary text-primary-foreground" : "bg-muted"
-                      }`}
-                    >
-                      {pickMode ? "인물을 클릭…" : subject ? "다시 지정" : "주인공 클릭 지정"}
-                    </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {canCompare && (
+                    <>
+                      <button
+                        onClick={syncToggle}
+                        className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        {syncPlaying ? "⏸ 동시 정지" : "▶ 동시 재생"}
+                      </button>
+                      <button
+                        onClick={syncRestart}
+                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                      >
+                        ↺ 처음부터
+                      </button>
+                      <button
+                        onClick={() => setMuted((m) => !m)}
+                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                        title="동시 재생 시 소리 끄기/켜기"
+                      >
+                        {muted ? "🔇 음소거" : "🔊 소리"}
+                      </button>
+                    </>
                   )}
+                  <span className="text-xs text-muted-foreground">
+                    {MODE_LABEL[doneJob.mode] ?? doneJob.mode} ·{" "}
+                    {STRENGTH_LABEL[doneJob.strength] ?? doneJob.strength}
+                    {metrics?.tracker === "sam2" ? " · SAM2" : ""}
+                  </span>
+                  <div className="ml-auto flex items-center gap-3">
+                    <button
+                      onClick={backToSetup}
+                      className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                    >
+                      ↩ 다시 설정
+                    </button>
+                    <a
+                      href={resultUrl}
+                      download
+                      className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      다운로드
+                    </a>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {mode === "person"
-                    ? "영상을 원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 고정할 지점(얼굴/몸통)을 클릭하세요. 미지정 시 화면 중앙의 인물을 자동 추적합니다."
-                    : "배경 기준으로 흔들림을 제거합니다. 왼쪽에서 강도를 고르고 “안정화 시작”을 누르세요."}
-                </p>
+              </section>
+            ) : previewUrl ? (
+              // 설정: 비디오 맨 위, 부가 정보(주인공 지정 등) 하단
+              <section className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="relative mx-auto h-[64vh] aspect-[9/16] bg-black rounded overflow-hidden">
                   <video
                     ref={pickVideoRef}
@@ -483,18 +530,44 @@ export default function StabilizePage() {
                     />
                   )}
                 </div>
-                {mode === "person" && subject && (
-                  <p className="text-xs text-muted-foreground">
-                    지정됨 · t={subject.t.toFixed(1)}s ({(subject.x * 100).toFixed(0)}%,{" "}
-                    {(subject.y * 100).toFixed(0)}%)
-                    <button onClick={() => setSubject(null)} className="ml-2 hover:text-destructive">
-                      지우기
-                    </button>
-                  </p>
-                )}
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-medium">
+                      {mode === "person" ? "주인공 지정 & 미리보기" : "미리보기"}
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {mode === "person"
+                        ? "원하는 장면에서 멈춘 뒤 “주인공 클릭 지정”을 누르고 고정할 지점(얼굴/몸통)을 클릭. 미지정 시 중앙 인물 자동."
+                        : "배경 기준으로 흔들림을 제거합니다. 왼쪽에서 강도를 고르고 “안정화 시작”을 누르세요."}
+                      {mode === "person" && subject
+                        ? ` · 지정됨(${(subject.x * 100).toFixed(0)}%, ${(subject.y * 100).toFixed(0)}%, t=${subject.t.toFixed(1)}s)`
+                        : ""}
+                    </p>
+                  </div>
+                  {mode === "person" && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setPickMode((v) => !v)}
+                        className={`px-3 py-1.5 rounded text-sm ${
+                          pickMode ? "bg-primary text-primary-foreground" : "bg-muted"
+                        }`}
+                      >
+                        {pickMode ? "인물을 클릭…" : subject ? "다시 지정" : "주인공 클릭 지정"}
+                      </button>
+                      {subject && (
+                        <button
+                          onClick={() => setSubject(null)}
+                          className="px-2 py-1.5 rounded text-sm bg-muted hover:bg-muted/80 text-muted-foreground"
+                        >
+                          지우기
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </section>
             ) : (
-              // 업로드 화면: 크게, 드래그&드롭
+              // 업로드: 크게, 드래그&드롭
               <div
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -531,69 +604,10 @@ export default function StabilizePage() {
                 </button>
                 <p className="text-xs text-muted-foreground">흔들린 짧은 영상 (mp4 등)</p>
               </div>
-                )}
-                {/* 진행/실패 표시 — 미리보기 유지한 채 메인 하단에 */}
-                {status && !done && (
-                  <section className="rounded-lg border border-border bg-card p-4 space-y-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <h2 className="text-sm font-medium">
-                        {MODE_LABEL[status.mode] ?? status.mode} ·{" "}
-                        {STRENGTH_LABEL[status.strength] ?? status.strength}
-                        <span
-                          className={`ml-2 text-xs ${
-                            status.status === "failed" ? "text-destructive" : "text-muted-foreground"
-                          }`}
-                        >
-                          {STATUS_LABEL[status.status] ?? status.status}
-                        </span>
-                      </h2>
-                      {running ? (
-                        <button onClick={cancelJob} className="px-2 py-1 rounded text-xs bg-muted">
-                          취소
-                        </button>
-                      ) : (
-                        <button
-                          onClick={backToSetup}
-                          className="px-2 py-1 rounded text-xs bg-muted hover:bg-muted/80"
-                        >
-                          ↩ 다시 설정
-                        </button>
-                      )}
-                    </div>
-                    {running && (
-                      <div className="space-y-1.5">
-                        <div className="h-2 rounded bg-muted overflow-hidden">
-                          <div
-                            className="h-full bg-primary transition-all"
-                            style={{ width: `${status.progress ?? 0}%` }}
-                          />
-                        </div>
-                        <div className="flex gap-1.5 text-[11px] text-muted-foreground">
-                          {STAGES.map((st) => (
-                            <span
-                              key={st}
-                              className={status.stage === st ? "text-foreground font-medium" : ""}
-                            >
-                              {st}
-                            </span>
-                          ))}
-                          <span className="ml-auto tabular-nums">{status.progress ?? 0}%</span>
-                        </div>
-                      </div>
-                    )}
-                    {status.note && (
-                      <p className="text-xs text-muted-foreground">참고: {status.note}</p>
-                    )}
-                    {status.status === "failed" && (
-                      <p className="text-sm text-destructive whitespace-pre-wrap">{status.error}</p>
-                    )}
-                  </section>
-                )}
-              </>
             )}
           </div>
 
-          {/* ===== 최근 작업 (3번째 컬럼) ===== */}
+          {/* ===== 우: 최근 작업 ===== */}
           <div className="landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4">
               <h2 className="text-sm font-medium mb-2">최근 작업</h2>
