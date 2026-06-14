@@ -10,6 +10,7 @@ const NAV = [
   { key: "image", href: "/image", label: "이미지" },
   { key: "face", href: "/face", label: "얼굴" },
   { key: "labels", href: "/labels", label: "라벨링" },
+  { key: "stabilize", href: "/stabilize", label: "안정화" },
   { key: "admin", href: "/admin", label: "관리자" },
 ] as const;
 

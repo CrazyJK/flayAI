@@ -116,7 +116,7 @@ def job_status(job_id: str, request: Request) -> dict[str, Any]:
     return st
 
 
-@router.get("/jobs/{job_id}/result")
+@router.api_route("/jobs/{job_id}/result", methods=["GET", "HEAD"])
 def job_result(job_id: str, request: Request) -> FileResponse:
     _localhost_only(request)
     st = J.get_status(job_id)
