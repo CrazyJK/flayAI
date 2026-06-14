@@ -40,9 +40,14 @@
 - 프론트: 업로드·기준(배경/인물)·강도·진행·전후 동시재생 + **인물 모드 클릭 지정 UI**, 가로 반응형
 - API: POST/GET jobs, result(GET+HEAD), cancel, delete · config `stabilize:` 블록 · 단위 테스트
 
+- **auto 강도**: 배경=카메라 이동량(ORB drift) · 인물=주인공 화면 이동량으로 lock/smooth/dejitter
+  자동 선택(결과 note·metrics.auto 표시). 검증: seg15 정지형→lock, 전체 트래블→dejitter
+- **인물 클릭 앵커**: 클릭 지점의 박스 내 상대 위치를 고정점으로(얼굴/몸통 구분) · **추적 후처리**
+  (미검출 보간 + 이상치 median 대체) + **밴드패스 보정**(배경 미세 튐 34~47%↓)
+
 **남음 ⬜** — 인물 추적 **SAM2 업그레이드**(밀집 군중 가림에 강건, 클릭→메모리 전파; v1 그리디는
-드리프트 가능), RAFT+마스킹 배경 엔진, auto 강도(드리프트 자동판정), 인물 스케일 고정 토글,
-여백 채움(temporal/pad), retain_hours 정리잡.
+중주파 드리프트 가능), RAFT+마스킹 배경 엔진, 인물 스케일 고정 토글, 여백 채움(temporal/pad),
+retain_hours 정리잡, UI/UX 다듬기.
 
 ---
 

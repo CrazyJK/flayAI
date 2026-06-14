@@ -51,9 +51,54 @@ def _probe(ffprobe: str, path: Path) -> dict[str, Any]:
 
 def _smoothing(cfg: dict, strength: str) -> int:
     presets = cfg.get("smoothing_presets", {})
-    if strength == "auto":   # v1: auto 는 smooth 로 (후속: 드리프트 측정해 자동 선택)
-        strength = "smooth"
     return int(presets.get(strength, presets.get("smooth", 40)))
+
+
+def _auto_background_strength(ff: str, work_mp4: Path, W: int, H: int) -> tuple[str, float]:
+    """카메라 이동량을 빠르게 측정해 강도 자동 선택.
+
+    work.mp4 를 8fps·256px·gray 로 파이프 디코딩 → 프레임간 전역 이동(ORB+RANSAC) 누적 →
+    누적 가로 이동 범위 / 폭 = drift. 정지형이면 lock, 크게 이동하면 dejitter.
+    (드리프트는 저주파라 8fps 로 충분. 전경 군중이 다소 부풀릴 수 있어 임계는 보수적.)
+    """
+    import cv2
+    import numpy as np
+
+    wo = 256
+    ho = 2 * round(H * wo / W / 2) if W else 256
+    proc = subprocess.Popen(
+        [ff, "-hide_banner", "-v", "error", "-i", str(work_mp4),
+         "-vf", f"fps=8,scale={wo}:{ho},format=gray", "-f", "rawvideo", "-"],
+        stdout=subprocess.PIPE, cwd=str(REPO_ROOT))
+    orb = cv2.ORB_create(800)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    fsz = wo * ho
+    pk = pd = None
+    cx = 0.0
+    xs = [0.0]
+    while True:
+        buf = proc.stdout.read(fsz)
+        if not buf or len(buf) < fsz:
+            break
+        g = np.frombuffer(buf, np.uint8).reshape(ho, wo)
+        kp, des = orb.detectAndCompute(g, None)
+        if pd is not None and des is not None and len(kp) > 6 and len(pk) > 6:
+            mm = bf.knnMatch(pd, des, k=2)
+            good = [a for a, b in mm if a.distance < 0.75 * b.distance]
+            if len(good) >= 10:
+                s = np.float32([pk[a.queryIdx].pt for a in good])
+                t = np.float32([kp[a.trainIdx].pt for a in good])
+                M, _ = cv2.estimateAffinePartial2D(s, t, method=cv2.RANSAC)
+                if M is not None:
+                    cx += float(M[0, 2])
+        xs.append(cx)
+        pk, pd = kp, des
+    proc.stdout.close()
+    proc.wait()
+    arr = np.array(xs)
+    drift = float((arr.max() - arr.min()) / wo) if len(arr) > 2 else 0.0
+    chosen = "lock" if drift < 0.5 else "smooth" if drift < 2.5 else "dejitter"
+    return chosen, round(drift, 2)
 
 
 def _metrics(out_mp4: Path, smoothing: int) -> dict[str, Any]:
@@ -118,6 +163,15 @@ def run_background(jdir: Path, strength: str, cfg: dict, set_status: Callable[..
     if rc != 0:
         raise RuntimeError(f"디코딩/스케일 실패: {err}")
 
+    # 강도 자동 선택(auto): 카메라 이동량을 측정해 lock/smooth/dejitter 결정
+    eff_strength = strength
+    auto_info = None
+    if strength == "auto":
+        wmeta = _probe(fp, work_mp4)
+        eff_strength, drift = _auto_background_strength(ff, work_mp4, wmeta["width"], wmeta["height"])
+        auto_info = {"drift": drift, "chosen": eff_strength}
+        set_status(note=f"자동: 카메라 이동 {drift}×폭 → '{eff_strength}'")
+
     # 2) 흔들림 검출
     set_status(stage="detect", progress=30)
     trf = work / "transforms.trf"
@@ -129,7 +183,7 @@ def run_background(jdir: Path, strength: str, cfg: dict, set_status: Callable[..
 
     # 3) 보정(무크롭: optzoom=0, crop=black) + 인코딩
     set_status(stage="transform", progress=55)
-    smoothing = _smoothing(cfg, strength)
+    smoothing = _smoothing(cfg, eff_strength)
     out = jdir / "out.mp4"
     vf = (f"vidstabtransform=input={_rel(trf)}:smoothing={smoothing}"
           f":optzoom=0:crop=black:maxshift=-1:maxangle=-1")
@@ -150,5 +204,7 @@ def run_background(jdir: Path, strength: str, cfg: dict, set_status: Callable[..
         raise RuntimeError(f"vidstabtransform 실패: {err}")
 
     metrics = _metrics(out, smoothing)
+    if auto_info:
+        metrics["auto"] = auto_info
     set_status(status="done", stage="encode", progress=100,
                outputs=[{"variant": "background", "file": "out.mp4", "metrics": metrics}])

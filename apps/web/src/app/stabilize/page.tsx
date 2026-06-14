@@ -13,7 +13,7 @@ const STRENGTHS = [
   { key: "dejitter", label: "흔들림만", desc: "이동·추종은 보존하고 떨림만 제거 (트래블 샷)" },
   { key: "smooth", label: "부분 고정", desc: "떨림 + 느린 움직임 일부 정리 (기본)" },
   { key: "lock", label: "완전 고정", desc: "느린 드리프트까지 평탄화 (정지형 구간)" },
-  { key: "auto", label: "자동", desc: "현재는 부분 고정과 동일 (자동 판정 예정)" },
+  { key: "auto", label: "자동", desc: "영상의 카메라/인물 이동량을 보고 강도를 자동 선택" },
 ] as const;
 
 type Metrics = {

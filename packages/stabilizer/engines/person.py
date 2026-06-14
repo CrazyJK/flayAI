@@ -230,7 +230,17 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     # 3) 평활 → 평행이동 shift = target - 실제
     set_status(stage="transform", progress=55)
     presets = cfg.get("smoothing_presets", {})
-    sigma = float(presets.get("smooth", 40) if strength == "auto" else presets.get(strength, 40))
+    # 강도 자동 선택(auto): 주인공이 화면을 얼마나 가로지르나로 결정.
+    # 거의 안 움직이면 lock(저렴하게 고정), 많이 가로지르면 dejitter(캔버스 폭증 방지).
+    auto_info = None
+    eff = strength
+    if strength == "auto":
+        exc = max(float((cen[:, 0].max() - cen[:, 0].min()) / W),
+                  float((cen[:, 1].max() - cen[:, 1].min()) / H))
+        eff = "lock" if exc < 0.3 else "smooth" if exc < 0.7 else "dejitter"
+        auto_info = {"excursion": round(exc, 2), "chosen": eff}
+        set_status(note=f"자동: 주인공 이동 {exc:.2f}×화면 → '{eff}'")
+    sigma = float(presets.get(eff, 40))
     # shift = gauss(궤적,σ_강도) − gauss(궤적,σ_denoise) (밴드패스).
     # σ_denoise 보다 빠른 떨림은 보정 대상에서 제외 → 추적 노이즈가 배경 미세 튐으로 새지 않게.
     sden = min(float(cfg.get("track_denoise_sigma", 4)), sigma)
@@ -298,5 +308,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         "anchor": list(anchor),
         "frames": nframes,
     }
+    if auto_info:
+        metrics["auto"] = auto_info
     set_status(status="done", stage="encode", progress=100,
                outputs=[{"variant": "person", "file": "out.mp4", "metrics": metrics}])
