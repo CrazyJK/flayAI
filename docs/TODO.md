@@ -18,6 +18,21 @@
 
 ---
 
+## 🆕 자막 생성(Subtitle)
+
+신규 서브시스템 [`docs/subtitle-plan.md`](subtitle-plan.md) — instance 영상의 일본어 음성을 한국어
+자막(`<stem>.srt`)으로. 외부에서 opus 신청 → 야간 드레인 배치. **phase 1(생성+큐+야간) 구현·테스트 통과.**
+
+- 🔴 **의존성 설치**: `pyproject.toml` 에 `faster-whisper>=1.1` 추가됨 → `uv lock` 후 사용자 `uv sync`.
+  CTranslate2 자체 CUDA12 libs 가 onnxruntime-gpu/torch 와 공존하는지 **`uv sync` 후 GPU 인식 검증**.
+- 🔴 **모델·스케줄러**: large-v3 최초 1회 자동 다운로드(≈3GB). `scripts/nightly_subtitle.ps1` 작업
+  스케줄러 등록(nightly_index 와 시간 분리 — GPU 동시 사용 방지).
+- ⬜ **phase 2(번역메모리)**: 159개 팬자막으로 JP↔KO TM/용어집 → LLM few-shot 번역 + 평가셋.
+- ⬜ **phase 3(싱크 수정)**: 기존 자막 드리프트를 Whisper 발화구간에 DTW 재정렬(타이밍만 교정).
+- ⚪ 관리자 UI: 신청 큐/진행/이력 패널(`/stabilize` 패턴 재사용).
+
+---
+
 ## 🆕 일기형 대화(Diary) — 수동 후속 작업
 
 신규 기능 [`docs/diary.md`](diary.md) 구현 완료(코드·테스트·빌드 통과). 환경 의존 단계는 사용자 실행 필요:

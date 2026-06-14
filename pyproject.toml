@@ -39,6 +39,11 @@ dependencies = [
     "sentencepiece>=0.2",
     "sacremoses>=0.1",
 
+    # 자막 STT(음성→텍스트) — faster-whisper(CTranslate2 백엔드, large-v3). 야간 배치.
+    # CTranslate2 가 자체 CUDA12 libs(nvidia-cublas/cudnn-cu12)를 끌어옴 — uv sync 후
+    # GPU 인식 검증 권장(과거 onnxruntime CPU/GPU 충돌 전례). 추가 후 lock: `uv lock`.
+    "faster-whisper>=1.1",
+
     # Document parsing
     "python-docx>=1.1",
     "openpyxl>=3.1",

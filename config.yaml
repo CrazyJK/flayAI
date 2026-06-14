@@ -152,6 +152,21 @@ stabilize:
     smooth:   40
     lock:     250
 
+subtitle:
+  # 자막 생성 (docs/subtitle-plan.md). 외부에서 opus 로 신청 → 야간 드레인이 처리.
+  # 산출물은 영상 옆 사이드카 <stem>.srt. 야간 배치 + VRAM 양보 불필요 → 최고 품질.
+  work_dir:        "data/subtitle"   # 잡 로그/임시 (.gitignore)
+  model:           "large-v3"        # faster-whisper STT. 빠르게: large-v3-turbo
+  device:          "cuda"            # cuda | cpu
+  compute_type:    "float16"         # float16(GPU) | int8_float16 | int8
+  language:        "ja"              # 원음 언어(일본어 고정 — 번역도 JP 전제)
+  vad_filter:      true              # 무음/비발화 구간 제거(환각 억제) — 필수
+  beam_size:       5
+  translator:      "nllb"            # phase1=nllb(기존 재사용). phase2=llm(번역메모리 few-shot)
+  out_suffix:      ""                # ""=<stem>.srt (기존 159개 관례), "ko"=<stem>.ko.srt
+  backup_existing: true              # 출력 위치에 기존 파일 있으면 <stem>.orig.srt 로 1회 백업
+  skip_if_exists:  true              # generate: 기존 자막 있으면 건너뜀(사람 팬자막 보호)
+
 logging:
   log_dir:        "logs"
   log_file:       "logs/flayai.log"

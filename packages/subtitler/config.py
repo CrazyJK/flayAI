@@ -1,0 +1,39 @@
+"""자막 설정 — config.yaml 의 `subtitle:` 블록 + 기본값 병합.
+
+yaml 블록이 없거나 일부만 있어도 동작하도록 코드 기본값을 깐다(stabilizer 와 동일 패턴).
+야간 배치 + VRAM 양보 불필요 전제 → 최고 품질(large-v3) 기본.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from packages.settings import load_config
+
+_DEFAULTS: dict[str, Any] = {
+    "work_dir": "data/subtitle",      # 잡 로그/임시 산출물 루트 (.gitignore)
+    # --- STT(faster-whisper) ---
+    "model": "large-v3",              # 야간 배치라 최고 품질. 빠르게: large-v3-turbo
+    "device": "cuda",                 # cuda | cpu
+    "compute_type": "float16",        # float16(GPU) | int8_float16 | int8
+    "language": "ja",                 # 원음 언어(일본어 고정 — 번역도 JP 전제)
+    "vad_filter": True,               # 무음/비발화 구간 제거(환각 억제) — 필수
+    "beam_size": 5,
+    # --- 번역 ---
+    "translator": "nllb",             # phase1=nllb(기존 인덱서 재사용). phase2=llm(TM few-shot)
+    # --- 출력 ---
+    "out_suffix": "",                 # ""→<stem>.srt, "ko"→<stem>.ko.srt (기존 159개 관례=평범한 .srt)
+    "backup_existing": True,          # 출력 위치에 기존 파일이 있으면 <stem>.orig.srt 로 1회 백업
+    "skip_if_exists": True,           # generate: 기존 자막 있으면 건너뜀(사람 팬자막 보호)
+}
+
+
+def subtitle_config() -> dict[str, Any]:
+    """병합된 자막 설정 dict."""
+    try:
+        raw = load_config().get("subtitle") or {}
+    except FileNotFoundError:
+        raw = {}
+    merged = dict(_DEFAULTS)
+    merged.update(raw)
+    return merged

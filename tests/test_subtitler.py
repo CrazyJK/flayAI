@@ -1,0 +1,187 @@
+"""자막 서브시스템 순수 로직 테스트(모델·GPU 무관).
+
+- SRT 입출력: 타임스탬프 변환, 인코딩 자동감지 파싱, 라운드트립, 크레딧 제거
+- 큐: 적재·중복방지·클레임 순서·진행·마감·삭제, 전사 캐시
+- core: 출력 경로/형제 srt/opus 해소
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from packages.indexer.db import connect, init_schema
+from packages.subtitler import core, srt_io
+from packages.subtitler import db as Q
+
+# --- SRT 입출력 ---------------------------------------------------
+
+
+def test_ts_roundtrip():
+    assert srt_io.format_ts(0) == "00:00:00,000"
+    assert srt_io.format_ts(3661.5) == "01:01:01,500"
+    assert srt_io.format_ts(114.949) == "00:01:54,949"
+    for sec in (0.0, 1.234, 59.999, 3600.0, 7325.678):
+        assert abs(srt_io.parse_ts(srt_io.format_ts(sec)) - sec) < 0.001
+
+
+_SAMPLE = (
+    "1\n"
+    "00:00:00,445 --> 00:00:06,718\n"
+    "자막제공 : 아브자막\n"
+    "(AVJAMAK.COM)\n"
+    "\n"
+    "2\n"
+    "00:01:54,949 --> 00:01:56,598\n"
+    "날씨가 좋아서 다행이네\n"
+    "\n"
+    "3\n"
+    "00:02:00,911 --> 00:02:02,832\n"
+    "- 오늘은 말이죠\n"
+    "- 네에-\n"
+)
+
+
+def test_parse_srt_utf8(tmp_path):
+    p = tmp_path / "a.srt"
+    p.write_text(_SAMPLE, encoding="utf-8")
+    cues = srt_io.parse_srt(p)
+    assert len(cues) == 3
+    assert abs(cues[1].start - 114.949) < 0.001
+    assert cues[2].text == "- 오늘은 말이죠\n- 네에-"  # 다중 라인 보존
+
+
+def test_parse_srt_cp949(tmp_path):
+    """한국어 팬자막은 CP949 인 경우가 많다 — 자동감지 디코딩."""
+    p = tmp_path / "b.srt"
+    p.write_bytes(_SAMPLE.encode("cp949"))
+    cues = srt_io.parse_srt(p)
+    assert len(cues) == 3
+    assert cues[1].text == "날씨가 좋아서 다행이네"
+
+
+def test_parse_srt_no_index_lines(tmp_path):
+    """인덱스 숫자 줄이 없는 변형도 파싱."""
+    text = "00:00:01,000 --> 00:00:02,000\n안녕\n\n00:00:03,000 --> 00:00:04,000\n잘가\n"
+    p = tmp_path / "c.srt"
+    p.write_text(text, encoding="utf-8")
+    cues = srt_io.parse_srt(p)
+    assert [c.text for c in cues] == ["안녕", "잘가"]
+
+
+def test_write_roundtrip(tmp_path):
+    p = tmp_path / "in.srt"
+    p.write_text(_SAMPLE, encoding="utf-8")
+    cues = srt_io.parse_srt(p)
+    out = tmp_path / "out.srt"
+    srt_io.write_srt(out, cues)
+    again = srt_io.parse_srt(out)
+    assert len(again) == len(cues)
+    assert again[1].text == cues[1].text
+    assert abs(again[1].start - cues[1].start) < 0.001
+
+
+def test_strip_credits(tmp_path):
+    p = tmp_path / "a.srt"
+    p.write_text(_SAMPLE, encoding="utf-8")
+    cues = srt_io.parse_srt(p)
+    kept = srt_io.strip_credit_cues(cues)
+    assert len(kept) == 2  # 자막제공/AVJAMAK 큐 제거
+    assert all(not srt_io.is_credit(c.text) for c in kept)
+
+
+# --- 큐 -----------------------------------------------------------
+
+
+@pytest.fixture
+def conn(tmp_path):
+    c = connect(tmp_path / "t.db")
+    init_schema(c)      # posters 등 본체
+    Q.init_schema(c)    # 자막 큐/캐시
+    yield c
+    c.close()
+
+
+def test_enqueue_dedupe(conn):
+    jid1, created1 = Q.enqueue(conn, "ABC-123", "generate")
+    assert created1 is True
+    jid2, created2 = Q.enqueue(conn, "ABC-123", "generate")
+    assert created2 is False and jid2 == jid1  # 활성 중복은 재사용
+    jid3, created3 = Q.enqueue(conn, "ABC-123", "resync")
+    assert created3 is True and jid3 != jid1   # task 다르면 별개
+
+
+def test_claim_order_and_finish(conn):
+    a, _ = Q.enqueue(conn, "A-1", "generate")
+    b, _ = Q.enqueue(conn, "B-2", "generate")
+    j1 = Q.claim_next(conn)
+    assert j1["id"] == a and j1["status"] == "running"
+    # 한 번 claim 한 잡은 다시 안 잡힘
+    j2 = Q.claim_next(conn)
+    assert j2["id"] == b
+    assert Q.claim_next(conn) is None
+
+    Q.set_progress(conn, a, stage="transcribe", progress=42)
+    assert Q.get_job(conn, a)["progress"] == 42
+
+    Q.finish(conn, a, "done", result_path="/x/y.srt")
+    fin = Q.get_job(conn, a)
+    assert fin["status"] == "done" and fin["result_path"] == "/x/y.srt" and fin["progress"] == 100
+
+    # 마감 후엔 같은 opus 재적재가 새 잡으로
+    a2, created = Q.enqueue(conn, "A-1", "generate")
+    assert created is True and a2 != a
+
+
+def test_delete_and_list(conn):
+    a, _ = Q.enqueue(conn, "A-1")
+    Q.enqueue(conn, "B-2")
+    assert len(Q.list_jobs(conn)) == 2
+    assert Q.delete_job(conn, a) is True
+    assert Q.delete_job(conn, 9999) is False
+    assert len(Q.list_jobs(conn)) == 1
+
+
+def test_transcript_cache(conn):
+    segs = [{"start": 0.0, "end": 1.0, "text": "あ"}, {"start": 1.0, "end": 2.0, "text": "い"}]
+    assert Q.get_transcript(conn, "A-1", "large-v3") is None
+    Q.put_transcript(conn, "A-1", "large-v3", 1700000000, "ja", segs)
+    got = Q.get_transcript(conn, "A-1", "large-v3")
+    assert got["video_mtime"] == 1700000000
+    assert got["language"] == "ja"
+    assert got["segments"] == segs
+
+
+# --- core 경로 해소 -----------------------------------------------
+
+
+def test_out_and_sibling_paths(tmp_path):
+    video = tmp_path / "[Studio][ABC-123][title][2020.05.08].mp4"
+    video.write_bytes(b"x")
+    assert core.out_srt_path(video).name == "[Studio][ABC-123][title][2020.05.08].srt"
+    assert core.out_srt_path(video, "ko").name == "[Studio][ABC-123][title][2020.05.08].ko.srt"
+    assert core.sibling_srt(video) is None
+    srt = core.out_srt_path(video)
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\n안녕\n", encoding="utf-8")
+    assert core.sibling_srt(video) == srt
+
+
+def test_resolve(conn, tmp_path):
+    video = tmp_path / "[ABC-123][x].mp4"
+    video.write_bytes(b"x")
+    srt = video.with_name(video.stem + ".srt")
+    srt.write_text("1\n00:00:01,000 --> 00:00:02,000\n안녕\n", encoding="utf-8")
+    with conn:
+        conn.execute(
+            "INSERT INTO posters(opus, path, kind, video_path) VALUES (?,?,?,?)",
+            ("ABC-123", str(video), "instance", str(video)),
+        )
+    vp, found_srt = core.resolve(conn, "ABC-123")
+    assert vp == video and found_srt == srt
+
+    # 영상 경로가 부재(오프라인)면 None
+    with conn:
+        conn.execute(
+            "INSERT INTO posters(opus, path, kind, video_path) VALUES (?,?,?,?)",
+            ("GONE-1", "/nope/x.jpg", "instance", "/nope/x.mp4"),
+        )
+    assert core.resolve(conn, "GONE-1") == (None, None)
