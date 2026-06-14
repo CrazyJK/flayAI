@@ -149,6 +149,10 @@ export default function StabilizePage() {
     setFile(f);
     setSubject(null);
     setPickMode(false);
+    // 새 파일 선택 시 이전 잡/결과를 비워 새 영상 설정 화면으로
+    setJobId(null);
+    setStatus(null);
+    setSyncPlaying(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(f ? URL.createObjectURL(f) : null);
   }
@@ -537,6 +541,12 @@ export default function StabilizePage() {
                     {metrics?.tracker === "sam2" ? " · SAM2" : ""}
                   </span>
                   <div className="ml-auto flex items-center gap-3">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                    >
+                      ＋ 새 영상
+                    </button>
                     <button
                       onClick={backToSetup}
                       className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
