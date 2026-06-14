@@ -328,7 +328,14 @@ export default function StabilizePage() {
 
       {/* 가로 모니터에선 폭을 넓게(32"/24" 멀티모니터), 세로는 자연히 좁아짐 */}
       <div className="mx-auto w-full max-w-[2400px] px-4 py-4">
-        <div className="grid gap-4 landscape:grid-cols-[minmax(350px,365px)_1fr_minmax(350px,365px)] items-start">
+        <div
+          className={`grid gap-4 items-start ${
+            doneJob
+              ? // 결과 화면: 메인을 영상 너비에 맞춰(auto) 줄이고 전체를 가운데 정렬 → 영상이 핏하게
+                "landscape:grid-cols-[minmax(350px,365px)_auto_minmax(350px,365px)] landscape:justify-center"
+              : "landscape:grid-cols-[minmax(350px,365px)_1fr_minmax(350px,365px)]"
+          }`}
+        >
           {/* ===== 좌: 옵션 + 처리중 ===== */}
           <div className="space-y-4 landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4 space-y-4">
@@ -458,7 +465,7 @@ export default function StabilizePage() {
                         onPause={() => syncPlaying && stabRef.current?.pause()}
                         onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
                         onEnded={() => setSyncPlaying(false)}
-                        className="block max-h-[80vh] max-w-full rounded border border-border bg-black"
+                        className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
                       />
                     </figure>
                   )}
@@ -469,7 +476,7 @@ export default function StabilizePage() {
                       src={resultUrl}
                       controls
                       muted
-                      className="block max-h-[80vh] max-w-full rounded border border-border bg-black"
+                      className="block max-h-[80vh] max-w-[44vw] rounded border border-border bg-black"
                     />
                   </figure>
                 </div>
