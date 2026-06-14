@@ -328,7 +328,7 @@ export default function StabilizePage() {
 
       {/* 가로 모니터에선 폭을 넓게(32"/24" 멀티모니터), 세로는 자연히 좁아짐 */}
       <div className="mx-auto w-full max-w-[2400px] px-4 py-4">
-        <div className="grid gap-4 landscape:grid-cols-[minmax(380px,440px)_1fr_minmax(220px,300px)] items-start">
+        <div className="grid gap-4 landscape:grid-cols-[minmax(350px,365px)_1fr_minmax(350px,365px)] items-start">
           {/* ===== 좌: 옵션 + 처리중 ===== */}
           <div className="space-y-4 landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4 space-y-4">
@@ -380,7 +380,7 @@ export default function StabilizePage() {
                     <button
                       key={s.key}
                       onClick={() => setStrength(s.key)}
-                      className={`px-2.5 py-1.5 rounded text-sm whitespace-nowrap ${
+                      className={`px-2 py-1.5 rounded text-sm whitespace-nowrap ${
                         strength === s.key ? "bg-primary text-primary-foreground" : "bg-muted"
                       }`}
                     >
@@ -444,7 +444,8 @@ export default function StabilizePage() {
             {doneJob && resultUrl ? (
               // 결과: 전/후 비교
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                {/* 두 영상을 가운데로 붙여 크게 — 좌우 여백 최소화 */}
+                <div className="flex justify-center items-start gap-2">
                   {previewUrl && (
                     <figure className="space-y-1 min-w-0">
                       <figcaption className="text-xs text-muted-foreground">원본</figcaption>
@@ -457,18 +458,18 @@ export default function StabilizePage() {
                         onPause={() => syncPlaying && stabRef.current?.pause()}
                         onPlay={() => syncPlaying && stabRef.current?.play().catch(() => {})}
                         onEnded={() => setSyncPlaying(false)}
-                        className="block mx-auto max-h-[72vh] max-w-full rounded border border-border bg-black"
+                        className="block max-h-[80vh] max-w-full rounded border border-border bg-black"
                       />
                     </figure>
                   )}
-                  <figure className={`space-y-1 min-w-0 ${previewUrl ? "" : "col-span-2"}`}>
+                  <figure className="space-y-1 min-w-0">
                     <figcaption className="text-xs text-success">안정화</figcaption>
                     <video
                       ref={stabRef}
                       src={resultUrl}
                       controls
                       muted
-                      className="block mx-auto max-h-[72vh] max-w-full rounded border border-border bg-black"
+                      className="block max-h-[80vh] max-w-full rounded border border-border bg-black"
                     />
                   </figure>
                 </div>
