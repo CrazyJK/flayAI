@@ -140,7 +140,7 @@ stabilize:
   segment_imgsz:   640               # YOLO 추론 입력 긴변 px
   default_mode:    "background"      # background | person
   default_strength: "smooth"         # dejitter(흔들림만) | smooth | lock(완전고정) | auto
-  edge:            "blur"            # 무크롭 여백 처리(인물 모드): blur(흐린 확대 채움) | black
+  edge:            "blur"            # 여백 처리 기본값: blur(흐린 확대 채움) | black | crop(여백 잘라냄). 잡별 옵션으로 덮어씀
   encoder:         "h264_nvenc"      # 폴백 libx264
   retain_hours:    48
   concurrency:     1                 # 12GB GPU 공유 → 동시 1잡 + 인덱싱과 상호배제

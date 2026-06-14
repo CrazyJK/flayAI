@@ -137,7 +137,8 @@ def _metrics(out_mp4: Path, smoothing: int) -> dict[str, Any]:
     return m
 
 
-def run_background(jdir: Path, strength: str, cfg: dict, set_status: Callable[..., Any]) -> None:
+def run_background(jdir: Path, strength: str, options: dict, cfg: dict,
+                   set_status: Callable[..., Any]) -> None:
     """배경 안정화 잡 본체. set_status(**kw) 로 진행상황을 status.json 에 반영."""
     ff, fp = cfg["ffmpeg"], cfg["ffprobe"]
     inp = jdir / "in.mp4"
@@ -181,12 +182,14 @@ def run_background(jdir: Path, strength: str, cfg: dict, set_status: Callable[..
     if rc != 0:
         raise RuntimeError(f"vidstabdetect 실패: {err}")
 
-    # 3) 보정(무크롭: optzoom=0, crop=black) + 인코딩
+    # 3) 보정 + 인코딩. edge=crop 이면 optzoom=1(여백 제거 위해 줌인=잘라내기), 아니면 무크롭(검은 여백)
     set_status(stage="transform", progress=55)
     smoothing = _smoothing(cfg, eff_strength)
+    edge = (options or {}).get("edge") or cfg.get("edge", "blur")
     out = jdir / "out.mp4"
+    zoom = "optzoom=1" if edge == "crop" else "optzoom=0:crop=black"
     vf = (f"vidstabtransform=input={_rel(trf)}:smoothing={smoothing}"
-          f":optzoom=0:crop=black:maxshift=-1:maxangle=-1")
+          f":{zoom}:maxshift=-1:maxangle=-1")
 
     def _encode(encoder: str) -> tuple[int, str]:
         c = [ff, "-hide_banner", "-v", "error", "-y", "-i", str(work_mp4), "-vf", vf, "-c:v", encoder]
@@ -204,6 +207,7 @@ def run_background(jdir: Path, strength: str, cfg: dict, set_status: Callable[..
         raise RuntimeError(f"vidstabtransform 실패: {err}")
 
     metrics = _metrics(out, smoothing)
+    metrics["edge"] = edge
     if auto_info:
         metrics["auto"] = auto_info
     set_status(status="done", stage="encode", progress=100,

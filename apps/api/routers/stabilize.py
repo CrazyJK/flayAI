@@ -71,6 +71,7 @@ async def create_job(
     mode: str = Form("background"),
     strength: str = Form("smooth"),
     subject: str | None = Form(None),  # 인물 모드 지정(클릭 좌표/박스 등) — JSON 문자열
+    edge: str | None = Form(None),  # 여백 처리: blur | black | crop
 ) -> dict[str, Any]:
     _localhost_only(request)
     if mode not in ("background", "person"):
@@ -88,6 +89,8 @@ async def create_job(
     options: dict[str, Any] = {}
     if subject:
         options["subject"] = subject
+    if edge:
+        options["edge"] = edge
     job_id = J.new_job(mode, strength, options)
 
     dest = J.input_path(job_id)

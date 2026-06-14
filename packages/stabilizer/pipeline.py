@@ -25,7 +25,7 @@ def run_job(job_id: str) -> None:
         strength = st.get("strength", cfg["default_strength"])
         if mode == "background":
             from .engines.vidstab import run_background
-            run_background(J.job_path(job_id), strength, cfg, _set)
+            run_background(J.job_path(job_id), strength, st.get("options") or {}, cfg, _set)
         elif mode == "person":
             from .engines.person import run_person
             run_person(J.job_path(job_id), strength, st.get("options") or {}, cfg, _set)

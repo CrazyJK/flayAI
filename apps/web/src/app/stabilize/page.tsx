@@ -126,6 +126,7 @@ export default function StabilizePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<"background" | "person">("background");
   const [strength, setStrength] = useState<string>("auto");
+  const [edge, setEdge] = useState<"blur" | "crop">("blur");
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus | null>(null);
@@ -156,7 +157,7 @@ export default function StabilizePage() {
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files?.[0];
-    if (f && f.type.startsWith("video")) onPick(f);
+    if (f && (f.type.startsWith("video") || f.type === "image/gif")) onPick(f);
   }
 
   function onPickClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -232,6 +233,7 @@ export default function StabilizePage() {
       fd.append("file", file);
       fd.append("mode", mode);
       fd.append("strength", strength);
+      fd.append("edge", edge);
       if (mode === "person" && subject) fd.append("subject", JSON.stringify(subject));
       const r = await fetch(`${API_BASE}/api/stabilize/jobs`, { method: "POST", body: fd });
       if (!r.ok) throw new Error(await r.text());
@@ -321,7 +323,7 @@ export default function StabilizePage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="video/mp4,video/*"
+        accept="video/mp4,video/quicktime,video/x-msvideo,video/*,image/gif"
         className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)}
       />
@@ -401,6 +403,33 @@ export default function StabilizePage() {
                 </p>
               </div>
 
+              <div className="space-y-1.5">
+                <span className="text-sm font-medium">여백 처리</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEdge("blur")}
+                    className={`px-3 py-1.5 rounded text-sm ${
+                      edge === "blur" ? "bg-primary text-primary-foreground" : "bg-muted"
+                    }`}
+                  >
+                    채움(확장)
+                  </button>
+                  <button
+                    onClick={() => setEdge("crop")}
+                    className={`px-3 py-1.5 rounded text-sm ${
+                      edge === "crop" ? "bg-primary text-primary-foreground" : "bg-muted"
+                    }`}
+                  >
+                    잘라내기
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {edge === "blur"
+                    ? "자르지 않고 화각 유지 — 여백은 블러로 채움(배경 모드는 검은 여백)."
+                    : "안정화 여백을 잘라내 깔끔하게(영상 크기는 줄어듭니다)."}
+                </p>
+              </div>
+
               <button
                 onClick={submit}
                 disabled={!file || submitting || !!running}
@@ -408,9 +437,6 @@ export default function StabilizePage() {
               >
                 {submitting ? "업로드 중…" : running ? "처리 중…" : "안정화 시작"}
               </button>
-              <p className="text-xs text-muted-foreground">
-                결과는 자르지 않고 캔버스를 확장합니다(여백은 블러로 채움).
-              </p>
               {err && <p className="text-sm text-destructive whitespace-pre-wrap">{err}</p>}
             </section>
 

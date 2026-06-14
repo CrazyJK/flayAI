@@ -263,18 +263,32 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     ty = _gauss(cen[:, 1], sigma) - refy
     minx, maxx = int(np.floor(tx.min())), int(np.ceil(tx.max()))
     miny, maxy = int(np.floor(ty.min())), int(np.ceil(ty.max()))
-    Wout = (W + (maxx - minx) + 1) & ~1  # 짝수
-    Hout = (H + (maxy - miny) + 1) & ~1
     offx = np.round(tx - minx).astype(int)
     offy = np.round(ty - miny).astype(int)
 
-    # 4) 무크롭 워프 → 인코딩 (스트리밍, 프레임 디스크 저장 없음)
+    # 여백 처리: blur(흐린 확대 채움) | black(검은 여백) | crop(공통영역만 잘라냄)
+    edge = (options or {}).get("edge") or cfg.get("edge", "blur")
+    cl = ct = 0
+    cr = cb = 0
+    if edge == "crop":
+        # 모든 프레임이 덮는 공통 영역(교집합) = 여백 없는 최대 사각형
+        cl, ct = int(offx.max()), int(offy.max())
+        cr, cb = int((offx + W).min()), int((offy + H).min())
+        if (cr - cl) < W * 0.3 or (cb - ct) < H * 0.3:
+            set_status(note="잘라낼 공통영역이 너무 작아 블러 채움으로 전환")
+            edge = "blur"
+    if edge == "crop":
+        Wout, Hout = max((cr - cl) & ~1, 2), max((cb - ct) & ~1, 2)
+    else:
+        Wout = (W + (maxx - minx) + 1) & ~1  # 캔버스 확장(짝수)
+        Hout = (H + (maxy - miny) + 1) & ~1
+
+    # 4) 워프 → 인코딩 (스트리밍, 프레임 디스크 저장 없음)
     set_status(stage="warp", progress=70)
     import cv2
 
     out = jdir / "out.mp4"
     encoder = cfg.get("encoder", "h264_nvenc")
-    edge = cfg.get("edge", "blur")  # 무크롭 여백 처리: blur(흐린 확대 채움) | black
 
     def _encode(enc_name):
         enc_cmd = [ff, "-hide_banner", "-v", "error", "-y",
@@ -294,16 +308,20 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
                 if not ok:
                     break
                 k = min(f, n - 1)
-                oy, ox = offy[k], offx[k]
-                if edge == "blur":
+                oy, ox = int(offy[k]), int(offx[k])
+                if edge == "crop":
+                    # 공통영역만: 프레임에서 안정화된 위치의 사각형을 잘라냄(여백 없음)
+                    canvas = frame[ct - oy:ct - oy + Hout, cl - ox:cl - ox + Wout]
+                elif edge == "blur":
                     # 여백 = 프레임 자체를 흐리게 확대해 채움(인스타/틱톡식). 다운스케일 블러로 빠르게.
                     sm = cv2.resize(frame, (max(Wout // 8, 1), max(Hout // 8, 1)))
                     sm = cv2.GaussianBlur(sm, (0, 0), max(sm.shape[1] * 0.06, 1.0))
                     canvas = (cv2.resize(sm, (Wout, Hout)).astype(np.float32) * 0.6).astype(np.uint8)
-                else:
+                    canvas[oy:oy + H, ox:ox + W] = frame  # 가운데에 선명한 프레임
+                else:  # black
                     canvas = np.zeros((Hout, Wout, 3), np.uint8)
-                canvas[oy:oy + H, ox:ox + W] = frame  # 가운데에 선명한 프레임 덮어쓰기
-                proc.stdin.write(canvas.tobytes())
+                    canvas[oy:oy + H, ox:ox + W] = frame
+                proc.stdin.write(np.ascontiguousarray(canvas).tobytes())
                 f += 1
         finally:
             cap.release()
