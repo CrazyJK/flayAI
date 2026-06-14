@@ -7,6 +7,16 @@
 
 ---
 
+## 🆕 영상 안정화(Stabilizer)
+
+신규 서브시스템 [`docs/video-stabilization-plan.md`](video-stabilization-plan.md) — 흔들린 영상을 배경/인물 기준으로
+안정화(클릭→SAM2 추적, 자동 강도, 여백 블러/크롭). **배경·인물 모드 + 전체 UI 동작.** 구현 현황과 **남은 할 일**(인물
+스케일 고정·temporal 모자이크·RAFT 엔진·정밀 앵커·저fps 경고·진행률 세분화 등)은 그 문서의 "구현 현황" 절에 정리.
+
+- 🔴 **수동 1회**: `uv lock`(ultralytics·sam2 락 동기화), SAM2 체크포인트 다운로드(`data/stabilize/_models/sam2.1_hiera_tiny.pt`).
+
+---
+
 ## 🆕 일기형 대화(Diary) — 수동 후속 작업
 
 신규 기능 [`docs/diary.md`](diary.md) 구현 완료(코드·테스트·빌드 통과). 환경 의존 단계는 사용자 실행 필요:

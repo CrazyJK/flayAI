@@ -12,49 +12,78 @@
 
 ---
 
-## 구현 현황 (2026-06-14)
+## 구현 현황 (2026-06-14 기준)
 
-샘플 영상(장원영 입장 직캠, 4K·60fps·AV1·34s)으로 검증 후 M0+배경 MVP 구현·동작 확인.
+샘플(장원영 입장 직캠, 4K·60fps·AV1·34s)로 검증하며 배경·인물 모드 전 기능 구현·동작 확인.
+**상태: 배경/인물 안정화 + 클릭 지정(SAM2) + 자동 강도 + 여백 처리(블러/크롭) + 전체 UI 동작.**
 
-**확정 설계 (사용자 합의)**
-- 안정화 옵션 = **[기준: 배경 | 인물] × [강도: dejitter(흔들림만) ~ smooth ~ lock(완전고정) | auto]**.
-  "배경 따라가며 흔들림만 보정"과 "배경 고정"은 같은 배경 모드의 강도 차이(slider)일 뿐.
-- **무크롭 확정**: 자르지 않고 캔버스 확장(검은 여백). 별도 크롭 기능은 후속.
-- **인물 모드 주인공 지정 = 한 프레임 클릭/박스 → SAM2 전파**(SAM2 핵심 기능). 보조로 자동("중앙의 큰 인물").
-- **배경 엔진 v1 = ffmpeg vidstab**(robust dense+시간평활) — 군중·저텍스처에서도 무크롭 ~×1.12 검증. RAFT+마스킹은 후속 엔진.
+### 확정 설계 (사용자 합의)
+- 옵션 = **[기준: 배경 | 인물] × [강도: dejitter ~ smooth ~ lock | auto] × [여백: 채움(blur) | 잘라내기(crop)]**.
+- **인물 주인공 지정 = 한 프레임 클릭** → SAM2 메모리 전파(가림 강건). 클릭 지점(얼굴/몸통)이 고정 앵커.
+- **배경 엔진 = ffmpeg vidstab**(robust). RAFT+마스킹은 후속. **잡 처리 = 인하우스 서브프로세스**(외부 브로커 없음).
 
-**실측 (RTX 4070 Ti, 이 PC)**
+### 실측 요약 (RTX 4070 Ti)
 | 항목 | 값 |
 |---|---|
 | AV1 4K 디코딩+다운스케일 | 93 fps (sw) |
-| YOLO11x-seg 세그(540px) | 45.8 fps · ~0.5GB |
-| RAFT 360×640 / 544×960 / 720×1280 | 0.25 / 1.0 / 2.9 GB (4K 직접은 ~26GB→OOM) |
-| vidstab 배경고정 무크롭 캔버스 | 첫15초(정지형) lock ×1.20 / 전체 soft ×1.12 |
-| 한계 | 카메라 전진(시차)이 크면 2D 한계 — 완전 락은 B경로(3D) 필요 |
+| YOLO11x-seg(540px) / RAFT(360~720) | 45fps·0.5GB / 0.25~2.9GB (4K 직접 RAFT는 OOM) |
+| **SAM2 tiny**(클릭 추적, CPU오프로드) | **VRAM ~0.7GB · 24fps** |
+| 배경 vidstab 무크롭 캔버스 | 첫15초 정지형 lock ×1.20 / 전체 트래블 soft ×1.12 |
+| SAM2 효과 | **정체성 점프 greedy 12 → SAM2 0**(군중 가림 튐 제거) |
+| 밴드패스 보정 | 인물 배경 미세 튐 **34~47%↓** |
+| **한계** | ① 카메라 전진(시차)이 크면 2D 한계(완전 락은 B경로 3D) ② **저fps gif**(예: 10프레임·5fps)는 데이터 부족으로 안정화 절반까지만(보간·디노이즈로도 개선 안 됨 — 소스 한계) |
 
-**구현됨 ✅** (`packages/stabilizer` + `apps/api/routers/stabilize.py` + `apps/web/stabilize`)
-- 잡 모델(status.json 원자적), 서브프로세스 워커(cli), localhost+동시1+인덱싱 상호배제
-- 배경 모드 vidstab 엔진(강도 프리셋·무크롭·NVENC+libx264 폴백·캔버스 확장 지표)
-- **인물 모드 v1**(`engines/person.py`): 클릭 시드 그리디 추적(YOLO11-seg) → 피사체 락(평행이동
-  target=gauss(traj,sigma)) → 무크롭 캔버스 확장 워프 → NVENC 인코딩. 주인공=클릭 1점(없으면 자동)
-- 프론트: 업로드·기준(배경/인물)·강도·진행·전후 동시재생 + **인물 모드 클릭 지정 UI**, 가로 반응형
-- API: POST/GET jobs, result(GET+HEAD), cancel, delete · config `stabilize:` 블록 · 단위 테스트
+### 구현됨 ✅
+**잡/인프라** (`packages/stabilizer`, `apps/api/routers/stabilize.py`, `apps/api/main.py`)
+- 잡 모델(`job.py`, status.json 원자적 기록·재시작 복구), 서브프로세스 워커(`cli.py`), 파이프라인 디스패치
+- API: POST/GET `jobs`, `result`(GET+HEAD·Range), `cancel`, `DELETE` · localhost-only + 동시 1잡 + 인덱싱 상호배제 · CORS(GET/POST/DELETE)
+- **보존기간 정리**: `cleanup_old_jobs()`(retain_hours 경과 잡 삭제, 새 잡 시 + CLI `cleanup`)
+- config `stabilize:` 블록 · 단위 테스트(`tests/test_stabilizer.py`)
 
-- **auto 강도**: 배경=카메라 이동량(ORB drift) · 인물=주인공 화면 이동량으로 lock/smooth/dejitter
-  자동 선택(결과 note·metrics.auto 표시). 검증: seg15 정지형→lock, 전체 트래블→dejitter
-- **인물 클릭 앵커**: 클릭 지점을 고정점으로(얼굴/몸통 구분) · **추적 후처리**(미검출 보간 +
-  이상치 median 대체) + **밴드패스 보정**(배경 미세 튐 34~47%↓)
-- **SAM2 추적**(`engines/track_sam2.py`): 클릭→메모리 전파(tiny+CPU오프로드, VRAM~0.7GB·24fps).
-  클릭 시 기본, 체크포인트 없거나 실패 시 그리디 폴백. x=마스크 중심·y=마스크 상단(머리, 가림 강건)
-  + σ5 평활. 검증: **정체성 점프 greedy 12→SAM2 0**(군중 가림 튐 제거), 출력 미세튐 동급.
-  체크포인트는 별도 다운로드: `data/stabilize/_models/sam2.1_hiera_tiny.pt`
-  (dl.fbaipublicfiles.com/segment_anything_2/092824/), gitignore.
-- **여백 채움(blur)**: 인물 모드 무크롭 여백을 검은 띠 대신 프레임을 흐리게 확대한 것으로 채움
-  (인스타식, 가운데에 선명한 프레임 덮어쓰기). config `edge: blur|black`.
-- **보존기간 정리**: `cleanup_old_jobs()` — retain_hours 지난 잡 자동 삭제(새 잡 시 + CLI `cleanup`).
+**배경 엔진** (`engines/vidstab.py`)
+- vidstab 2패스(detect→transform), 강도 프리셋(dejitter/smooth/lock)→smoothing
+- **auto 강도**: work.mp4 ORB 카메라 이동량(drift) 측정 → lock/smooth/dejitter (seg15→lock, 전체→dejitter 검증)
+- 여백: 채움(`optzoom=0` 검은 여백) / **잘라내기**(`optzoom=1` 줌인) · NVENC+libx264 폴백 · 캔버스 확장 지표
 
-**남음 ⬜** — RAFT+마스킹 배경 엔진, **여백 temporal 모자이크**(배경 모드용 — 인물 모드는
-주인공 고정이라 이웃 배경 비정렬 → blur 채택), 인물 스케일 고정 토글, UI/UX 다듬기.
+**인물 엔진** (`engines/person.py`, `engines/track_sam2.py`)
+- **SAM2 추적**(`track_sam2.py`): 클릭 점 프롬프트 → 전후 양방향 메모리 전파. tiny+CPU오프로드. x=마스크 중심·y=마스크 상단(머리, 가림 강건) + σ5 평활. 체크포인트 없거나 실패 시 **그리디(YOLO11-seg) 폴백**
+- **클릭 앵커**: 클릭 지점의 상대 위치를 고정점으로(얼굴/몸통 구분)
+- **추적 후처리**: 미검출 선형보간 + 이상치 median 대체 + **밴드패스 보정**(σ_denoise=4 → 배경 미세 튐 제거)
+- 피사체 락(평행이동 target=gauss−gauss), **auto 강도**(주인공 화면 이동량 excursion)
+- 여백: 채움(**blur** 흐린 확대) / black / **잘라내기**(공통영역 교집합, 너무 작으면 blur 폴백) · 스트리밍 워프(프레임 디스크 미저장)
+
+**프론트** (`apps/web/src/app/stabilize/page.tsx`)
+- 업로드(드래그&드롭·큰 화면, **mp4/mov/avi/mkv/webm + gif/이미지**) · 파일 변경 · **새 영상** 시작
+- 기준(배경/인물) · 강도(auto 기본) · 여백 처리(채움/잘라내기) 선택
+- **인물 클릭 지정 UI**(큰 영상에서 얼굴/몸통 클릭, 마커) · gif/이미지는 `<img>` 렌더
+- 진행: **단계별 원형 불빛**(대기/진행/완료/실패 색, 좌측 사이드, 처리 중 미리보기 유지)
+- 결과: 전/후 비교(영상 꽉 차게 fit·비율 유지) + **동시 재생**(음소거 토글) + 다운로드 + 다시 설정
+- 모니터 방향 반응형 3단(옵션|메인|최근작업) · 최근작업 친절한 라벨·상대시간·전체 삭제
+
+**의존성**: `ultralytics`·`sam2` pyproject 선언(`uv lock` 필요 — [project_stabilizer_pip_deps] 메모리). SAM2 체크포인트
+`data/stabilize/_models/sam2.1_hiera_tiny.pt`(별도 다운로드, gitignore). 가중치 `yolo*.pt`·`data/stabilize/` gitignore.
+
+### 남은 할 일 ⬜
+
+**기능**
+- [ ] **인물 스케일 고정 토글** — 주인공 크기까지 일정(줌). 현재는 평행이동만(크기 변함)
+- [ ] **여백 temporal 모자이크**(배경 모드) — 검은/블러 여백을 이웃 프레임으로 메움. 인물 모드는 캔버스가
+  주인공 기준이라 이웃 배경 비정렬 → 부적합(blur 유지). 배경 모드 + 명시적 transform 필요(B1과 결합)
+- [ ] **RAFT+마스킹 배경 엔진**(B1) — vidstab로 충분하나, 참조프레임 정합 '진짜 락'·temporal 채움·파이프 통일 필요 시
+- [ ] **얼굴/포즈 기반 정밀 앵커** — InsightFace(보유)로 얼굴 클릭 시 정밀 고정(현재는 박스 상대위치 근사)
+- [ ] **"둘 다" 모드** — 한 업로드로 배경·인물 두 결과 산출(원안)
+- [ ] **B경로**(RStab 등 3D 풀FOV) — 시차 큰 트래블의 완전 무크롭 락(연구용, GPU 큼)
+
+**품질/UX**
+- [ ] **저fps/소수프레임 입력 경고** — gif 등 N프레임·Nfps면 "안정화 품질 제한" 안내(기대치 관리)
+- [ ] **gif 보간 옵션**(minterpolate) — 끊김 완화용(흔들림 자체는 개선 안 됨, 아티팩트 위험)
+- [ ] **진행률 세분화** — detect/track 단계 중 YOLO/SAM2 프레임 진행 % 반영(현재 단계 단위)
+- [ ] UI 추가 다듬기(검출 박스 탭 선택 등)
+
+**운영**
+- [ ] **`uv lock`** 으로 ultralytics·sam2 락파일 동기화(사용자 실행)
+- [ ] **NVDEC AV1 하드웨어 디코딩**(`-hwaccel cuda`) — 4K 디코딩 가속
+- [ ] 구현 안정화 후 `docs/video-stabilization.md`(동작 설명서)로 분리, `docs/README.md`·`docs/TODO.md` 반영
 
 ---
 
