@@ -148,4 +148,5 @@ def build_track_sam2(work_mp4: Path, W: int, H: int, fps: float, subject: dict,
     cen = _clean(raw, W)
     # 마스크 픽셀 경계 떨림(노이즈) 제거 — 피사체 실제 이동은 저주파라 σ5(≈0.08s)면 안전.
     cen[:, 0], cen[:, 1] = _g(cen[:, 0], 5), _g(cen[:, 1], 5)
-    return cen, (round(fx, 3), round(fy, 3))
+    size = (h_a * H).astype(np.float32)  # 주인공 높이(work px) — 스케일 고정용
+    return cen, (round(fx, 3), round(fy, 3)), size

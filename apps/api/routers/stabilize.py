@@ -73,6 +73,7 @@ async def create_job(
     subject: str | None = Form(None),  # 인물 모드 지정(클릭 좌표/박스 등) — JSON 문자열
     edge: str | None = Form(None),  # 여백 처리: blur | black | crop
     interpolate: str | None = Form(None),  # 저fps 보간(부드럽게)
+    scale_lock: str | None = Form(None),  # 인물 모드 — 주인공 크기까지 고정
 ) -> dict[str, Any]:
     _localhost_only(request)
     if mode not in ("background", "person"):
@@ -94,6 +95,8 @@ async def create_job(
         options["edge"] = edge
     if interpolate and interpolate not in ("0", "false", "False"):
         options["interpolate"] = True
+    if mode == "person" and scale_lock and scale_lock not in ("0", "false", "False"):
+        options["scale_lock"] = True
     job_id = J.new_job(mode, strength, options)
 
     dest = J.input_path(job_id)

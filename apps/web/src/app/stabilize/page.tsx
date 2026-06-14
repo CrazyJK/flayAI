@@ -128,6 +128,7 @@ export default function StabilizePage() {
   const [strength, setStrength] = useState<string>("auto");
   const [edge, setEdge] = useState<"blur" | "crop">("blur");
   const [interpolate, setInterpolate] = useState(false);
+  const [scaleLock, setScaleLock] = useState(false);
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus | null>(null);
@@ -240,6 +241,7 @@ export default function StabilizePage() {
       fd.append("strength", strength);
       fd.append("edge", edge);
       if (interpolate) fd.append("interpolate", "1");
+      if (mode === "person" && scaleLock) fd.append("scale_lock", "1");
       if (mode === "person" && subject) fd.append("subject", JSON.stringify(subject));
       const r = await fetch(`${API_BASE}/api/stabilize/jobs`, { method: "POST", body: fd });
       if (!r.ok) throw new Error(await r.text());
@@ -437,6 +439,17 @@ export default function StabilizePage() {
                 </p>
               </div>
 
+              {mode === "person" && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scaleLock}
+                    onChange={(e) => setScaleLock(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  주인공 크기까지 고정 — 거리 변화 작을 때만(클수록 배경 줌 손실↑)
+                </label>
+              )}
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"

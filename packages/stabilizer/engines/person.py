@@ -179,7 +179,12 @@ def _build_track(dets: list[np.ndarray], W: int, H: int, fps: float,
     med = np.stack([_medfilt(raw[:, 0]), _medfilt(raw[:, 1])], 1)
     bad = np.hypot(raw[:, 0] - med[:, 0], raw[:, 1] - med[:, 1]) > 0.06 * W
     raw[bad] = med[bad]
-    return raw.astype(np.float32), (round(relx, 3), round(rely, 3))
+    # 주인공 높이(스케일 고정용): 박스 높이, 미검출 보간
+    hh = np.array([b[3] - b[1] if b is not None else np.nan for b in track], float)
+    okh = ~np.isnan(hh)
+    hh = (np.interp(idx, idx[okh], hh[okh]) if okh.sum() >= 2
+          else np.full(n, float(hh[okh][0]) if okh.any() else H * 0.5))
+    return raw.astype(np.float32), (round(relx, 3), round(rely, 3)), hh.astype(np.float32)
 
 
 def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
@@ -218,12 +223,12 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         except json.JSONDecodeError:
             subject = None
 
-    cen = anchor = None
+    cen = anchor = size = None
     if cfg.get("person_tracker", "sam2") == "sam2" and subject and "t" in subject:
         try:
             from .track_sam2 import build_track_sam2, sam2_available
             if sam2_available(cfg):
-                cen, anchor = build_track_sam2(work_mp4, W, H, fps, subject, cfg, set_status)
+                cen, anchor, size = build_track_sam2(work_mp4, W, H, fps, subject, cfg, set_status)
         except Exception as e:  # noqa: BLE001 — SAM2 실패 시 그리디로 폴백
             log.warning("SAM2 추적 실패 → 그리디 폴백: %s", e)
             set_status(note="SAM2 추적 실패 → 기본 추적으로 폴백")
@@ -237,7 +242,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
             raise RuntimeError("ultralytics 미설치 — 인물 모드를 쓰려면 설치가 필요합니다.")
         if dW and (dW != W or dH != H):
             W, H = dW, dH
-        cen, anchor = _build_track(dets, W, H, fps, subject)
+        cen, anchor, size = _build_track(dets, W, H, fps, subject)
 
     # 3) 평활 → 평행이동 shift = target - 실제
     set_status(stage="transform", progress=55)
@@ -259,27 +264,36 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
     refx, refy = _gauss(cen[:, 0], sden), _gauss(cen[:, 1], sden)
     tx = _gauss(cen[:, 0], sigma) - refx
     ty = _gauss(cen[:, 1], sigma) - refy
-    minx, maxx = int(np.floor(tx.min())), int(np.ceil(tx.max()))
-    miny, maxy = int(np.floor(ty.min())), int(np.ceil(ty.max()))
-    offx = np.round(tx - minx).astype(int)
-    offy = np.round(ty - miny).astype(int)
 
-    # 여백 처리: blur(흐린 확대 채움) | black(검은 여백) | crop(공통영역만 잘라냄)
     edge = (options or {}).get("edge") or cfg.get("edge", "blur")
-    cl = ct = 0
-    cr = cb = 0
-    if edge == "crop":
-        # 모든 프레임이 덮는 공통 영역(교집합) = 여백 없는 최대 사각형
-        cl, ct = int(offx.max()), int(offy.max())
-        cr, cb = int((offx + W).min()), int((offy + H).min())
-        if (cr - cl) < W * 0.3 or (cb - ct) < H * 0.3:
-            set_status(note="잘라낼 공통영역이 너무 작아 블러 채움으로 전환")
-            edge = "blur"
-    if edge == "crop":
-        Wout, Hout = max((cr - cl) & ~1, 2), max((cb - ct) & ~1, 2)
+    # 스케일 고정: 주인공 크기까지 일정하게(앵커 기준 줌). 거리 변화 큰 영상은 배경 줌 손실 큼.
+    scale_lock = bool((options or {}).get("scale_lock")) and size is not None
+    cl = ct = cr = cb = 0
+    s_arr = None
+
+    if scale_lock:
+        # 출력은 작업 크기 고정 → 캔버스 폭증/인코더 해상도 한계 없음.
+        # 주인공을 상수 크기로: 넘치면 크롭, 모자란 여백은 채움(blur/black).
+        size_s = np.maximum(_gauss(size, 10.0), 1.0)
+        ref_h = float(np.median(size_s))
+        s_arr = np.clip(ref_h / size_s, 0.4, 2.5)  # 줌 클램프
+        Wout, Hout = (W & ~1), (H & ~1)
     else:
-        Wout = (W + (maxx - minx) + 1) & ~1  # 캔버스 확장(짝수)
-        Hout = (H + (maxy - miny) + 1) & ~1
+        minx, maxx = int(np.floor(tx.min())), int(np.ceil(tx.max()))
+        miny, maxy = int(np.floor(ty.min())), int(np.ceil(ty.max()))
+        offx = np.round(tx - minx).astype(int)
+        offy = np.round(ty - miny).astype(int)
+        if edge == "crop":
+            cl, ct = int(offx.max()), int(offy.max())
+            cr, cb = int((offx + W).min()), int((offy + H).min())
+            if (cr - cl) < W * 0.3 or (cb - ct) < H * 0.3:
+                set_status(note="잘라낼 공통영역이 너무 작아 블러 채움으로 전환")
+                edge = "blur"
+        if edge == "crop":
+            Wout, Hout = max((cr - cl) & ~1, 2), max((cb - ct) & ~1, 2)
+        else:
+            Wout = (W + (maxx - minx) + 1) & ~1  # 캔버스 확장(짝수)
+            Hout = (H + (maxy - miny) + 1) & ~1
 
     # 4) 워프 → 인코딩 (스트리밍, 프레임 디스크 저장 없음)
     set_status(stage="warp", progress=70)
@@ -298,7 +312,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         enc_cmd += ["-pix_fmt", "yuv420p", "-c:a", "copy", "-shortest", str(out)]
         proc = subprocess.Popen(enc_cmd, stdin=subprocess.PIPE, cwd=str(REPO_ROOT))
         cap = cv2.VideoCapture(str(work_mp4))
-        n = len(offx)
+        n = len(cen)
         f = 0
         try:
             while True:
@@ -306,19 +320,35 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
                 if not ok:
                     break
                 k = min(f, n - 1)
-                oy, ox = int(offy[k]), int(offx[k])
-                if edge == "crop":
-                    # 공통영역만: 프레임에서 안정화된 위치의 사각형을 잘라냄(여백 없음)
-                    canvas = frame[ct - oy:ct - oy + Hout, cl - ox:cl - ox + Wout]
-                elif edge == "blur":
-                    # 여백 = 프레임 자체를 흐리게 확대해 채움(인스타/틱톡식). 다운스케일 블러로 빠르게.
-                    sm = cv2.resize(frame, (max(Wout // 8, 1), max(Hout // 8, 1)))
-                    sm = cv2.GaussianBlur(sm, (0, 0), max(sm.shape[1] * 0.06, 1.0))
-                    canvas = (cv2.resize(sm, (Wout, Hout)).astype(np.float32) * 0.6).astype(np.uint8)
-                    canvas[oy:oy + H, ox:ox + W] = frame  # 가운데에 선명한 프레임
-                else:  # black
-                    canvas = np.zeros((Hout, Wout, 3), np.uint8)
-                    canvas[oy:oy + H, ox:ox + W] = frame
+                if scale_lock:
+                    # affine: 앵커(cen) 기준 줌 sc + 이동 tx,ty(작업크기 출력). blur 는 마스크 합성
+                    sc = float(s_arr[k])
+                    M = np.array([[sc, 0.0, (1.0 - sc) * cen[k, 0] + tx[k]],
+                                  [0.0, sc, (1.0 - sc) * cen[k, 1] + ty[k]]], np.float32)
+                    if edge == "blur":
+                        sm = cv2.resize(frame, (max(Wout // 8, 1), max(Hout // 8, 1)))
+                        sm = cv2.GaussianBlur(sm, (0, 0), max(sm.shape[1] * 0.06, 1.0))
+                        canvas = (cv2.resize(sm, (Wout, Hout)).astype(np.float32) * 0.6).astype(np.uint8)
+                        warped = cv2.warpAffine(frame, M, (Wout, Hout))
+                        mask = cv2.warpAffine(np.full((H, W), 255, np.uint8), M, (Wout, Hout),
+                                              flags=cv2.INTER_NEAREST)
+                        canvas[mask > 0] = warped[mask > 0]
+                    else:  # crop(교집합이라 채워짐) / black(검은 여백)
+                        canvas = cv2.warpAffine(frame, M, (Wout, Hout))
+                else:
+                    oy, ox = int(offy[k]), int(offx[k])
+                    if edge == "crop":
+                        # 공통영역만: 프레임에서 안정화된 위치의 사각형을 잘라냄(여백 없음)
+                        canvas = frame[ct - oy:ct - oy + Hout, cl - ox:cl - ox + Wout]
+                    elif edge == "blur":
+                        # 여백 = 프레임 자체를 흐리게 확대해 채움(인스타/틱톡식). 다운스케일 블러로 빠르게.
+                        sm = cv2.resize(frame, (max(Wout // 8, 1), max(Hout // 8, 1)))
+                        sm = cv2.GaussianBlur(sm, (0, 0), max(sm.shape[1] * 0.06, 1.0))
+                        canvas = (cv2.resize(sm, (Wout, Hout)).astype(np.float32) * 0.6).astype(np.uint8)
+                        canvas[oy:oy + H, ox:ox + W] = frame  # 가운데에 선명한 프레임
+                    else:  # black
+                        canvas = np.zeros((Hout, Wout, 3), np.uint8)
+                        canvas[oy:oy + H, ox:ox + W] = frame
                 proc.stdin.write(np.ascontiguousarray(canvas).tobytes())
                 f += 1
                 if f % 30 == 0:
@@ -347,6 +377,7 @@ def run_person(jdir: Path, strength: str, options: dict, cfg: dict,
         "anchor": list(anchor),
         "tracker": tracker_used,
         "edge": edge,
+        "scale_lock": scale_lock,
         "frames": nframes,
     }
     if auto_info:
