@@ -13,7 +13,8 @@
 안정화(클릭→SAM2 추적, 자동 강도, 여백 블러/크롭). **배경·인물 모드 + 전체 UI 동작.** 구현 현황과 **남은 할 일**(인물
 스케일 고정·temporal 모자이크·RAFT 엔진·정밀 앵커·저fps 경고·진행률 세분화 등)은 그 문서의 "구현 현황" 절에 정리.
 
-- 🔴 **수동 1회**: `uv lock`(ultralytics·sam2 락 동기화), SAM2 체크포인트 다운로드(`data/stabilize/_models/sam2.1_hiera_tiny.pt`).
+- ✅ `uv lock` 완료(ultralytics·sam2 동기화, torch cu124 유지). 설치 반영은 사용자 `uv sync`.
+- 🟡 SAM2 체크포인트는 gitignore — 이 PC엔 있음. 다른 환경 체크아웃 시 재다운로드 필요(`data/stabilize/_models/sam2.1_hiera_tiny.pt`).
 
 ---
 

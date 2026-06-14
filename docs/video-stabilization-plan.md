@@ -75,14 +75,14 @@
 - [ ] **B경로**(RStab 등 3D 풀FOV) — 시차 큰 트래블의 완전 무크롭 락(연구용, GPU 큼)
 
 **품질/UX**
-- [ ] **저fps/소수프레임 입력 경고** — gif 등 N프레임·Nfps면 "안정화 품질 제한" 안내(기대치 관리)
-- [ ] **gif 보간 옵션**(minterpolate) — 끊김 완화용(흔들림 자체는 개선 안 됨, 아티팩트 위험)
-- [ ] **진행률 세분화** — detect/track 단계 중 YOLO/SAM2 프레임 진행 % 반영(현재 단계 단위)
+- [x] **저fps/소수프레임 입력 경고** — status note(`_ffwork.lowfps_note`). 프론트 "참고:"에 표시
+- [x] **gif 보간 옵션**(minterpolate) — 옵션 `interpolate`, UI 토글. 끊김 완화용(흔들림은 미개선)
+- [x] **진행률 세분화** — SAM2 추적(30→52%)·인물 워프(70→98%) 루프 진행 갱신
 - [ ] UI 추가 다듬기(검출 박스 탭 선택 등)
 
 **운영**
-- [ ] **`uv lock`** 으로 ultralytics·sam2 락파일 동기화(사용자 실행)
-- [ ] **NVDEC AV1 하드웨어 디코딩**(`-hwaccel cuda`) — 4K 디코딩 가속
+- [x] **`uv lock`** — ultralytics·sam2 락 동기화(torch cu124 유지). 설치는 사용자 `uv sync`
+- [x] **NVDEC AV1 하드웨어 디코딩**(`-hwaccel cuda`) — 4K AV1 디코딩 2배+(`_ffwork`, SW 폴백)
 - [ ] 구현 안정화 후 `docs/video-stabilization.md`(동작 설명서)로 분리, `docs/README.md`·`docs/TODO.md` 반영
 
 ---
