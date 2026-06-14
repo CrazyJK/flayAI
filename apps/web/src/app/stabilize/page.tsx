@@ -341,9 +341,10 @@ export default function StabilizePage() {
   // 원본: 방금 올린 파일(previewUrl) 우선, 최근작업에서 열면 서버 작업본(?variant=original)
   const origIsImage = isImage && !!previewUrl;
   const origSrc = previewUrl ?? (done && resultUrl ? `${resultUrl}?variant=original` : null);
-  // 원본 + 각 결과를 한 줄에 같이 띄우고 동시 재생(둘 다 모드는 원본·배경·인물 3개). 폭은 개수로 분배.
+  // 원본 + 각 결과를 한 줄에 같이 띄우고 동시 재생(둘 다 모드는 원본·배경·인물 3개).
   const vidCount = (origSrc && !origIsImage ? 1 : 0) + outs.length;
-  const maxVw = `${Math.floor(94 / Math.max(vidCount, 1))}vw`;
+  // 각 영상(figure) 폭을 줄(메인) 너비의 1/N 로 제한 → 줄바꿈 없이 N개가 한 줄에(넘치면 축소)
+  const figMax = `calc((100% - ${(Math.max(vidCount, 1) - 1) * 8}px) / ${Math.max(vidCount, 1)})`;
   const canSync = !!done && vidCount >= 2;
 
   return (
@@ -360,12 +361,12 @@ export default function StabilizePage() {
       {/* 가로 모니터에선 폭을 넓게(32"/24" 멀티모니터), 세로는 자연히 좁아짐 */}
       <div className="mx-auto w-full max-w-[2400px] px-4 py-4">
         <div
-          className={`grid gap-4 items-start landscape:justify-center ${
+          className={`grid gap-4 items-start ${
             doneJob
-              ? // 결과: 메인을 영상 너비에 맞춰(auto) — 영상이 핏하게
-                "landscape:grid-cols-[minmax(350px,365px)_auto_minmax(350px,365px)]"
-              : // 설정·업로드: 결과와 같은 폭으로 고정(~1261px) → 전환 시 폭이 흔들리지 않게
-                "landscape:grid-cols-[minmax(350px,365px)_minmax(0,1261px)_minmax(350px,365px)]"
+              ? // 결과: 메인을 풀 너비(1fr)로 — 원본·결과 N개를 한 줄에 최대한 크게
+                "landscape:grid-cols-[minmax(330px,360px)_1fr_minmax(330px,360px)]"
+              : // 설정·업로드: 적당한 고정 폭으로 가운데 정렬
+                "landscape:grid-cols-[minmax(330px,360px)_minmax(0,1261px)_minmax(330px,360px)] landscape:justify-center"
           }`}
         >
           {/* ===== 좌: 옵션 + 처리중 ===== */}
@@ -530,18 +531,17 @@ export default function StabilizePage() {
             {doneJob && resultUrl ? (
               // 결과: 전/후 비교
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
-                {/* 원본 + 각 결과를 한 줄에 같이(둘 다 모드는 원본·배경·인물) — 동시 재생 비교 */}
-                <div className="flex justify-center items-start gap-2 flex-wrap">
+                {/* 원본 + 각 결과를 한 줄에(둘 다 모드는 원본·배경·인물) — 폭 1/N 제한으로 줄바꿈 없이 동시 재생 */}
+                <div className="flex justify-center items-start gap-2">
                   {origSrc && (
-                    <figure className="space-y-1 min-w-0">
+                    <figure className="space-y-1 min-w-0" style={{ maxWidth: figMax }}>
                       <figcaption className="text-xs text-muted-foreground">원본</figcaption>
                       {origIsImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={origSrc}
                           alt="원본"
-                          style={{ maxWidth: maxVw }}
-                          className="block max-h-[80vh] rounded border border-border bg-black"
+                          className="block mx-auto max-w-full max-h-[82vh] rounded border border-border bg-black"
                         />
                       ) : (
                         <video
@@ -561,14 +561,13 @@ export default function StabilizePage() {
                               );
                           }}
                           onEnded={() => setSyncPlaying(false)}
-                          style={{ maxWidth: maxVw }}
-                          className="block max-h-[80vh] rounded border border-border bg-black"
+                          className="block mx-auto max-w-full max-h-[82vh] rounded border border-border bg-black"
                         />
                       )}
                     </figure>
                   )}
                   {outs.map((o) => (
-                    <figure key={o.variant} className="space-y-1 min-w-0">
+                    <figure key={o.variant} className="space-y-1 min-w-0" style={{ maxWidth: figMax }}>
                       <figcaption className="flex items-center gap-2 text-xs">
                         <span className="text-success">
                           {outs.length > 1 ? `${VARIANT_LABEL[o.variant] ?? o.variant} 안정화` : "안정화"}
@@ -589,8 +588,7 @@ export default function StabilizePage() {
                         src={`${resultUrl}?variant=${o.variant}`}
                         controls
                         muted
-                        style={{ maxWidth: maxVw }}
-                        className="block max-h-[80vh] rounded border border-border bg-black"
+                        className="block mx-auto max-w-full max-h-[82vh] rounded border border-border bg-black"
                       />
                     </figure>
                   ))}
