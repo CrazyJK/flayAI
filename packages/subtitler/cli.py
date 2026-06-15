@@ -1,9 +1,10 @@
 """flay-sub CLI — 자막 큐/워커 진입점.
 
-  python -m packages.subtitler.cli enqueue <opus> [task]   # 신청 적재(보통은 API)
-  python -m packages.subtitler.cli run <opus> [task]       # 단건 즉시 처리(테스트/수동)
-  python -m packages.subtitler.cli drain                   # 야간 배치: 큐를 비울 때까지
-  python -m packages.subtitler.cli build-tm [limit]        # phase2: 팬자막 → JP↔KO 번역메모리
+  python -m packages.subtitler.cli enqueue <opus> [task]      # 신청 적재(보통은 API)
+  python -m packages.subtitler.cli enqueue-all <task> [limit] # 후보 전체 적재(resync=기존자막 전체)
+  python -m packages.subtitler.cli run <opus> [task]          # 단건 즉시 처리(테스트/수동)
+  python -m packages.subtitler.cli drain                      # 야간 배치: 큐를 비울 때까지
+  python -m packages.subtitler.cli build-tm [limit]           # phase2: 팬자막 → JP↔KO 번역메모리
 
 drain 은 Windows 작업 스케줄러가 야간에 호출(scripts/nightly_subtitle.ps1).
 (typer 인자 흡수 모호성을 피해 argv 를 직접 파싱 — stabilizer.cli 와 동일 패턴.)
@@ -42,6 +43,44 @@ def cmd_enqueue(opus: str, task: str) -> None:
     try:
         jid, created = db.enqueue(conn, opus, task)
         sys.stderr.write(f"{'queued' if created else 'exists'} job#{jid} opus={opus} task={task}\n")
+    finally:
+        conn.close()
+
+
+def cmd_enqueue_all(task: str, limit: int | None) -> None:
+    """후보 opus 전체를 큐에 적재(중복은 자동 스킵).
+
+    resync   = 기존 자막(.srt) 보유 영상 전체(일회성 일괄 싱크 수정).
+    generate = 자막 없는 재생영상 전체(주의: 대량 — limit 권장).
+    """
+    from pathlib import Path
+
+    from . import tm
+
+    conn = _conn()
+    try:
+        if task == "resync":
+            candidates = [opus for opus, _vp, _srt in tm.discover(conn)]
+        elif task == "generate":
+            candidates = []
+            for r in conn.execute(
+                "SELECT opus, video_path FROM posters "
+                "WHERE video_path IS NOT NULL AND video_path != ''"
+            ):
+                vp = Path(r["video_path"])
+                if vp.exists() and core.sibling_srt(vp) is None:
+                    candidates.append(r["opus"])
+        else:
+            sys.stderr.write(f"task 는 generate | resync (got: {task})\n")
+            sys.exit(2)
+        if limit:
+            candidates = candidates[: int(limit)]
+        added = 0
+        for opus in candidates:
+            _jid, created = db.enqueue(conn, opus, task)
+            if created:
+                added += 1
+        sys.stderr.write(f"enqueue-all {task}: {added} new / {len(candidates)} candidates\n")
     finally:
         conn.close()
 
@@ -165,7 +204,8 @@ def cmd_eval(opus: str | None, n: int | None) -> None:
 
 _USAGE = (
     "usage: python -m packages.subtitler.cli "
-    "enqueue <opus> [task] | run <opus> [task] | drain | build-tm [limit] | eval [opus] [n]\n"
+    "enqueue <opus> [task] | enqueue-all <task> [limit] | run <opus> [task] | "
+    "drain | build-tm [limit] | eval [opus] [n]\n"
 )
 
 
@@ -190,6 +230,9 @@ def main(argv: list[str] | None = None) -> None:
             cmd_eval(None, int(a1))
         else:
             cmd_eval(a1, int(a2) if a2 else None)
+        return
+    if cmd == "enqueue-all" and len(argv) >= 2:
+        cmd_enqueue_all(argv[1], int(argv[2]) if len(argv) >= 3 else None)
         return
     if cmd in ("enqueue", "run") and len(argv) >= 2:
         opus = argv[1]
