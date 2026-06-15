@@ -10,8 +10,9 @@ from __future__ import annotations
 import pytest
 
 from packages.indexer.db import connect, init_schema
-from packages.subtitler import core, srt_io
+from packages.subtitler import align, core, srt_io
 from packages.subtitler import db as Q
+from packages.subtitler.srt_io import Cue
 
 # --- SRT 입출력 ---------------------------------------------------
 
@@ -185,3 +186,63 @@ def test_resolve(conn, tmp_path):
             ("GONE-1", "/nope/x.jpg", "instance", "/nope/x.mp4"),
         )
     assert core.resolve(conn, "GONE-1") == (None, None)
+
+
+# --- 정렬(phase 2 TM) ---------------------------------------------
+
+
+def _seg(s, e, t):
+    return {"start": s, "end": e, "text": t}
+
+
+def test_align_by_time_basic():
+    jp = [_seg(1.0, 2.0, "こんにちは"), _seg(3.0, 4.0, "さようなら")]
+    ko = [Cue(1, 1.0, 2.0, "안녕하세요"), Cue(2, 3.0, 4.0, "잘 가요")]
+    pairs = align.align_by_time(jp, ko)
+    assert len(pairs) == 2
+    assert pairs[0].jp == "こんにちは" and pairs[0].ko == "안녕하세요"
+    assert pairs[1].jp == "さようなら"
+
+
+def test_align_many_to_one():
+    """한 KO 큐가 여러 JP 세그먼트를 덮으면 JP 를 합친다."""
+    jp = [_seg(1.0, 2.0, "A"), _seg(2.0, 3.0, "B")]
+    ko = [Cue(1, 1.0, 3.0, "에이비")]
+    pairs = align.align_by_time(jp, ko)
+    assert len(pairs) == 1 and pairs[0].jp == "A B"
+
+
+def test_align_drops_gap_cue():
+    """JP 발화와 안 겹치는(드리프트/무음) KO 큐는 후보에서 빠진다."""
+    jp = [_seg(1.0, 2.0, "A")]
+    ko = [Cue(1, 1.0, 2.0, "맞음"), Cue(2, 50.0, 51.0, "동떨어진큐")]
+    pairs = align.align_by_time(jp, ko)
+    assert [p.ko for p in pairs] == ["맞음"]
+
+
+def test_filter_by_similarity_drops_mismatch():
+    pairs = [
+        align.Pair(jp="あいうえお", ko="아이우에오", ko_start=0, ko_end=1, overlap=1.0),
+        align.Pair(jp="まったく違う文", ko="전혀 다른 문장", ko_start=1, ko_end=2, overlap=1.0),
+    ]
+    vmap = {
+        "あいうえお": [1.0, 0.0], "아이우에오": [1.0, 0.0],          # 동일 의미 → 코사인 1
+        "まったく違う文": [1.0, 0.0], "전혀 다른 문장": [0.0, 1.0],   # 오정렬 → 코사인 0
+    }
+
+    def embed(texts):
+        return [vmap[t] for t in texts]
+
+    kept, dropped = align.filter_by_similarity(pairs, embed, min_sim=0.5)
+    assert len(kept) == 1 and kept[0].ko == "아이우에오" and kept[0].sim > 0.99
+    assert len(dropped) == 1
+
+
+def test_filter_by_similarity_drops_length_outlier():
+    p = align.Pair(jp="あ" * 100, ko="짧음", ko_start=0, ko_end=1, overlap=1.0)
+
+    def embed(texts):
+        return [[1.0, 0.0] for _ in texts]  # 의미는 동일하다 쳐도
+
+    kept, dropped = align.filter_by_similarity([p], embed, min_sim=0.0)
+    assert len(kept) == 0 and len(dropped) == 1  # 길이비 0.02 < 0.15 → 탈락

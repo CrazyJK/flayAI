@@ -166,6 +166,9 @@ subtitle:
   out_suffix:      ""                # ""=<stem>.srt (기존 159개 관례), "ko"=<stem>.ko.srt
   backup_existing: true              # 출력 위치에 기존 파일 있으면 <stem>.orig.srt 로 1회 백업
   skip_if_exists:  true              # generate: 기존 자막 있으면 건너뜀(사람 팬자막 보호)
+  # 번역메모리(TM, phase 2) — 기존 팬자막으로 JP↔KO 코퍼스 구축
+  tm_min_overlap:  0.2               # KO 큐가 JP 발화로 이 비율 이상 덮여야 정렬 후보
+  tm_min_sim:      0.50              # JP↔KO 교차언어 코사인(bge-m3) 미만이면 오정렬로 탈락
 
 logging:
   log_dir:        "logs"

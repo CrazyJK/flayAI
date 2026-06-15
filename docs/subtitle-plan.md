@@ -41,8 +41,12 @@
 | 페이즈 | 내용 | 상태 |
 |---|---|---|
 | **1. 생성 + 큐 + 야간** | opus → 전사 → 번역(NLLB 재사용) → `.srt`. 신청 API + drain CLI + 야간 스크립트 | ✅ 구현 |
-| **2. 번역 품질 보정** | 159개로 번역메모리(few-shot)+용어집 구축 → LLM 번역으로 교체, 평가셋 대조 | ⬜ 예정 |
-| **3. 싱크 드리프트 수정** | 159개 드리프트 자막을 Whisper 발화구간에 DTW 재정렬 → 타이밍 교정 | ⬜ 예정 |
+| **2. 번역 품질 보정** | ① JP↔KO 번역메모리 구축 ✅ → ② LLM+few-shot 번역 → ③ 평가셋 대조 | 🔶 ① 구현 |
+| **3. 싱크 드리프트 수정** | 137개 드리프트 자막을 Whisper 발화구간에 DTW 재정렬 → 타이밍 교정 | ⬜ 예정 |
+
+> 실측: 팬자막 보유 instance = **137편**(온라인+DB 기준). 1편(ABW-061) 시범 구축: JP 1085세그먼트 ×
+> KO 1356큐 → **756쌍 채택 / 526 탈락**(유사도·길이 필터). 팬자막이 의역체라 sim 0.5~0.7대 —
+> 이 "현지화된 말투"가 ②의 few-shot 학습 대상이다.
 
 ### 구현됨 ✅ (phase 1)
 **서브시스템** (`packages/subtitler/`)
@@ -109,9 +113,14 @@ curl -X POST https://ai.kamoru.jk:8000/api/subtitle/requests \
 
 ## 남은 작업 (phase 2/3)
 
-- **phase 2 (번역메모리)**: `tm.py`·`align.py` — 159개를 Whisper-JP 전사 → 기존 KO 큐와 타임스탬프
-  정렬 → JP↔KO 쌍/용어집 구축. `translate.py mode="llm"` 에 few-shot 주입. 평가셋으로 품질 수치화.
-  노골적 프롬프트/예시는 CLAUDE.md 지침대로 **gitignore 오버라이드 파일**로 분리.
+- **phase 2 ① 번역메모리 (구현됨)**: `align.py`(시간정렬 + bge-m3 교차언어 유사도 필터) ·
+  `tm.py`(전사→KO파싱→정렬→필터→`subtitle_tm`/`subtitle_corpus`) · CLI `build-tm [limit]`.
+  증분(자막 mtime). 전체 137편 구축은 야간 1회(`build-tm`).
+- **phase 2 ② LLM 번역 (다음)**: `translate.py mode="llm"` — `subtitle_tm` 을 bge-m3 로 임베딩(Qdrant)
+  → 번역할 JP 와 유사한 예시 K개 검색 → 무검열 LLM 프롬프트에 few-shot+문맥+용어집 주입. 세그먼트
+  10~20개씩 묶어 번역(문맥·속도). 노골적 프롬프트/예시는 **gitignore 오버라이드**로 분리.
+- **phase 2 ③ 평가 (다음)**: 일부 편을 TM 에서 제외(leakage 방지) → NLLB vs LLM+TM 을 사람 자막과
+  chrF/LLM-judge 로 대조 → 모델·few-shot 수·청크 크기 결정.
 - **phase 3 (싱크 수정)**: `core.resync()` — Whisper 발화구간을 앵커로 기존 KO 큐를 DTW 단조 정렬 후
   재타이밍. 사람 번역 텍스트는 보존, **타이밍만** 교정(챕터 경계 계단 드리프트 대응). 원본은 백업.
 - 관리자 UI: 신청 큐/진행/이력 패널(`/stabilize` 페이지 패턴 재사용).

@@ -48,10 +48,13 @@ def resolve(conn: sqlite3.Connection, opus: str) -> tuple[Path | None, Path | No
     return vp, srt
 
 
-def _transcribe_cached(
-    conn: sqlite3.Connection, opus: str, video_path: Path, cfg: dict[str, Any], report: Report
+def transcribe_cached(
+    conn: sqlite3.Connection, opus: str, video_path: Path, cfg: dict[str, Any], report: Report = _noop
 ) -> tuple[str | None, list[dict[str, Any]]]:
-    """전사(캐시 우선). 영상 mtime 이 캐시와 같으면 재실행 생략."""
+    """전사(캐시 우선). 영상 mtime 이 캐시와 같으면 재실행 생략.
+
+    generate(신규 자막)·tm(번역메모리)·resync(싱크수정)가 공유 — Whisper 1패스 재사용.
+    """
     mtime = int(video_path.stat().st_mtime)
     cached = db.get_transcript(conn, opus, cfg["model"])
     if cached and cached.get("video_mtime") == mtime:
@@ -91,7 +94,7 @@ def generate(
         }
 
     report("transcribe", 0)
-    lang, segments = _transcribe_cached(conn, opus, video_path, cfg, report)
+    lang, segments = transcribe_cached(conn, opus, video_path, cfg, report)
     if not segments:
         return {"status": "failed", "error": "발화 세그먼트 없음(무음/VAD 전부 제거)"}
 

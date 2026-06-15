@@ -3,6 +3,7 @@
   python -m packages.subtitler.cli enqueue <opus> [task]   # 신청 적재(보통은 API)
   python -m packages.subtitler.cli run <opus> [task]       # 단건 즉시 처리(테스트/수동)
   python -m packages.subtitler.cli drain                   # 야간 배치: 큐를 비울 때까지
+  python -m packages.subtitler.cli build-tm [limit]        # phase2: 팬자막 → JP↔KO 번역메모리
 
 drain 은 Windows 작업 스케줄러가 야간에 호출(scripts/nightly_subtitle.ps1).
 (typer 인자 흡수 모호성을 피해 argv 를 직접 파싱 — stabilizer.cli 와 동일 패턴.)
@@ -103,28 +104,54 @@ def cmd_drain() -> None:
     log.info("drain done: %d done, %d skipped, %d failed", done, skipped, failed)
 
 
+def cmd_build_tm(limit: int | None) -> None:
+    """phase 2: 팬자막 보유 instance → JP↔KO 번역메모리 구축(증분)."""
+    from . import tm
+
+    conn = _conn()
+    cfg = subtitle_config()
+    try:
+        def report(stage: str, pct: int) -> None:
+            sys.stderr.write(f"\r{stage} {pct:3d}%        ")
+            sys.stderr.flush()
+
+        res = tm.build_all(conn, cfg, limit=limit, report=report)
+        sys.stderr.write("\n")
+        log.info(
+            "build-tm done: total=%d built=%d pairs=%d",
+            res["total"], res["built"], res["pairs"],
+        )
+    finally:
+        whisper_stt.unload()
+        conn.close()
+
+
+_USAGE = (
+    "usage: python -m packages.subtitler.cli "
+    "enqueue <opus> [task] | run <opus> [task] | drain | build-tm [limit]\n"
+)
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     _setup_logging()
     if not argv:
-        sys.stderr.write(
-            "usage: python -m packages.subtitler.cli "
-            "enqueue <opus> [task] | run <opus> [task] | drain\n"
-        )
+        sys.stderr.write(_USAGE)
         sys.exit(2)
     cmd = argv[0]
     if cmd == "drain":
         cmd_drain()
+        return
+    if cmd == "build-tm":
+        limit = int(argv[1]) if len(argv) >= 2 else None
+        cmd_build_tm(limit)
         return
     if cmd in ("enqueue", "run") and len(argv) >= 2:
         opus = argv[1]
         task = argv[2] if len(argv) >= 3 else "generate"
         (cmd_enqueue if cmd == "enqueue" else cmd_run)(opus, task)
         return
-    sys.stderr.write(
-        "usage: python -m packages.subtitler.cli "
-        "enqueue <opus> [task] | run <opus> [task] | drain\n"
-    )
+    sys.stderr.write(_USAGE)
     sys.exit(2)
 
 

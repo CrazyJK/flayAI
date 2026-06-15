@@ -25,6 +25,9 @@ _DEFAULTS: dict[str, Any] = {
     "out_suffix": "",                 # ""→<stem>.srt, "ko"→<stem>.ko.srt (기존 159개 관례=평범한 .srt)
     "backup_existing": True,          # 출력 위치에 기존 파일이 있으면 <stem>.orig.srt 로 1회 백업
     "skip_if_exists": True,           # generate: 기존 자막 있으면 건너뜀(사람 팬자막 보호)
+    # --- 번역메모리(TM, phase 2) ---
+    "tm_min_overlap": 0.2,            # KO 큐가 JP 발화로 이 비율 이상 덮여야 정렬 쌍 후보
+    "tm_min_sim": 0.50,               # JP↔KO 교차언어 코사인(bge-m3) 이 미만이면 오정렬로 탈락
 }
 
 
