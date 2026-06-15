@@ -31,6 +31,8 @@ _DEFAULTS: dict[str, Any] = {
     # --- 번역메모리(TM, phase 2) ---
     "tm_min_overlap": 0.2,            # KO 큐가 JP 발화로 이 비율 이상 덮여야 정렬 쌍 후보
     "tm_min_sim": 0.50,               # JP↔KO 교차언어 코사인(bge-m3) 이 미만이면 오정렬로 탈락
+    # --- 싱크 수정(resync, phase 3) ---
+    "resync_floor": 0.35,             # KO↔JP 의미 매칭 최소 코사인(미만이면 그 큐는 미매칭→보간)
 }
 
 

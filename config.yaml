@@ -172,6 +172,8 @@ subtitle:
   # 번역메모리(TM, phase 2) — 기존 팬자막으로 JP↔KO 코퍼스 구축
   tm_min_overlap:  0.2               # KO 큐가 JP 발화로 이 비율 이상 덮여야 정렬 후보
   tm_min_sim:      0.50              # JP↔KO 교차언어 코사인(bge-m3) 미만이면 오정렬로 탈락
+  # 싱크 수정(resync, phase 3)
+  resync_floor:    0.35              # KO↔JP 의미 매칭 최소 코사인(미만이면 미매칭→앵커 보간)
 
 logging:
   log_dir:        "logs"

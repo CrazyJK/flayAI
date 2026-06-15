@@ -285,3 +285,28 @@ def test_chrf():
     assert evaluate.chrf("비슷한 문장입니다", "비슷한 문장입니다") > evaluate.chrf(
         "완전히 다른 내용", "비슷한 문장입니다"
     )
+
+
+# --- 싱크 수정 정렬(phase 3) --------------------------------------
+
+
+def test_align_semantic_identity():
+    ko = [[1.0, 0.0], [0.0, 1.0]]
+    jp = [[1.0, 0.0], [0.0, 1.0]]
+    assert align.align_semantic(ko, jp, floor=0.5) == [(0, 0), (1, 1)]
+
+
+def test_align_semantic_skips_extra_jp():
+    """KO 와 안 맞는 JP 세그먼트는 건너뛴다(순서 보존)."""
+    ko = [[1.0, 0.0], [0.0, 1.0]]
+    jp = [[1.0, 0.0], [0.7, 0.7], [0.0, 1.0]]  # 가운데는 양쪽과 0.71 — 최적은 0→0, 1→2
+    assert align.align_semantic(ko, jp, floor=0.6) == [(0, 0), (1, 2)]
+
+
+def test_retime_anchor_and_interpolate():
+    cues = [Cue(1, 100.0, 101.0, "a"), Cue(2, 101.0, 102.0, "b"), Cue(3, 102.0, 103.0, "c")]
+    jp = [{"start": 0.0, "end": 1.0, "text": "A"}, {"start": 5.0, "end": 6.0, "text": "C"}]
+    out = align.retime(cues, jp, [(0, 0), (2, 1)])  # b(idx1)는 미매칭 → 보간
+    starts = [round(c.start, 2) for c in out]
+    assert starts == [0.0, 2.5, 5.0]              # 앵커 0·5, 가운데 보간 2.5
+    assert abs((out[0].end - out[0].start) - 1.0) < 1e-6  # 읽기 길이 보존

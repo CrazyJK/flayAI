@@ -90,6 +90,117 @@ def _cosine(a: Any, b: Any) -> float:
     return float(a.dot(b) / (na * nb))
 
 
+def align_semantic(
+    ko_vecs: Any,
+    jp_vecs: Any,
+    *,
+    floor: float = 0.35,
+) -> list[tuple[int, int]]:
+    """KO 큐 ↔ JP 세그먼트 단조 정렬(의미 기반 DP). 반환: [(ko_idx, jp_idx)] 매칭.
+
+    드리프트된 자막은 시간이 틀렸으므로 시간이 아니라 bge-m3 교차언어 유사도로 정렬한다.
+    Needleman-Wunsch 류: 대각=매칭(유사도>=floor), 위/왼=한쪽 건너뜀(무료). 순서 보존.
+    """
+    from array import array
+
+    import numpy as np
+
+    A = np.asarray(ko_vecs, dtype="float32")
+    B = np.asarray(jp_vecs, dtype="float32")
+    if A.ndim != 2 or B.ndim != 2 or len(A) == 0 or len(B) == 0:
+        return []
+    A = A / (np.linalg.norm(A, axis=1, keepdims=True) + 1e-8)
+    B = B / (np.linalg.norm(B, axis=1, keepdims=True) + 1e-8)
+    srows = (A @ B.T).tolist()  # K×J 유사도(행 단위 리스트 — 스칼라 접근 빠름)
+    k = len(srows)
+    j_n = len(srows[0])
+    neg = -1e9
+
+    tb = [array("b", bytes(j_n + 1)) for _ in range(k + 1)]  # 0=diag 1=up(skip ko) 2=left(skip jp)
+    prev = array("d", bytes(8 * (j_n + 1)))  # f[i-1], 가장자리 0
+    for i in range(1, k + 1):
+        srow = srows[i - 1]
+        cur = array("d", bytes(8 * (j_n + 1)))
+        tbi = tb[i]
+        for j in range(1, j_n + 1):
+            s = srow[j - 1]
+            diag = (prev[j - 1] + s) if s >= floor else neg
+            up = prev[j]
+            left = cur[j - 1]
+            best, t = diag, 0
+            if up > best:
+                best, t = up, 1
+            if left > best:
+                best, t = left, 2
+            cur[j] = best
+            tbi[j] = t
+        prev = cur
+
+    i, j = k, j_n
+    matches: list[tuple[int, int]] = []
+    while i > 0 and j > 0:
+        t = tb[i][j]
+        if t == 0:
+            matches.append((i - 1, j - 1))
+            i -= 1
+            j -= 1
+        elif t == 1:
+            i -= 1
+        else:
+            j -= 1
+    matches.reverse()
+    return matches
+
+
+def _interp_start(
+    old_start: float,
+    cue_idx: int,
+    ko_cues: Sequence[Cue],
+    anchor: dict[int, tuple[float, float]],
+    anchor_idx: list[int],
+) -> float:
+    """매칭 안 된 큐의 새 시작시각을 인접 앵커 사이 선형 보간으로 추정."""
+    import bisect
+
+    pos = bisect.bisect_left(anchor_idx, cue_idx)
+    lo = anchor_idx[pos - 1] if pos > 0 else None
+    hi = anchor_idx[pos] if pos < len(anchor_idx) else None
+    if lo is not None and hi is not None:
+        o_lo, o_hi = ko_cues[lo].start, ko_cues[hi].start
+        n_lo, n_hi = anchor[lo][0], anchor[hi][0]
+        if o_hi > o_lo:
+            frac = min(1.0, max(0.0, (old_start - o_lo) / (o_hi - o_lo)))
+            return n_lo + frac * (n_hi - n_lo)
+        return n_lo
+    if lo is not None:  # 마지막 앵커 이후 — 그 앵커의 오프셋 적용
+        return old_start + (anchor[lo][0] - ko_cues[lo].start)
+    if hi is not None:  # 첫 앵커 이전
+        return old_start + (anchor[hi][0] - ko_cues[hi].start)
+    return old_start
+
+
+def retime(
+    ko_cues: Sequence[Cue],
+    jp_segments: Sequence[dict[str, Any]],
+    matches: list[tuple[int, int]],
+) -> list[Cue]:
+    """매칭으로 KO 큐를 재타이밍. 텍스트·읽기길이는 보존, 시작시각만 오디오에 맞춤."""
+    anchor: dict[int, tuple[float, float]] = {}
+    for ki, ji in matches:
+        anchor[ki] = (jp_segments[ji]["start"], jp_segments[ji]["end"])
+    if not anchor:
+        return list(ko_cues)  # 매칭 0 — 원본 유지(고치지 못함)
+    anchor_idx = sorted(anchor)
+    out: list[Cue] = []
+    for i, c in enumerate(ko_cues):
+        dur = max(0.7, c.end - c.start)  # 원래 읽기 길이 보존(최소 0.7s)
+        ns = anchor[i][0] if i in anchor else _interp_start(c.start, i, ko_cues, anchor, anchor_idx)
+        out.append(Cue(i + 1, ns, ns + dur, c.text))
+    # 단조성 보정: 시작시각이 역전되면 직전 끝으로 밀어 정렬
+    out.sort(key=lambda x: x.start)
+    return out
+
+
 def filter_by_similarity(
     pairs: list[Pair],
     embed_fn: Callable[[list[str]], Any],

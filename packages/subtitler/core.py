@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from . import db, whisper_stt
-from .srt_io import Cue, write_srt
+from .srt_io import Cue, parse_srt, write_srt
 from .translate import translate_segments
 
 log = logging.getLogger(__name__)
@@ -135,8 +135,40 @@ def resync(
     cfg: dict[str, Any],
     report: Report = _noop,
 ) -> dict[str, Any]:
-    """기존 자막 싱크 수정 — Whisper 발화구간에 KO 대사 재정렬(phase 3)."""
-    raise NotImplementedError("resync(싱크 수정)는 phase 3")
+    """기존 자막 싱크 수정 — KO 대사를 Whisper 발화구간에 의미 정렬 후 재타이밍.
+
+    텍스트(사람 번역)는 보존하고 타이밍만 교정한다. 원본은 <stem>.orig.srt 로 백업.
+    """
+    if existing_srt is None:
+        return {"status": "failed", "error": "기존 자막 없음 — resync 대상 아님"}
+    from . import align, tm
+
+    report("transcribe", 0)
+    _lang, segs = transcribe_cached(conn, opus, video_path, cfg, report)
+    if not segs:
+        return {"status": "failed", "error": "발화 세그먼트 없음(무음/VAD)"}
+    cues = parse_srt(existing_srt)
+    if not cues:
+        return {"status": "failed", "error": "기존 자막 파싱 결과 없음"}
+
+    report("align", 60)
+    ko_vecs = tm.bge_embed([c.text for c in cues])
+    jp_vecs = tm.bge_embed([s["text"] for s in segs])
+    matches = align.align_semantic(ko_vecs, jp_vecs, floor=float(cfg.get("resync_floor", 0.35)))
+    new_cues = align.retime(cues, segs, matches)
+
+    report("write", 95)
+    bak = existing_srt.with_name(f"{video_path.stem}.orig.srt")
+    if cfg.get("backup_existing", True) and not bak.exists():
+        shutil.copy2(existing_srt, bak)
+    write_srt(existing_srt, new_cues)
+    report("write", 100)
+
+    rate = len(matches) / max(1, len(cues))
+    note = f"{len(matches)}/{len(cues)} 큐 오디오 매칭({rate:.0%})"
+    if rate < 0.3:
+        note += " — 매칭률 낮음(과대 드리프트/음성인식 부정확 가능, 확인 권장)"
+    return {"status": "done", "result_path": str(existing_srt), "matched": len(matches), "note": note}
 
 
 def process(
@@ -151,6 +183,11 @@ def process(
 
     if task == "generate":
         return generate(conn, opus, video_path, existing_srt, cfg, report)
-    if task in ("resync", "both"):
-        return {"status": "failed", "error": "resync/both 미구현 — phase 3"}
+    if task == "resync":
+        return resync(conn, opus, video_path, existing_srt, cfg, report)
+    if task == "both":
+        # 기존 자막 있으면 싱크 수정, 없으면 신규 생성.
+        if existing_srt is not None:
+            return resync(conn, opus, video_path, existing_srt, cfg, report)
+        return generate(conn, opus, video_path, existing_srt, cfg, report)
     return {"status": "failed", "error": f"알 수 없는 task: {task}"}
