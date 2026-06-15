@@ -245,7 +245,7 @@ function QdrantSection({ data }: { data: QdrantData }) {
   }
   return (
     <SectionCard title="Qdrant 벡터 DB" badge={`${data.collections.length}개 컬렉션`} available>
-      <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
         {data.collections.map((col) => (
           <div
             key={col.name}
@@ -254,7 +254,7 @@ function QdrantSection({ data }: { data: QdrantData }) {
             {col.error ? (
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono text-base text-foreground">{col.name}</p>
+                  <p className="font-mono text-base text-foreground truncate">{col.name}</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     {QDRANT_DESC[col.name] ?? "벡터 컬렉션"}
                   </p>
@@ -264,7 +264,7 @@ function QdrantSection({ data }: { data: QdrantData }) {
             ) : (
               <div className="flex items-center gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-mono text-base text-foreground">{col.name}</p>
+                  <p className="font-mono text-base text-foreground truncate">{col.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {QDRANT_DESC[col.name] ?? "벡터 컬렉션"}
                   </p>
