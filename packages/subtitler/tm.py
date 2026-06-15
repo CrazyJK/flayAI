@@ -175,6 +175,85 @@ def build_all(
     return {"total": len(items), "built": len(stats), "pairs": total_pairs, "stats": stats}
 
 
+# --- Qdrant 검색(phase 2 ② few-shot) -----------------------------
+
+TM_COLLECTION = "subtitle_tm"
+TM_DIM = 1024  # bge-m3
+
+
+def ensure_tm_collection(qc) -> None:
+    from qdrant_client.http import models as qm
+
+    names = {c.name for c in qc.get_collections().collections}
+    if TM_COLLECTION in names:
+        return
+    qc.create_collection(
+        TM_COLLECTION,
+        vectors_config=qm.VectorParams(size=TM_DIM, distance=qm.Distance.COSINE),
+    )
+    try:
+        qc.create_payload_index(TM_COLLECTION, "opus", field_schema=qm.PayloadSchemaType.KEYWORD)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _vec_list(v: Any) -> list[float]:
+    return v.tolist() if hasattr(v, "tolist") else list(v)
+
+
+def embed_tm(conn: sqlite3.Connection, qc=None, *, opus: str | None = None) -> int:
+    """subtitle_tm 의 JP 를 bge-m3 로 임베딩해 Qdrant 에 upsert(검색용). 반환: 점 수."""
+    from qdrant_client.http import models as qm
+
+    if qc is None:
+        from packages.indexer.embed_text import _qdrant
+
+        qc = _qdrant()
+    ensure_tm_collection(qc)
+    if opus:
+        rows = conn.execute(
+            "SELECT id, opus, jp, ko FROM subtitle_tm WHERE opus = ?", (opus,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT id, opus, jp, ko FROM subtitle_tm").fetchall()
+    if not rows:
+        return 0
+    vecs = bge_embed([r["jp"] for r in rows])
+    points = [
+        qm.PointStruct(
+            id=int(r["id"]),
+            vector=_vec_list(v),
+            payload={"opus": r["opus"], "jp": r["jp"], "ko": r["ko"]},
+        )
+        for r, v in zip(rows, vecs)
+    ]
+    for i in range(0, len(points), 256):
+        qc.upsert(TM_COLLECTION, points[i : i + 256])
+    return len(points)
+
+
+def retrieve_examples(qc, query_lines: list[str], k: int, per_line: int = 3) -> list[tuple[str, str]]:
+    """청크의 각 JP 줄과 유사한 (jp, ko) 예시를 모아 중복 제거 후 최대 k개."""
+    if qc is None or not query_lines:
+        return []
+    qvecs = bge_embed(query_lines)
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, float, str]] = []  # (jp, score, ko) — score 로 정렬
+    for v in qvecs:
+        try:
+            hits = qc.search(TM_COLLECTION, query_vector=_vec_list(v), limit=per_line)
+        except Exception:  # noqa: BLE001
+            continue
+        for h in hits:
+            jp = (h.payload or {}).get("jp")
+            ko = (h.payload or {}).get("ko")
+            if jp and ko and (jp, ko) not in seen:
+                seen.add((jp, ko))
+                out.append((jp, float(h.score), ko))
+    out.sort(key=lambda t: t[1], reverse=True)
+    return [(jp, ko) for jp, _s, ko in out[:k]]
+
+
 def sample(conn: sqlite3.Connection, opus: str | None = None, limit: int = 30) -> list[dict[str, Any]]:
     if opus:
         rows = conn.execute(

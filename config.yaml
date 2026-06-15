@@ -162,7 +162,10 @@ subtitle:
   language:        "ja"              # 원음 언어(일본어 고정 — 번역도 JP 전제)
   vad_filter:      true              # 무음/비발화 구간 제거(환각 억제) — 필수
   beam_size:       5
-  translator:      "nllb"            # phase1=nllb(기존 재사용). phase2=llm(번역메모리 few-shot)
+  translator:      "nllb"            # nllb(빠름) | llm(품질·phase2, 번역메모리 few-shot)
+  translator_llm:  "huihui_ai/qwen2.5-abliterate:14b"  # llm 모드 번역 모델(무검열, 야간 12GB 풀가용)
+  llm_fewshot_k:   6                 # 청크당 주입할 번역메모리 예시 수
+  llm_chunk_size:  12                # 한 번에 번역할 세그먼트 수(문맥·속도 균형)
   out_suffix:      ""                # ""=<stem>.srt (기존 159개 관례), "ko"=<stem>.ko.srt
   backup_existing: true              # 출력 위치에 기존 파일 있으면 <stem>.orig.srt 로 1회 백업
   skip_if_exists:  true              # generate: 기존 자막 있으면 건너뜀(사람 팬자막 보호)

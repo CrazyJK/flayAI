@@ -20,7 +20,10 @@ _DEFAULTS: dict[str, Any] = {
     "vad_filter": True,               # 무음/비발화 구간 제거(환각 억제) — 필수
     "beam_size": 5,
     # --- 번역 ---
-    "translator": "nllb",             # phase1=nllb(기존 인덱서 재사용). phase2=llm(TM few-shot)
+    "translator": "nllb",             # nllb(빠름) | llm(품질·phase2, TM few-shot)
+    "translator_llm": "huihui_ai/qwen2.5-abliterate:14b",  # llm 모드 번역 모델(무검열, 야간 12GB)
+    "llm_fewshot_k": 6,               # 청크당 주입할 번역메모리 예시 수
+    "llm_chunk_size": 12,             # 한 번에 번역할 세그먼트 수(문맥·속도 균형)
     # --- 출력 ---
     "out_suffix": "",                 # ""→<stem>.srt, "ko"→<stem>.ko.srt (기존 159개 관례=평범한 .srt)
     "backup_existing": True,          # 출력 위치에 기존 파일이 있으면 <stem>.orig.srt 로 1회 백업

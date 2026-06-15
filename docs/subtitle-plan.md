@@ -41,7 +41,7 @@
 | 페이즈 | 내용 | 상태 |
 |---|---|---|
 | **1. 생성 + 큐 + 야간** | opus → 전사 → 번역(NLLB 재사용) → `.srt`. 신청 API + drain CLI + 야간 스크립트 | ✅ 구현 |
-| **2. 번역 품질 보정** | ① JP↔KO 번역메모리 구축 ✅ → ② LLM+few-shot 번역 → ③ 평가셋 대조 | 🔶 ① 구현 |
+| **2. 번역 품질 보정** | ① JP↔KO 번역메모리 ✅ → ② LLM+few-shot 번역 ✅ → ③ 평가셋 대조 | 🔶 ①② 구현 |
 | **3. 싱크 드리프트 수정** | 137개 드리프트 자막을 Whisper 발화구간에 DTW 재정렬 → 타이밍 교정 | ⬜ 예정 |
 
 > 실측: 팬자막 보유 instance = **137편**(온라인+DB 기준). 1편(ABW-061) 시범 구축: JP 1085세그먼트 ×
@@ -116,9 +116,13 @@ curl -X POST https://ai.kamoru.jk:8000/api/subtitle/requests \
 - **phase 2 ① 번역메모리 (구현됨)**: `align.py`(시간정렬 + bge-m3 교차언어 유사도 필터) ·
   `tm.py`(전사→KO파싱→정렬→필터→`subtitle_tm`/`subtitle_corpus`) · CLI `build-tm [limit]`.
   증분(자막 mtime). 전체 137편 구축은 야간 1회(`build-tm`).
-- **phase 2 ② LLM 번역 (다음)**: `translate.py mode="llm"` — `subtitle_tm` 을 bge-m3 로 임베딩(Qdrant)
-  → 번역할 JP 와 유사한 예시 K개 검색 → 무검열 LLM 프롬프트에 few-shot+문맥+용어집 주입. 세그먼트
-  10~20개씩 묶어 번역(문맥·속도). 노골적 프롬프트/예시는 **gitignore 오버라이드**로 분리.
+- **phase 2 ② LLM 번역 (구현됨)**: `translate.py mode="llm"` — `subtitle_tm` 을 bge-m3 로 임베딩
+  (Qdrant `subtitle_tm` 컬렉션) → 번역할 JP 와 유사 예시 K개 검색 → 무검열 LLM(`translator_llm`,
+  기본 `huihui_ai/qwen2.5-abliterate:14b`) 에 few-shot+용어집 주입, 세그먼트 12개씩 묶어 번역.
+  깨진 줄(`_looks_bad`: 라틴 누출·한자 다수)은 NLLB 로 폴백. 프롬프트는 `prompts.py`(점잖은 기본값)
+  + `subtitle_prompts.yaml`(gitignore 오버라이드, 예시 `subtitle_prompts.example.yaml`).
+  실측(FSDSS-951 15세그먼트): NLLB 의 환각·오역·쓰레기를 LLM 이 교정 — 문맥·말투 대폭 개선 확인.
+  `translator: "llm"` 로 켠다(기본은 아직 nllb — ③ 평가 후 전환 권장).
 - **phase 2 ③ 평가 (다음)**: 일부 편을 TM 에서 제외(leakage 방지) → NLLB vs LLM+TM 을 사람 자막과
   chrF/LLM-judge 로 대조 → 모델·few-shot 수·청크 크기 결정.
 - **phase 3 (싱크 수정)**: `core.resync()` — Whisper 발화구간을 앵커로 기존 KO 큐를 DTW 단조 정렬 후

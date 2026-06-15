@@ -107,9 +107,7 @@ def generate(
     def tcb(done: int, total: int) -> None:
         report("translate", int(100 * done / total) if total else 0)
 
-    kos = translate_segments(
-        conn, [s["text"] for s in segments], mode=cfg["translator"], progress_cb=tcb
-    )
+    kos = translate_segments(conn, [s["text"] for s in segments], cfg=cfg, progress_cb=tcb)
     cues = [
         Cue(0, s["start"], s["end"], ko.strip())
         for s, ko in zip(segments, kos)

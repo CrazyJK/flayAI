@@ -117,9 +117,18 @@ def cmd_build_tm(limit: int | None) -> None:
 
         res = tm.build_all(conn, cfg, limit=limit, report=report)
         sys.stderr.write("\n")
+        # 새로 구축한 편을 Qdrant 에 임베딩(검색 few-shot 용)
+        embedded = 0
+        for s in res.get("stats", []):
+            if s.get("error") or not s.get("kept"):
+                continue
+            try:
+                embedded += tm.embed_tm(conn, opus=s["opus"])
+            except Exception as e:  # noqa: BLE001 — Qdrant 미가용이어도 TM 테이블은 남음
+                log.warning("TM 임베딩 스킵 opus=%s: %s", s["opus"], e)
         log.info(
-            "build-tm done: total=%d built=%d pairs=%d",
-            res["total"], res["built"], res["pairs"],
+            "build-tm done: total=%d built=%d pairs=%d embedded=%d",
+            res["total"], res["built"], res["pairs"], embedded,
         )
     finally:
         whisper_stt.unload()

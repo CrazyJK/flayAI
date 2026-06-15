@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from packages.indexer.db import connect, init_schema
-from packages.subtitler import align, core, srt_io
+from packages.subtitler import align, core, srt_io, translate
 from packages.subtitler import db as Q
 from packages.subtitler.srt_io import Cue
 
@@ -246,3 +246,30 @@ def test_filter_by_similarity_drops_length_outlier():
 
     kept, dropped = align.filter_by_similarity([p], embed, min_sim=0.0)
     assert len(kept) == 0 and len(dropped) == 1  # 길이비 0.02 < 0.15 → 탈락
+
+
+# --- LLM 번역 헬퍼(phase 2 ②) -------------------------------------
+
+
+def test_parse_numbered_formats():
+    assert translate.parse_numbered("1. 안녕\n2. 잘가", 2) == ["안녕", "잘가"]
+    assert translate.parse_numbered("1) 가\n2) 나\n3: 다", 3) == ["가", "나", "다"]
+
+
+def test_parse_numbered_partial_and_fail():
+    assert translate.parse_numbered("1. 가\n3. 다", 3) == ["가", "", "다"]  # 빠진 2번=빈칸
+    assert translate.parse_numbered("번호 없는 텍스트", 2) is None        # 폴백 신호
+
+
+def test_build_messages_structure():
+    msgs = translate.build_messages("SYS", [("JPex", "KOex")], [("用語", "용어")], ["あ", "い"])
+    assert msgs[0]["role"] == "system" and msgs[1]["role"] == "user"
+    assert "용어" in msgs[0]["content"] and "KOex" in msgs[0]["content"]
+    assert "1. あ" in msgs[1]["content"] and "2. い" in msgs[1]["content"]
+
+
+def test_looks_bad_guard():
+    assert translate._looks_bad("어싸łoADING") is True   # 라틴 문자 누출
+    assert translate._looks_bad("") is True               # 빈 줄
+    assert translate._looks_bad("근육이 엄청 커졌네") is False
+    assert translate._looks_bad("OK 좋아") is False        # 짧은 라틴(2자)은 통과

@@ -165,6 +165,9 @@ yolo*.pt
 
 # 일기 프롬프트(개인 취향·수위 조정) — git 에 올리지 않음. 예시는 diary_prompts.example.yaml
 diary_prompts.yaml
+
+# 자막 번역 프롬프트(말투·용어 조정) — git 에 올리지 않음. 예시는 subtitle_prompts.example.yaml
+subtitle_prompts.yaml
 *.sqlite
 *.sqlite3
 *.db
