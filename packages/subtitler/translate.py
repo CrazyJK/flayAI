@@ -172,9 +172,14 @@ def _translate_llm(
 
     n = len(texts)
     out: list[str | None] = [None] * n
+    exclude_opus = cfg.get("exclude_opus")  # 평가 시 자기 opus 제외(leakage 방지)
     for start in range(0, n, chunk):
         block = texts[start : start + chunk]
-        examples = tm.retrieve_examples(qc, block, k) if qc is not None else []
+        examples = (
+            tm.retrieve_examples(qc, block, k, exclude_opus=exclude_opus)
+            if qc is not None
+            else []
+        )
         resp = _ollama_chat(model, build_messages(system, examples, glossary, block))
         parsed = parse_numbered(resp, len(block))
         for i in range(len(block)):

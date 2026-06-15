@@ -41,7 +41,7 @@
 | 페이즈 | 내용 | 상태 |
 |---|---|---|
 | **1. 생성 + 큐 + 야간** | opus → 전사 → 번역(NLLB 재사용) → `.srt`. 신청 API + drain CLI + 야간 스크립트 | ✅ 구현 |
-| **2. 번역 품질 보정** | ① JP↔KO 번역메모리 ✅ → ② LLM+few-shot 번역 ✅ → ③ 평가셋 대조 | 🔶 ①② 구현 |
+| **2. 번역 품질 보정** | ① JP↔KO 번역메모리 ✅ → ② LLM+few-shot 번역 ✅ → ③ 평가 하네스 ✅ | 🔶 코퍼스 후 본실행 |
 | **3. 싱크 드리프트 수정** | 137개 드리프트 자막을 Whisper 발화구간에 DTW 재정렬 → 타이밍 교정 | ⬜ 예정 |
 
 > 실측: 팬자막 보유 instance = **137편**(온라인+DB 기준). 1편(ABW-061) 시범 구축: JP 1085세그먼트 ×
@@ -123,8 +123,12 @@ curl -X POST https://ai.kamoru.jk:8000/api/subtitle/requests \
   + `subtitle_prompts.yaml`(gitignore 오버라이드, 예시 `subtitle_prompts.example.yaml`).
   실측(FSDSS-951 15세그먼트): NLLB 의 환각·오역·쓰레기를 LLM 이 교정 — 문맥·말투 대폭 개선 확인.
   `translator: "llm"` 로 켠다(기본은 아직 nllb — ③ 평가 후 전환 권장).
-- **phase 2 ③ 평가 (다음)**: 일부 편을 TM 에서 제외(leakage 방지) → NLLB vs LLM+TM 을 사람 자막과
-  chrF/LLM-judge 로 대조 → 모델·few-shot 수·청크 크기 결정.
+- **phase 2 ③ 평가 (구현됨)**: `evaluate.py` — subtitle_tm 의 (jp, 사람 ko)가 정답셋. jp 를
+  NLLB·LLM 으로 번역해 chrF + LLM-judge(둘 중 나은 쪽) 비교. LLM 은 해당 opus 를 retrieval 에서
+  제외(leakage). CLI `eval [opus] [n]`.
+  - **발견**: 팬자막이 의역체라 **chrF 는 박한 지표**(정확한 번역도 0.07대) — **LLM-judge 가 신뢰
+    지표**다. 스모크(ABW-061, few-shot 없이): chrF +0.015 에 그치나 judge 는 **LLM 5승/NLLB 0승/무1**.
+  - 본실행: 코퍼스 전체 구축 후 held-out 여러 편에 `eval` → judge 승률로 모델·K·청크 확정 → `translator: "llm"` 전환.
 - **phase 3 (싱크 수정)**: `core.resync()` — Whisper 발화구간을 앵커로 기존 KO 큐를 DTW 단조 정렬 후
   재타이밍. 사람 번역 텍스트는 보존, **타이밍만** 교정(챕터 경계 계단 드리프트 대응). 원본은 백업.
 - 관리자 UI: 신청 큐/진행/이력 패널(`/stabilize` 페이지 패턴 재사용).

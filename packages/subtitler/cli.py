@@ -135,9 +135,37 @@ def cmd_build_tm(limit: int | None) -> None:
         conn.close()
 
 
+def cmd_eval(opus: str | None, n: int | None) -> None:
+    """phase 2 ③: NLLB vs LLM+TM 를 사람 자막과 chrF 비교."""
+    from . import evaluate
+
+    conn = _conn()
+    try:
+        if opus:
+            res = evaluate.evaluate_opus(conn, opus, n=n, judge_n=min(n or 12, 20))
+            sys.stderr.write(
+                f"{opus}: n={res.get('n')} chrf nllb={res.get('chrf_nllb')} "
+                f"llm={res.get('chrf_llm')} delta={res.get('delta')} "
+                f"judge(LLM 우세/NLLB 우세/무승부)={res.get('judge')}\n"
+            )
+            for s in res.get("samples", [])[:6]:
+                sys.stderr.write(
+                    f"  JP  {s['jp']}\n  REF {s['ref']}\n  NLLB {s['nllb']}\n  LLM {s['llm']}\n\n"
+                )
+        else:
+            res = evaluate.evaluate(conn, n_per=n or 40)
+            agg = res["aggregate"]
+            sys.stderr.write(
+                f"집계 {agg.get('opuses')}편: chrf nllb={agg.get('chrf_nllb')} "
+                f"llm={agg.get('chrf_llm')} delta={agg.get('delta')}\n"
+            )
+    finally:
+        conn.close()
+
+
 _USAGE = (
     "usage: python -m packages.subtitler.cli "
-    "enqueue <opus> [task] | run <opus> [task] | drain | build-tm [limit]\n"
+    "enqueue <opus> [task] | run <opus> [task] | drain | build-tm [limit] | eval [opus] [n]\n"
 )
 
 
@@ -154,6 +182,14 @@ def main(argv: list[str] | None = None) -> None:
     if cmd == "build-tm":
         limit = int(argv[1]) if len(argv) >= 2 else None
         cmd_build_tm(limit)
+        return
+    if cmd == "eval":
+        a1 = argv[1] if len(argv) >= 2 else None
+        a2 = argv[2] if len(argv) >= 3 else None
+        if a1 and a1.isdigit():
+            cmd_eval(None, int(a1))
+        else:
+            cmd_eval(a1, int(a2) if a2 else None)
         return
     if cmd in ("enqueue", "run") and len(argv) >= 2:
         opus = argv[1]

@@ -232,16 +232,30 @@ def embed_tm(conn: sqlite3.Connection, qc=None, *, opus: str | None = None) -> i
     return len(points)
 
 
-def retrieve_examples(qc, query_lines: list[str], k: int, per_line: int = 3) -> list[tuple[str, str]]:
-    """청크의 각 JP 줄과 유사한 (jp, ko) 예시를 모아 중복 제거 후 최대 k개."""
+def retrieve_examples(
+    qc, query_lines: list[str], k: int, per_line: int = 3, exclude_opus: str | None = None
+) -> list[tuple[str, str]]:
+    """청크의 각 JP 줄과 유사한 (jp, ko) 예시를 모아 중복 제거 후 최대 k개.
+
+    exclude_opus 면 그 opus 의 쌍은 검색에서 제외(평가 시 leakage 방지).
+    """
     if qc is None or not query_lines:
         return []
+    flt = None
+    if exclude_opus:
+        from qdrant_client.http import models as qm
+
+        flt = qm.Filter(
+            must_not=[qm.FieldCondition(key="opus", match=qm.MatchValue(value=exclude_opus))]
+        )
     qvecs = bge_embed(query_lines)
     seen: set[tuple[str, str]] = set()
     out: list[tuple[str, float, str]] = []  # (jp, score, ko) — score 로 정렬
     for v in qvecs:
         try:
-            hits = qc.search(TM_COLLECTION, query_vector=_vec_list(v), limit=per_line)
+            hits = qc.search(
+                TM_COLLECTION, query_vector=_vec_list(v), limit=per_line, query_filter=flt
+            )
         except Exception:  # noqa: BLE001
             continue
         for h in hits:

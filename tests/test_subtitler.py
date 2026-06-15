@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from packages.indexer.db import connect, init_schema
-from packages.subtitler import align, core, srt_io, translate
+from packages.subtitler import align, core, evaluate, srt_io, translate
 from packages.subtitler import db as Q
 from packages.subtitler.srt_io import Cue
 
@@ -273,3 +273,15 @@ def test_looks_bad_guard():
     assert translate._looks_bad("") is True               # 빈 줄
     assert translate._looks_bad("근육이 엄청 커졌네") is False
     assert translate._looks_bad("OK 좋아") is False        # 짧은 라틴(2자)은 통과
+
+
+# --- 평가 chrF(phase 2 ③) -----------------------------------------
+
+
+def test_chrf():
+    assert evaluate.chrf("안녕하세요", "안녕하세요") > 0.99    # 동일 → ~1
+    assert evaluate.chrf("", "무언가") == 0.0
+    # 같은 문장이 다른 문장보다 점수 높다
+    assert evaluate.chrf("비슷한 문장입니다", "비슷한 문장입니다") > evaluate.chrf(
+        "완전히 다른 내용", "비슷한 문장입니다"
+    )
