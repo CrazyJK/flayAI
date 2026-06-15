@@ -105,6 +105,10 @@ def _load_model() -> None:
     _TOKENIZER = AutoTokenizer.from_pretrained(name, src_lang="jpn_Jpan")
     _MODEL = AutoModelForSeq2SeqLM.from_pretrained(name).to(_DEVICE)
     _MODEL.eval()
+    # 길이는 generate 의 max_new_tokens 로만 제어. 모델 기본 max_length(=200)를 비워
+    # "둘 다 설정됨" 경고가 generate 호출마다(=세그먼트마다) 찍히는 로그 스팸을 없앤다.
+    if _MODEL.generation_config is not None:
+        _MODEL.generation_config.max_length = None
 
 
 def _translate_batch(texts: list[str], target: str = "ko") -> list[str]:
