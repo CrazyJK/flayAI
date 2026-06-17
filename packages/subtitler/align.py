@@ -204,13 +204,14 @@ def retime(
         ns = anchor[i][0] if i in anchor else _interp_start(c.start, i, ko_cues, anchor, anchor_idx)
         out.append(Cue(i + 1, ns, ns + dur, c.text))
     out.sort(key=lambda x: x.start)
-    # 끝시각 클램프: 다음 큐 시작 직전까지(겹침 방지). 밀집 구간은 최소 표시시간 보장.
+    # 끝시각 클램프: 항상 다음 큐 시작 직전까지(겹침 0 보장). 여유 있으면 원래 길이만큼,
+    # 밀집 구간(저매칭 보간)은 짧게 깜빡 — 화면 가득 쌓이는 것보다 순차 표시가 낫다.
     for i, c in enumerate(out):
         end = min(c.end, c.start + max_dur)
         if i + 1 < len(out):
             end = min(end, out[i + 1].start - gap)
-        if end < c.start + min_dur:
-            end = c.start + min_dur
+        if end <= c.start:
+            end = c.start + 0.05  # 최소 양수 길이(겹침보다 짧은 표시 우선)
         c.end = end
         c.index = i + 1
     return out
