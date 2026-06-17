@@ -183,8 +183,15 @@ def retime(
     ko_cues: Sequence[Cue],
     jp_segments: Sequence[dict[str, Any]],
     matches: list[tuple[int, int]],
+    *,
+    gap: float = 0.04,
+    min_dur: float = 0.7,
+    max_dur: float = 7.0,
 ) -> list[Cue]:
-    """매칭으로 KO 큐를 재타이밍. 텍스트·읽기길이는 보존, 시작시각만 오디오에 맞춤."""
+    """매칭으로 KO 큐를 재타이밍. 텍스트는 보존, 시작시각만 오디오에 맞춤.
+
+    끝시각은 다음 큐 시작 직전으로 클램프(겹침 방지) + 최소/최대 표시시간 보장.
+    """
     anchor: dict[int, tuple[float, float]] = {}
     for ki, ji in matches:
         anchor[ki] = (jp_segments[ji]["start"], jp_segments[ji]["end"])
@@ -193,11 +200,19 @@ def retime(
     anchor_idx = sorted(anchor)
     out: list[Cue] = []
     for i, c in enumerate(ko_cues):
-        dur = max(0.7, c.end - c.start)  # 원래 읽기 길이 보존(최소 0.7s)
+        dur = max(min_dur, c.end - c.start)  # 원래 읽기 길이 보존
         ns = anchor[i][0] if i in anchor else _interp_start(c.start, i, ko_cues, anchor, anchor_idx)
         out.append(Cue(i + 1, ns, ns + dur, c.text))
-    # 단조성 보정: 시작시각이 역전되면 직전 끝으로 밀어 정렬
     out.sort(key=lambda x: x.start)
+    # 끝시각 클램프: 다음 큐 시작 직전까지(겹침 방지). 밀집 구간은 최소 표시시간 보장.
+    for i, c in enumerate(out):
+        end = min(c.end, c.start + max_dur)
+        if i + 1 < len(out):
+            end = min(end, out[i + 1].start - gap)
+        if end < c.start + min_dur:
+            end = c.start + min_dur
+        c.end = end
+        c.index = i + 1
     return out
 
 

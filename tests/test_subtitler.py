@@ -310,3 +310,12 @@ def test_retime_anchor_and_interpolate():
     starts = [round(c.start, 2) for c in out]
     assert starts == [0.0, 2.5, 5.0]              # 앵커 0·5, 가운데 보간 2.5
     assert abs((out[0].end - out[0].start) - 1.0) < 1e-6  # 읽기 길이 보존
+
+
+def test_retime_clamps_overlap():
+    """원래 길이가 길어 다음 큐와 겹치면 끝을 다음 시작 앞으로 클램프."""
+    cues = [Cue(1, 0.0, 10.0, "a"), Cue(2, 1.0, 11.0, "b")]  # 둘 다 10초(겹침)
+    jp = [{"start": 0.0, "end": 1.0, "text": "A"}, {"start": 3.0, "end": 4.0, "text": "B"}]
+    out = align.retime(cues, jp, [(0, 0), (1, 1)])  # a→0s, b→3s
+    assert out[0].end <= out[1].start  # 겹침 없음
+    assert out[1].start == 3.0
