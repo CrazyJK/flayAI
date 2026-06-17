@@ -33,6 +33,7 @@ _DEFAULTS: dict[str, Any] = {
     "tm_min_sim": 0.50,               # JP↔KO 교차언어 코사인(bge-m3) 이 미만이면 오정렬로 탈락
     # --- 싱크 수정(resync, phase 3) ---
     "resync_floor": 0.35,             # KO↔JP 의미 매칭 최소 코사인(미만이면 그 큐는 미매칭→보간)
+    "resync_min_match": 0.30,         # 매칭률 이 미만이면 보간이 자막을 몰아 오히려 나빠짐 → 원본 복원
 }
 
 

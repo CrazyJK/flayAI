@@ -143,11 +143,18 @@ def resync(
         return {"status": "failed", "error": "기존 자막 없음 — resync 대상 아님"}
     from . import align, tm
 
+    # 소스는 항상 원본(<stem>.orig.srt) 우선 — 여러 번 resync 해도 타이밍이 누적 오염되지
+    # 않게(멱등). 최초 1회 원본 백업.
+    bak = existing_srt.with_name(f"{video_path.stem}.orig.srt")
+    if cfg.get("backup_existing", True) and not bak.exists():
+        shutil.copy2(existing_srt, bak)
+    source = bak if bak.exists() else existing_srt
+
     report("transcribe", 0)
     _lang, segs = transcribe_cached(conn, opus, video_path, cfg, report)
     if not segs:
         return {"status": "failed", "error": "발화 세그먼트 없음(무음/VAD)"}
-    cues = parse_srt(existing_srt)
+    cues = parse_srt(source)
     if not cues:
         return {"status": "failed", "error": "기존 자막 파싱 결과 없음"}
 
@@ -155,20 +162,30 @@ def resync(
     ko_vecs = tm.bge_embed([c.text for c in cues])
     jp_vecs = tm.bge_embed([s["text"] for s in segs])
     matches = align.align_semantic(ko_vecs, jp_vecs, floor=float(cfg.get("resync_floor", 0.35)))
-    new_cues = align.retime(cues, segs, matches)
+    rate = len(matches) / max(1, len(cues))
 
+    min_match = float(cfg.get("resync_min_match", 0.30))
+    if rate < min_match:
+        # 앵커 부족 → 보간이 자막을 좁은 구간에 몰아 오히려 나빠진다. 원본 타이밍 유지/복원.
+        if source != existing_srt:
+            shutil.copy2(source, existing_srt)
+        return {
+            "status": "skipped",
+            "result_path": str(existing_srt),
+            "matched": len(matches),
+            "note": f"매칭률 {rate:.0%} < {min_match:.0%} — 앵커 부족, 원본 유지",
+        }
+
+    new_cues = align.retime(cues, segs, matches)
     report("write", 95)
-    bak = existing_srt.with_name(f"{video_path.stem}.orig.srt")
-    if cfg.get("backup_existing", True) and not bak.exists():
-        shutil.copy2(existing_srt, bak)
     write_srt(existing_srt, new_cues)
     report("write", 100)
-
-    rate = len(matches) / max(1, len(cues))
-    note = f"{len(matches)}/{len(cues)} 큐 오디오 매칭({rate:.0%})"
-    if rate < 0.3:
-        note += " — 매칭률 낮음(과대 드리프트/음성인식 부정확 가능, 확인 권장)"
-    return {"status": "done", "result_path": str(existing_srt), "matched": len(matches), "note": note}
+    return {
+        "status": "done",
+        "result_path": str(existing_srt),
+        "matched": len(matches),
+        "note": f"{len(matches)}/{len(cues)} 큐 오디오 매칭({rate:.0%})",
+    }
 
 
 def process(
