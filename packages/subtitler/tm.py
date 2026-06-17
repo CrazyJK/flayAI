@@ -218,6 +218,19 @@ def embed_tm(conn: sqlite3.Connection, qc=None, *, opus: str | None = None) -> i
         rows = conn.execute("SELECT id, opus, jp, ko FROM subtitle_tm").fetchall()
     if not rows:
         return 0
+    # 재임베딩 전 이 opus 들의 기존 점을 먼저 삭제 — 재빌드 시 id 가 바뀌어 생기는 고아 점 방지.
+    opuses = sorted({r["opus"] for r in rows})
+    try:
+        qc.delete(
+            TM_COLLECTION,
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[qm.FieldCondition(key="opus", match=qm.MatchAny(any=opuses))]
+                )
+            ),
+        )
+    except Exception:  # noqa: BLE001 — 삭제 실패해도 upsert 는 진행(고아는 무해)
+        pass
     vecs = bge_embed([r["jp"] for r in rows])
     points = [
         qm.PointStruct(
