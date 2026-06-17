@@ -138,6 +138,7 @@ def parse_smi(path: str | Path) -> list[Cue]:
         body = re.sub(r"(?i)</?p[^>]*>", "", body)
         body = re.sub(r"(?i)<br\s*/?>", "\n", body)
         body = re.sub(r"<[^>]+>", "", body)
+        body = re.sub(r"\n[ \t\r]*\n+", "\n", body.replace("\r", ""))
         body = html.unescape(body).replace(" ", " ").strip()
         raw.append((start, body))
     cues: list[Cue] = []
