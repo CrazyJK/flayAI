@@ -320,6 +320,7 @@ def test_looks_bad_guard():
     assert translate._looks_bad("") is True               # 빈 줄
     assert translate._looks_bad("근육이 엄청 커졌네") is False
     assert translate._looks_bad("OK 좋아") is False        # 짧은 라틴(2자)은 통과
+    assert translate._looks_bad("좋은 旅馆이네") is True     # 한자 2자 누출 → 폴백
 
 
 # --- 평가 chrF(phase 2 ③) -----------------------------------------

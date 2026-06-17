@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 # "1. ko" / "1) ko" / "1: ko" / "1 ko"
 _NUM_RE = re.compile(r"^\s*(\d+)\s*[.)\]:]?\s+(.*)$")
 
-# LLM 출력 오염 감지 — 라틴문자 4+ 연속(예: "어싸łoADING") 또는 한자 다수.
+# LLM 출력 오염 감지 — 라틴문자 4+ 연속(예: "어싸łoADING") 또는 한자 누출.
 _LATIN_RUN = re.compile(r"[A-Za-zÀ-ɏ]{4,}")
 _HAN_RE = re.compile(r"[一-鿿]")
 
@@ -37,7 +37,8 @@ def _looks_bad(ko: str) -> bool:
         return True
     if _LATIN_RUN.search(ko):
         return True
-    if len(_HAN_RE.findall(ko)) >= 3:  # 한자 다수 = 중국어 오염
+    # 한국어 자막에 한자 2+ 연속/다수면 미번역 한자어(예: 旅馆) 누출로 간주.
+    if len(_HAN_RE.findall(ko)) >= 2:
         return True
     return False
 

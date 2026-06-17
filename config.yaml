@@ -162,7 +162,7 @@ subtitle:
   language:        "ja"              # 원음 언어(일본어 고정 — 번역도 JP 전제)
   vad_filter:      true              # 무음/비발화 구간 제거(환각 억제) — 필수
   beam_size:       5
-  translator:      "nllb"            # nllb(빠름) | llm(품질·phase2, 번역메모리 few-shot)
+  translator:      "llm"             # nllb(빠름) | llm(품질·번역메모리 few-shot) — 평가로 llm 우세 확정
   translator_llm:  "huihui_ai/qwen2.5-abliterate:14b"  # llm 모드 번역 모델(무검열, 야간 12GB 풀가용)
   llm_fewshot_k:   6                 # 청크당 주입할 번역메모리 예시 수
   llm_chunk_size:  12                # 한 번에 번역할 세그먼트 수(문맥·속도 균형)
