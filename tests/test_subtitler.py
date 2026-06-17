@@ -90,6 +90,53 @@ def test_strip_credits(tmp_path):
     assert all(not srt_io.is_credit(c.text) for c in kept)
 
 
+# --- SMI(SAMI) 입출력 ---------------------------------------------
+
+_SMI_SAMPLE = (
+    "<SAMI><HEAD><TITLE>x</TITLE></HEAD><BODY>\n"
+    "<SYNC Start=1000><P Class=KRCC>안녕하세요\n"
+    "<SYNC Start=3000><P Class=KRCC>&nbsp;\n"
+    "<SYNC Start=5000><P Class=KRCC>두 번째 줄<br>이어서\n"
+    "<SYNC Start=7000><P Class=KRCC>&nbsp;\n"
+    "</BODY></SAMI>\n"
+)
+
+
+def test_parse_smi(tmp_path):
+    p = tmp_path / "a.smi"
+    p.write_text(_SMI_SAMPLE, encoding="utf-8")
+    cues = srt_io.parse_smi(p)
+    assert len(cues) == 2  # &nbsp;(지움) 은 큐 아님
+    assert cues[0].text == "안녕하세요"
+    assert abs(cues[0].start - 1.0) < 1e-6 and abs(cues[0].end - 3.0) < 1e-6
+    assert cues[1].text == "두 번째 줄\n이어서"  # <br> → 줄바꿈
+
+
+def test_parse_smi_cp949(tmp_path):
+    """SMI 도 CP949 가 흔하다 — 자동감지."""
+    p = tmp_path / "b.smi"
+    p.write_bytes(_SMI_SAMPLE.encode("cp949"))
+    assert srt_io.parse_smi(p)[0].text == "안녕하세요"
+
+
+def test_smi_roundtrip(tmp_path):
+    cues = [Cue(1, 1.0, 3.0, "가"), Cue(2, 5.0, 7.0, "나\n다")]
+    p = tmp_path / "o.smi"
+    srt_io.write_smi(p, cues)
+    again = srt_io.parse_smi(p)
+    assert [c.text for c in again] == ["가", "나\n다"]
+    assert abs(again[0].start - 1.0) < 1e-6 and abs(again[1].end - 7.0) < 1e-6
+
+
+def test_parse_subtitle_dispatch(tmp_path):
+    s = tmp_path / "a.srt"
+    s.write_text("1\n00:00:01,000 --> 00:00:02,000\nx\n", encoding="utf-8")
+    m = tmp_path / "a.smi"
+    m.write_text(_SMI_SAMPLE, encoding="utf-8")
+    assert srt_io.parse_subtitle(s)[0].text == "x"
+    assert srt_io.parse_subtitle(m)[0].text == "안녕하세요"
+
+
 # --- 큐 -----------------------------------------------------------
 
 

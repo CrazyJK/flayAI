@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from . import db, whisper_stt
-from .srt_io import Cue, parse_srt, write_srt
+from .srt_io import Cue, parse_subtitle, write_srt, write_subtitle
 from .translate import translate_segments
 
 log = logging.getLogger(__name__)
@@ -33,19 +33,28 @@ def out_srt_path(video_path: Path, suffix: str = "") -> Path:
 
 
 def sibling_srt(video_path: Path) -> Path | None:
-    """영상과 같은 stem 의 기존 .srt (사람 팬자막). 없으면 None."""
+    """영상과 같은 stem 의 기존 .srt. 없으면 None."""
     cand = out_srt_path(video_path, "")
     return cand if cand.exists() else None
 
 
+def sibling_sub(video_path: Path) -> Path | None:
+    """영상과 같은 stem 의 기존 자막(.srt 우선, 없으면 .smi). 사람 팬자막."""
+    for ext in (".srt", ".smi"):
+        cand = video_path.parent / (video_path.stem + ext)
+        if cand.exists():
+            return cand
+    return None
+
+
 def resolve(conn: sqlite3.Connection, opus: str) -> tuple[Path | None, Path | None]:
-    """opus → (재생 영상 경로, 기존 .srt). 영상이 오프라인/부재면 video_path=None."""
+    """opus → (재생 영상 경로, 기존 자막 .srt/.smi). 영상이 오프라인/부재면 video_path=None."""
     row = conn.execute("SELECT video_path FROM posters WHERE opus=?", (opus,)).fetchone()
     vp = Path(row["video_path"]) if row and row["video_path"] else None
     if vp is not None and not vp.exists():
         vp = None
-    srt = sibling_srt(vp) if vp else None
-    return vp, srt
+    sub = sibling_sub(vp) if vp else None
+    return vp, sub
 
 
 def transcribe_cached(
@@ -144,8 +153,9 @@ def resync(
     from . import align, tm
 
     # 소스는 항상 원본(<stem>.orig.srt) 우선 — 여러 번 resync 해도 타이밍이 누적 오염되지
-    # 않게(멱등). 최초 1회 원본 백업.
-    bak = existing_srt.with_name(f"{video_path.stem}.orig.srt")
+    # 않게(멱등). 최초 1회 원본 백업. 포맷(.srt/.smi) 보존.
+    ext = existing_srt.suffix.lower()
+    bak = existing_srt.with_name(f"{video_path.stem}.orig{ext}")
     if cfg.get("backup_existing", True) and not bak.exists():
         shutil.copy2(existing_srt, bak)
     source = bak if bak.exists() else existing_srt
@@ -154,7 +164,7 @@ def resync(
     _lang, segs = transcribe_cached(conn, opus, video_path, cfg, report)
     if not segs:
         return {"status": "failed", "error": "발화 세그먼트 없음(무음/VAD)"}
-    cues = parse_srt(source)
+    cues = parse_subtitle(source)
     if not cues:
         return {"status": "failed", "error": "기존 자막 파싱 결과 없음"}
 
@@ -178,7 +188,7 @@ def resync(
 
     new_cues = align.retime(cues, segs, matches)
     report("write", 95)
-    write_srt(existing_srt, new_cues)
+    write_subtitle(existing_srt, new_cues)  # 입력 포맷(.srt/.smi) 그대로 작성
     report("write", 100)
     return {
         "status": "done",

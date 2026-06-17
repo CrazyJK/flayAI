@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from . import align, core
-from .srt_io import parse_srt, strip_credit_cues
+from .srt_io import parse_subtitle, strip_credit_cues
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def discover(conn: sqlite3.Connection) -> list[tuple[str, Path, Path]]:
         vp = Path(r["video_path"])
         if not vp.exists():
             continue
-        srt = core.sibling_srt(vp)
+        srt = core.sibling_sub(vp)
         if srt is None:
             continue
         out.append((r["opus"], vp, srt))
@@ -96,7 +96,7 @@ def build_one(
     srt_mtime = int(srt_path.stat().st_mtime)
 
     lang, jp_segments = core.transcribe_cached(conn, opus, video_path, cfg, report)
-    ko_cues = strip_credit_cues(parse_srt(srt_path))
+    ko_cues = strip_credit_cues(parse_subtitle(srt_path))
 
     pairs = align.align_by_time(
         jp_segments, ko_cues, min_overlap_ratio=float(cfg.get("tm_min_overlap", 0.2))
