@@ -11,6 +11,7 @@ const NAV = [
   { key: "face", href: "/face", label: "얼굴" },
   { key: "labels", href: "/labels", label: "라벨링" },
   { key: "stabilize", href: "/stabilize", label: "안정화" },
+  { key: "subtitle", href: "/subtitle", label: "자막" },
   { key: "admin", href: "/admin", label: "관리자" },
 ] as const;
 
