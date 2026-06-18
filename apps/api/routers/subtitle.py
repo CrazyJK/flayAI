@@ -5,8 +5,13 @@
 
 엔드포인트(prefix=/api/subtitle):
   POST   /requests           {opus, task} -> 큐 적재 (외부 신청)
+  POST   /requests/bulk      {opuses[], task} -> 여러 건 적재 (목록 다중 선택)
   GET    /requests           큐/이력 목록
   GET    /requests/{id}      상태(폴링)
+  GET    /candidates         무자막 instance 목록(생성 대상) + 검색/정렬/페이지
+  GET    /subbed             자막 보유 영상 목록(resync 대상) + 최근 resync 결과
+  POST   /scan               자막 유무 디스크 스캔(캐시 갱신) — localhost 전용
+  POST   /enqueue-all        {task} -> 카테고리 전체 적재 — localhost 전용
   POST   /drain              지금 드레인(서브프로세스) — 보통은 야간 스케줄러
   DELETE /requests/{id}      신청 삭제
 """
@@ -22,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from packages.indexer.db import connect
 from packages.settings import REPO_ROOT
+from packages.subtitler import candidates as C
 from packages.subtitler import db as Q
 
 router = APIRouter(prefix="/api/subtitle", tags=["subtitle"])
@@ -36,6 +42,17 @@ _drain_proc: dict[str, subprocess.Popen] = {}
 class SubtitleRequest(BaseModel):
     opus: str = Field(..., description="자막을 만들 영상의 opus")
     task: str = Field("generate", description="generate | resync | both")
+
+
+class BulkRequest(BaseModel):
+    opuses: list[str] = Field(default_factory=list, description="신청할 opus 목록")
+    task: str = Field("generate", description="generate | resync | both")
+
+
+class EnqueueAllRequest(BaseModel):
+    task: str = Field("generate", description="generate(무자막 전체) | resync(자막보유 전체)")
+    only_reverted: bool = Field(False, description="resync 시 원본복원분만")
+    q: str | None = Field(None, description="generate 시 검색어로 범위 제한(선택)")
 
 
 def _localhost_only(request: Request) -> None:
@@ -132,3 +149,89 @@ def drain_now(request: Request) -> dict[str, Any]:
     )
     _drain_proc["drain"] = proc
     return {"status": "draining", "pending": pending}
+
+
+# --- 목록(생성·resync 대상 선택) ----------------------------------
+
+
+@router.post("/requests/bulk")
+def create_bulk(req: BulkRequest) -> dict[str, Any]:
+    """목록에서 다중 선택한 opus 들을 한 번에 큐 적재(중복은 건너뜀)."""
+    if req.task not in _VALID_TASKS:
+        raise HTTPException(400, f"task 는 {' | '.join(_VALID_TASKS)}")
+    conn = _conn()
+    try:
+        created = skipped = invalid = 0
+        for raw in req.opuses:
+            op = (raw or "").strip()
+            if not op:
+                continue
+            row = conn.execute("SELECT video_path FROM posters WHERE opus=?", (op,)).fetchone()
+            if row is None or not row["video_path"]:
+                invalid += 1
+                continue
+            _jid, was_new = Q.enqueue(conn, op, req.task)
+            created += int(was_new)
+            skipped += int(not was_new)
+        return {"created": created, "skipped": skipped, "invalid": invalid}
+    finally:
+        conn.close()
+
+
+@router.get("/candidates")
+def list_candidates(
+    q: str | None = None, sort: str = "like", limit: int = 60, offset: int = 0
+) -> dict[str, Any]:
+    """무자막 instance 목록(생성 대상). sort: like|play|recent|opus."""
+    conn = _conn()
+    try:
+        res = C.list_candidates(conn, q=q, sort=sort, limit=limit, offset=offset)
+        res["last_scan"] = C.last_scan_at(conn)
+        return res
+    finally:
+        conn.close()
+
+
+@router.get("/subbed")
+def list_subbed(
+    q: str | None = None, only_reverted: bool = False, limit: int = 60, offset: int = 0
+) -> dict[str, Any]:
+    """자막 보유 영상 목록(resync 대상) + 최근 resync 결과."""
+    conn = _conn()
+    try:
+        return C.list_subbed(conn, only_reverted=only_reverted, q=q, limit=limit, offset=offset)
+    finally:
+        conn.close()
+
+
+@router.post("/scan")
+def scan_status(request: Request) -> dict[str, Any]:
+    """자막 유무를 디스크에서 스캔해 캐시 갱신(드라이브 온라인 필요). localhost 전용."""
+    _localhost_only(request)
+    conn = _conn()
+    try:
+        return C.scan_status(conn)
+    finally:
+        conn.close()
+
+
+@router.post("/enqueue-all")
+def enqueue_all(req: EnqueueAllRequest, request: Request) -> dict[str, Any]:
+    """카테고리 전체 일괄 신청 — generate(무자막 전체) 또는 resync(자막보유 전체). localhost 전용."""
+    _localhost_only(request)
+    if req.task not in ("generate", "resync"):
+        raise HTTPException(400, "task 는 generate | resync")
+    conn = _conn()
+    try:
+        if req.task == "generate":
+            opuses = C.all_candidate_opuses(conn, q=req.q)
+        else:
+            opuses = C.all_subbed_opuses(conn, only_reverted=req.only_reverted)
+        created = skipped = 0
+        for op in opuses:
+            _jid, was_new = Q.enqueue(conn, op, req.task)
+            created += int(was_new)
+            skipped += int(not was_new)
+        return {"created": created, "skipped": skipped, "total": len(opuses)}
+    finally:
+        conn.close()

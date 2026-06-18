@@ -29,8 +29,10 @@
   스케줄러 등록(nightly_index 와 시간 분리 — GPU 동시 사용 방지).
 - ⬜ **phase 2(번역메모리)**: 159개 팬자막으로 JP↔KO TM/용어집 → LLM few-shot 번역 + 평가셋.
 - ⬜ **phase 3(싱크 수정)**: 기존 자막 드리프트를 Whisper 발화구간에 DTW 재정렬(타이밍만 교정).
-- ✅ **자막 화면**: `/subtitle` 단독 페이지(신청 폼 + 큐/진행/이력). 관리자에서 분리,
-  헤더 네비 '자막'. 카드 래퍼는 공용 `_components/SectionCard.tsx` 로 추출(관리자와 공유).
+- ✅ **자막 화면**: `/subtitle` 단독 페이지 3섹션 — ① 무자막 목록 선택→일괄 생성 신청(검색/정렬/
+  페이지·목록 스캔) ② resync(opus 입력 + 자막보유 목록·원본복원 필터·전체 재시도) ③ 처리 큐(진행 막대).
+  백엔드: `candidates.py` + `subtitle_status` 캐시, `/candidates`·`/subbed`·`/scan`·`/requests/bulk`·`/enqueue-all`.
+  남은 개선: 스튜디오/태그 필터 드롭다운, 자막 미리보기, 야간 예정 시각 표시.
 
 ---
 

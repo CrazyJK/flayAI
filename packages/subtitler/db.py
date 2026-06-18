@@ -39,6 +39,19 @@ CREATE TABLE IF NOT EXISTS transcripts (
   created_at   INTEGER,
   PRIMARY KEY (opus, model)
 );
+
+-- 자막 유무 캐시: instance 영상별로 사이드카 자막(.srt/.smi) 존재 여부.
+-- 매 요청마다 1천여 파일을 디스크 확인하면 느리고 드라이브 오프라인 시 깨지므로,
+-- 스캔(candidates.scan_status)으로 채워 두고 목록 조회는 이 캐시에서 읽는다.
+CREATE TABLE IF NOT EXISTS subtitle_status (
+  opus        TEXT PRIMARY KEY,
+  has_sub     INTEGER NOT NULL DEFAULT 0,  -- 0=무자막, 1=자막 있음
+  fmt         TEXT,                          -- 'srt' | 'smi' | NULL
+  sub_path    TEXT,
+  video_seen  INTEGER NOT NULL DEFAULT 0,   -- 1=영상 파일 확인됨(드라이브 온라인)
+  checked_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_substatus_has ON subtitle_status(has_sub);
 """
 
 _ACTIVE = ("queued", "running")
