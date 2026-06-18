@@ -295,6 +295,8 @@ function SqliteSection({ data }: { data: SqliteData }) {
       title="SQLite DB"
       badge={`${data.tables.length}개 테이블 · 최근 24h 쿼리 ${fmtNum(data.recent_queries_24h)}건`}
       available
+      collapsible
+      defaultCollapsed
     >
       {/* 모든 박스 동일 너비(grid 1fr). 폭은 가장 긴 설명이 한 줄로 들어가도록 결정.
           3줄 구성: 이름 / 건수 / 설명(말줄임 없이 한 줄) */}
