@@ -181,4 +181,7 @@ curl -X POST https://ai.kamoru.jk:8000/api/subtitle/requests \
   앵커 보간, 텍스트·읽기길이 보존). `core.resync` 가 원본을 `<stem>.orig.srt` 백업 후 제자리 교정.
   `task="resync"`(또는 `both`)로 신청. 실측(ABW-061): 1047/1358(77%) 오디오 매칭, 지연된 자막을
   발화 시점으로 당김 확인. 미세 튜닝 여지: `resync_floor`, 다대일 분배.
-- 관리자 UI: 신청 큐/진행/이력 패널(`/stabilize` 페이지 패턴 재사용).
+- **자막 화면 (구현됨)**: `/subtitle` 단독 페이지 — 신청 폼(opus + task) + 큐/진행/이력
+  테이블. 헤더 네비게이션 '자막'(안정화↔관리자 사이). 관리자 대시보드에서 분리했고,
+  카드 래퍼는 공용 `apps/web/src/app/_components/SectionCard.tsx`(관리자와 공유). 폴링은
+  활성(running/queued) 2초·평소 6초, `document.hidden` 시 생략.
