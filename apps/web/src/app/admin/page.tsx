@@ -941,10 +941,10 @@ function IndexerSection({
         </div>
       </div>
 
-      {/* 흐름도 — 카드 그리드. 세로 모니터(가로 1599px 이하 = 24·32" 세로)는 3열 유지,
-          그보다 넓은 가로 모니터(1600px 이상)에서만 4열. 좁으면 1~2열.
+      {/* 흐름도 — 카드 그리드(자동 채움 minmax 300px). 폭에 맞춰 열 수 자동 결정:
+          24" 세로 3열 · 32" 세로 4열 · 더 넓으면 그 이상, 좁으면 1~2열.
           카드 사이 화살표 대신 각 카드 우측의 › 로 좌→우 흐름을 표시. */}
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-[1600px]:grid-cols-4">
+      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
         {PIPELINE.map((s, i) => {
           const { status, info } = stageState(s.job, jobs);
           const isAI = s.group === "AI";
@@ -1418,8 +1418,9 @@ export default function AdminPage() {
           <h2 className="text-lg font-semibold">
             모니터링 <span className="text-xs font-normal text-muted-foreground">· 실시간 (1초)</span>
           </h2>
-          {/* 시스템·Qdrant·Ollama: 넓으면 3열로 가로 꽉 채움, 좁으면 세로 스택. 등높이 카드 */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 items-stretch">
+          {/* 시스템·Qdrant·Ollama: 세로 모니터(portrait)는 폭과 무관하게 세로로 쌓고(1열, 24·32" 동일),
+              가로 모니터(landscape, xl↑)에서만 3열로 가로 배치. 등높이 카드 */}
+          <div className="grid grid-cols-1 landscape:xl:grid-cols-3 gap-3 items-stretch">
             <SystemSection sys={monitor?.system} history={history} />
             <QdrantSection
               data={monitor?.qdrant ?? data?.qdrant ?? { available: false, collections: [] }}
