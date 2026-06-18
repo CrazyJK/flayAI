@@ -207,9 +207,9 @@ function GenerateSection({ onSubmitted }: { onSubmitted: () => void }) {
   }
 
   return (
-    <SectionCard title="새 자막 생성" badge={`무자막 ${fmtNum(total)}편`}>
-      {/* 검색·정렬·스캔 */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+    <SectionCard title="새 자막 생성" badge={`무자막 ${fmtNum(total)}편`} fill>
+      {/* 검색·정렬·스캔 (고정) */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -244,8 +244,8 @@ function GenerateSection({ onSubmitted }: { onSubmitted: () => void }) {
         </span>
       </div>
 
-      {/* 목록 */}
-      <div className="border border-border/60 rounded-lg divide-y divide-border/40">
+      {/* 목록 (스크롤) */}
+      <div className="border border-border/60 rounded-lg divide-y divide-border/40 flex-1 min-h-0 overflow-y-auto">
         {items.map((c) => (
           <label
             key={c.opus}
@@ -271,20 +271,20 @@ function GenerateSection({ onSubmitted }: { onSubmitted: () => void }) {
         )}
       </div>
 
-      {/* 더 보기 */}
+      {/* 더 보기 (고정) */}
       {items.length < total && (
         <button
           type="button"
           onClick={() => void load(items.length)}
           disabled={loading}
-          className="mt-2 w-full py-1.5 text-sm rounded border border-border hover:bg-accent disabled:opacity-50"
+          className="mt-2 w-full py-1.5 text-sm rounded border border-border hover:bg-accent disabled:opacity-50 shrink-0"
         >
           {loading ? "불러오는 중…" : `더 보기 (${fmtNum(total - items.length)}편 남음)`}
         </button>
       )}
 
-      {/* 신청 */}
-      <div className="flex flex-wrap items-center gap-2 mt-3">
+      {/* 신청 (고정) */}
+      <div className="flex flex-wrap items-center gap-2 mt-3 shrink-0">
         <button
           type="button"
           onClick={() => void submitSelected()}
@@ -383,9 +383,9 @@ function ResyncSection({ onSubmitted }: { onSubmitted: () => void }) {
   }
 
   return (
-    <SectionCard title="싱크 수정" badge={`자막 보유 ${fmtNum(total)}편`}>
-      {/* opus 직접 입력 + 필터 */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+    <SectionCard title="싱크 수정" badge={`자막 보유 ${fmtNum(total)}편`} fill>
+      {/* opus 직접 입력 + 필터 (고정) */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0">
         <input
           value={opus}
           onChange={(e) => setOpus(e.target.value)}
@@ -424,8 +424,8 @@ function ResyncSection({ onSubmitted }: { onSubmitted: () => void }) {
         {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
       </div>
 
-      {/* 목록 */}
-      <div className="border border-border/60 rounded-lg divide-y divide-border/40 max-h-96 overflow-y-auto">
+      {/* 목록 (스크롤) */}
+      <div className="border border-border/60 rounded-lg divide-y divide-border/40 flex-1 min-h-0 overflow-y-auto">
         {items.map((s) => {
           const reverted = s.resync_status === "skipped";
           const done = s.resync_status === "done";
@@ -510,8 +510,8 @@ function QueueSection({ jobs, onReload }: { jobs: SubtitleJob[]; onReload: () =>
   }
 
   return (
-    <SectionCard title="처리 큐 · 진행" badge={pending ? `대기 ${pending}` : undefined}>
-      <div className="flex items-center gap-2 mb-3">
+    <SectionCard title="처리 큐 · 진행" badge={pending ? `대기 ${pending}` : undefined} fill>
+      <div className="flex items-center gap-2 mb-3 shrink-0">
         <button
           type="button"
           onClick={() => void drainNow()}
@@ -527,7 +527,7 @@ function QueueSection({ jobs, onReload }: { jobs: SubtitleJob[]; onReload: () =>
       {jobs.length === 0 ? (
         <p className="text-sm text-muted-foreground">신청 내역이 없습니다.</p>
       ) : (
-        <div className="border border-border/60 rounded-lg divide-y divide-border/40 max-h-96 overflow-y-auto">
+        <div className="border border-border/60 rounded-lg divide-y divide-border/40 flex-1 min-h-0 overflow-y-auto">
           {jobs.map((j) => {
             const running = j.status === "running";
             return (
@@ -579,7 +579,7 @@ function QueueSection({ jobs, onReload }: { jobs: SubtitleJob[]; onReload: () =>
 }
 
 // ---------------------------------------------------------------------------
-// 페이지 — 큐 폴링을 상위에서 소유하고 각 섹션에 갱신 콜백 전달
+// 페이지 — 화면 높이를 3등분(각 섹션 flex-1, 내부 목록만 스크롤). 큐 폴링은 상위 소유.
 // ---------------------------------------------------------------------------
 
 export default function SubtitlePage() {
@@ -610,16 +610,8 @@ export default function SubtitlePage() {
   return (
     <main className="flex-1 flex flex-col w-full min-h-0">
       <AppHeader active="subtitle" />
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-        <div className="mx-auto w-full max-w-[1100px] space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">자막 생성</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              무자막 영상은 목록에서 골라 신청하고, 기존 자막은 opus 입력 또는 목록에서 싱크를
-              맞춥니다. 신청분은 야간 배치가 처리하며(또는 [지금 처리]), 산출물은 영상 옆 사이드카
-              자막(.srt/.smi)입니다.
-            </p>
-          </div>
+      <div className="flex-1 min-h-0 px-4 py-3">
+        <div className="mx-auto w-full max-w-[1100px] h-full flex flex-col gap-3">
           <GenerateSection onSubmitted={() => void loadJobs()} />
           <ResyncSection onSubmitted={() => void loadJobs()} />
           <QueueSection jobs={jobs} onReload={() => void loadJobs()} />
