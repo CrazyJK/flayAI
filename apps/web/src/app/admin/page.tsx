@@ -941,9 +941,10 @@ function IndexerSection({
         </div>
       </div>
 
-      {/* 흐름도 — 카드 그리드(자동 채움, 24" 세로모니터 기준 3열·좁으면 1열).
+      {/* 흐름도 — 카드 그리드. 세로 모니터(가로 1599px 이하 = 24·32" 세로)는 3열 유지,
+          그보다 넓은 가로 모니터(1600px 이상)에서만 4열. 좁으면 1~2열.
           카드 사이 화살표 대신 각 카드 우측의 › 로 좌→우 흐름을 표시. */}
-      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-[1600px]:grid-cols-4">
         {PIPELINE.map((s, i) => {
           const { status, info } = stageState(s.job, jobs);
           const isAI = s.group === "AI";
