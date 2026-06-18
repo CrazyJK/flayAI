@@ -656,35 +656,6 @@ function LogBox({ info }: { info: JobInfo }) {
   );
 }
 
-// 단계 간 연결 화살표. 좁은 화면은 아래(▼), 넓은 화면(xl)은 오른쪽(→) 방향 SVG.
-function StageArrow() {
-  return (
-    <div
-      className="flex items-center justify-center text-muted-foreground py-1 lg:py-0 lg:px-1"
-      aria-hidden
-    >
-      <svg className="lg:hidden" width="16" height="20" viewBox="0 0 16 20" fill="none">
-        <path
-          d="M8 1V15M3 10l5 5 5-5"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <svg className="hidden lg:block" width="22" height="16" viewBox="0 0 22 16" fill="none">
-        <path
-          d="M1 8h14M11 3l5 5-5 5"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
-  );
-}
-
 // 파이프라인 일시정지/재개 버튼 (실행 중 → 일시정지, 일시정지 → 재개)
 function PipeCtlButton({
   kind,
@@ -970,8 +941,9 @@ function IndexerSection({
         </div>
       </div>
 
-      {/* 흐름도 — 좁은 화면은 세로(▼), 넓은 화면은 가로(→) */}
-      <div className="flex flex-col lg:flex-row lg:flex-wrap lg:items-stretch gap-2">
+      {/* 흐름도 — 카드 그리드(자동 채움, 24" 세로모니터 기준 3열·좁으면 1열).
+          카드 사이 화살표 대신 각 카드 우측의 › 로 좌→우 흐름을 표시. */}
+      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
         {PIPELINE.map((s, i) => {
           const { status, info } = stageState(s.job, jobs);
           const isAI = s.group === "AI";
@@ -994,10 +966,10 @@ function IndexerSection({
                     ? "border-sky-500/50 bg-sky-500/5"
                     : "border-border/50 bg-card/40";
           return (
-            <div key={s.job} className="flex flex-col lg:flex-row lg:items-stretch">
+            <div key={s.job} className="flex">
               <div
                 className={
-                  "rounded-lg border px-3 py-2.5 transition-colors lg:w-[360px] lg:flex lg:flex-col " +
+                  "relative flex w-full flex-col rounded-lg border px-3 py-2.5 transition-colors sm:pr-8 " +
                   border
                 }
               >
@@ -1071,8 +1043,16 @@ function IndexerSection({
                   {tl && <div className="text-[11px] font-mono text-muted-foreground">{tl}</div>}
                 </div>
                 {expanded && stepInfo && hasLog && <LogBox info={stepInfo} />}
+                {/* 카드 우측 흐름 표시(파이프라인 순서 좌→우). 마지막 단계는 제외 */}
+                {i < PIPELINE.length - 1 && (
+                  <span
+                    className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 text-xl leading-none text-muted-foreground/40 sm:block"
+                    aria-hidden
+                  >
+                    ›
+                  </span>
+                )}
               </div>
-              {i < PIPELINE.length - 1 && <StageArrow />}
             </div>
           );
         })}
