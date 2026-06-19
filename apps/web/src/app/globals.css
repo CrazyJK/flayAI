@@ -4,45 +4,45 @@
  * 헤더 토글이 <html> 에 .dark 를 붙였다 떼는 방식으로 system/light/dark 제어. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* shadcn 스타일 시맨틱 토큰 — 라이트(:root) / 다크(.dark) 두 벌.
+/* 시맨틱 토큰 — 라이트(:root) / 다크(.dark) 두 벌. Apple 디자인(HIG + apple.com).
  * @theme inline 으로 Tailwind 유틸리티(bg-background, text-foreground, bg-card,
  * text-muted-foreground, border-border, hover:bg-accent 등) 생성. */
 :root {
-  --background: #f5f5f5; /* 캔버스(연한 회색) */
-  --foreground: #171717; /* 본문 텍스트 */
-  --card: #ffffff; /* 입력/카드 등 띄운 표면 */
-  --card-foreground: #171717;
-  --popover: #ffffff; /* 팝오버 */
-  --popover-foreground: #171717;
-  --muted: #e5e5e5; /* 옅은 채움(neutral-200) */
-  --muted-foreground: #737373; /* 보조 텍스트(neutral-500) */
-  --accent: #f5f5f5; /* hover 배경(neutral-100) */
-  --accent-foreground: #171717;
-  --border: #e5e5e5; /* 테두리(neutral-200) */
-  --input: #d4d4d4; /* 입력 테두리(neutral-300) */
-  --primary: #2563eb; /* 주 액션(blue-600) */
+  --background: #f5f5f7; /* apple.com 시그니처 라이트 그레이 캔버스 */
+  --foreground: #1d1d1f; /* Apple 본문(순수 검정 아님) */
+  --card: #ffffff; /* 흰 카드/입력 표면 */
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --muted: #f5f5f7; /* 옅은 채움 */
+  --muted-foreground: #6e6e73; /* Apple 보조 그레이 */
+  --accent: #ebebf0; /* hover 배경 */
+  --accent-foreground: #1d1d1f;
+  --border: #d2d2d7; /* Apple 라이트 보더 그레이 */
+  --input: #d2d2d7;
+  --primary: #0071e3; /* Apple 시스템 블루(apple.com CTA) */
   --primary-foreground: #ffffff;
-  --success: #059669; /* 성공/라벨(emerald-600, 라이트에서 진하게) */
-  --destructive: #dc2626; /* 오류(red-600) */
+  --success: #34c759; /* Apple green */
+  --destructive: #ff3b30; /* Apple red */
 }
 
 .dark {
-  --background: #0d1117; /* GitHub dark dimmed 톤 */
-  --foreground: #e6edf3; /* GitHub fg.default */
-  --card: #161b22; /* GitHub canvas.subtle (배경보다 살짝 밝게) */
-  --card-foreground: #e6edf3;
-  --popover: #161b22;
-  --popover-foreground: #e6edf3;
-  --muted: #21262d; /* GitHub neutral.subtle (옅은 채움) */
-  --muted-foreground: #8b949e; /* GitHub fg.muted */
-  --accent: #30363d; /* hover 배경(GitHub neutral) */
-  --accent-foreground: #e6edf3;
-  --border: #30363d; /* GitHub border.default */
-  --input: #30363d; /* 입력 테두리 */
-  --primary: #3b82f6; /* blue-500 */
+  --background: #000000; /* iOS systemBackground(dark) — apple.com dark hero */
+  --foreground: #f5f5f7;
+  --card: #1c1c1e; /* iOS secondarySystemBackground */
+  --card-foreground: #f5f5f7;
+  --popover: #1c1c1e;
+  --popover-foreground: #f5f5f7;
+  --muted: #2c2c2e; /* iOS tertiarySystemBackground */
+  --muted-foreground: #98989d; /* iOS secondaryLabel(dark) */
+  --accent: #2c2c2e;
+  --accent-foreground: #f5f5f7;
+  --border: #38383a; /* iOS separator(dark) */
+  --input: #48484a;
+  --primary: #0a84ff; /* iOS systemBlue(dark) */
   --primary-foreground: #ffffff;
-  --success: #34d399; /* emerald-400 */
-  --destructive: #f87171; /* red-400 */
+  --success: #30d158; /* iOS green(dark) */
+  --destructive: #ff453a; /* iOS red(dark) */
 }
 
 @theme inline {
@@ -62,8 +62,11 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-success: var(--success);
   --color-destructive: var(--destructive);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Apple 시스템 폰트 — macOS/iOS 는 진짜 SF Pro, Windows 는 Segoe UI 로 폴백 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "SFMono-Regular", ui-monospace, "Cascadia Code", "Segoe UI Mono",
+    "Roboto Mono", monospace;
 }
 
 /* 배경/글자색은 Tailwind 클래스(layout 의 bg-white dark:bg-neutral-950 등)와
@@ -71,7 +74,12 @@
  * 레이어 밖 body{background:...} 규칙이 Tailwind 유틸리티를 덮어써 라이트 모드가
  * 적용되지 않던 문제 때문. */
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  /* Apple 시스템 폰트 스택(SF Pro → Segoe UI 폴백). 글자 렌더링도 Apple 느낌으로. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em; /* Apple 특유의 살짝 좁은 자간 */
 }
 
 /* 일기장 무드 — /diary 한정(diary/layout.tsx 가 래퍼에 부착).
