@@ -201,7 +201,7 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
       />
 
       {/* 상단 오버레이: opus, 배지, 스코어 — 호버 시에만 노출(페이드+슬라이드) */}
-      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/45 to-transparent px-3.5 pt-3 pb-[18px] [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 ease-out">
+      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/45 to-transparent px-3.5 pt-3 pb-[18px] [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] opacity-0 -translate-y-3 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-[350ms] ease-out">
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* opus — 가장 강조: 크게 + 볼드 + 앰버 */}
           <span className="font-mono text-base font-semibold tracking-wide text-amber-300">{hit.opus}</span>
@@ -220,10 +220,10 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
 
       {/* 하단 오버레이: 제목은 항상, 나머지(메타·근거)는 호버 시 제목 위로 펼쳐짐 */}
       <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-4 pt-[52px] pb-4 [text-shadow:0_1px_2px_rgba(0,0,0,0.95)]">
-        {/* 메타+근거 — grid-rows 0fr→1fr 로 부드럽게 펼치고 페이드 인 */}
-        <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-300 ease-out">
+        {/* 메타+근거 — grid-rows 0fr→1fr 로 높이를 열고, 내용은 아래에서 위로 슬라이드 */}
+        <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-[350ms] ease-out">
           <div className="overflow-hidden">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pb-2 space-y-1">
+            <div className="translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-[350ms] ease-out pb-2 space-y-1">
               <div className="text-sm text-neutral-200 flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
                 {hit.studio && <span>{hit.studio}</span>}
                 {hit.year && (
