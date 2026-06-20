@@ -473,7 +473,7 @@ export default function DiaryPage() {
                 <img
                   src={src}
                   alt="첨부 미리보기"
-                  className="h-16 w-16 object-cover rounded-md border border-border"
+                  className="h-64 w-64 object-cover rounded-md border border-border"
                 />
                 <button
                   type="button"
