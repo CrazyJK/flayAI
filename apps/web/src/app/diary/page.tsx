@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
@@ -33,63 +33,126 @@ type Message = {
   error?: string;
 };
 
-const WEATHER_ICON: Record<string, string> = {
-  sunny: "☀️",
-  cloudy: "☁️",
-  rainy: "🌧️",
-  snowy: "❄️",
-};
-
 // 레거시 일기 HTML 의 이미지 src(/static/diary-assets/..)를 API 절대경로로 치환
 function withImageHost(html: string): string {
   return html.replaceAll('src="/static/diary-assets/', `src="${API_BASE}/static/diary-assets/`);
 }
 
-// 회상 카드: 그때 일기 한 건(날짜·제목·날씨 + 원문). memo — 스트리밍 토큰마다 리렌더되어
-// 흔들리지 않게(부모 text 변경과 무관, s 참조 고정).
-const RecallCard = memo(function RecallCard({ s }: { s: RecallSession }) {
+// 메시지 id(`u-<ts>`/`a-<ts>`)에서 작성 시각을 복원해 "오후 9:24" 형태로
+function msgTime(id: string): string {
+  const ts = Number(id.replace(/^[ua]-/, ""));
+  if (!Number.isFinite(ts)) return "";
+  return new Date(ts).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+}
+
+// 오늘 날짜 구분선 라벨 — "2026년 6월 20일 · 오늘"
+function todayLabel(): string {
+  const d = new Date();
+  const date = d.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+  return `${date} · 오늘`;
+}
+
+/* ---------- 라인 아이콘(stroke 1.6, currentColor) ---------- */
+function Ico({ size = 16, sw = 1.6, children }: { size?: number; sw?: number; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] dark:bg-amber-400/[0.05] px-4 py-3.5 shadow-sm">
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-mono text-amber-700 dark:text-amber-300">
-          {s.date}
-        </span>
-        {s.weather && (
-          <span className="text-sm" title={s.weather}>
-            {WEATHER_ICON[s.weather] ?? s.weather}
-          </span>
-        )}
-        {s.title && (
-          <span className="text-sm font-semibold text-foreground truncate">{s.title}</span>
-        )}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
+      {children}
+    </svg>
+  );
+}
+const SunIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M5 5l1.4 1.4M17.6 17.6L19 19M2 12h2M20 12h2M5 19l1.4-1.4M17.6 6.4L19 5" />
+  </Ico>
+);
+const CloudIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.6 1.5A4 4 0 0 0 6.5 19h11Z" />
+  </Ico>
+);
+const RainIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <path d="M17.5 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.6 1.5A4 4 0 0 0 6.5 16" />
+    <path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" />
+  </Ico>
+);
+const SnowIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <path d="M17.5 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.6 1.5A4 4 0 0 0 6.5 16" />
+    <path d="M8 19h.01M12 21h.01M16 19h.01" />
+  </Ico>
+);
+const BookmarkIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </Ico>
+);
+const ImageIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="1.8" />
+    <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+  </Ico>
+);
+const SendIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <polyline points="9 10 4 15 9 20" />
+    <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+  </Ico>
+);
+
+// 날씨 → 라인 아이콘(이모지 대체). 미지의 값은 원문 텍스트로 폴백.
+const WEATHER_MAP: Record<string, ({ size }: { size?: number }) => ReactNode> = {
+  sunny: SunIco,
+  cloudy: CloudIco,
+  rainy: RainIco,
+  snowy: SnowIco,
+};
+function WeatherIcon({ weather, size = 15 }: { weather?: string | null; size?: number }) {
+  if (!weather) return null;
+  const C = WEATHER_MAP[weather];
+  return C ? <C size={size} /> : <span className="font-sans text-xs">{weather}</span>;
+}
+
+// 날짜 구분선 — 양쪽 hairline + 가운데 대문자 라벨
+function DateDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-4">
+      <div className="flex-1 h-px bg-border" />
+      <span className="font-sans text-xs uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
+// AI 응답 = 여백의 동행 노트(보조 톤) — 좌측 거터에 작은 강조점 + 세리프 이탤릭
+function Companion({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex gap-3.5 pl-1 pr-0.5 py-0.5">
+      <div className="shrink-0 w-[22px] flex justify-center pt-[7px]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--diary-accent)] opacity-80" />
       </div>
-      <div className="space-y-1.5">
-        {s.messages.map((m, i) =>
-          m.raw_html ? (
-            <div
-              key={i}
-              className="diary-html text-sm leading-relaxed text-foreground/90 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-1.5 [&_h3]:font-semibold [&_p]:my-0.5"
-              dangerouslySetInnerHTML={{ __html: withImageHost(m.raw_html) }}
-            />
-          ) : m.role === "user" ? (
-            <p key={i} className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-              {m.content}
-            </p>
-          ) : (
-            <p
-              key={i}
-              className="border-l-2 border-amber-500/20 pl-2.5 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap"
-            >
-              {m.content}
-            </p>
-          )
-        )}
+      <div className="italic text-base leading-[1.7] text-muted-foreground max-w-[560px]">
+        {children}
       </div>
     </div>
   );
-});
+}
 
-// 타이핑 인디케이터(점 3개) + 경과 초(1s, 2s…) — 대기 길어질 때(비전 캡션 등) 표시
+// 타이핑 인디케이터(점 3개 + 경과초) — 동행 노트와 같은 거터/강조색
 function TypingDots() {
   const [sec, setSec] = useState(0);
   useEffect(() => {
@@ -98,46 +161,99 @@ function TypingDots() {
     return () => clearInterval(id);
   }, []);
   return (
-    <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md bg-muted/60 dark:bg-muted/40 px-4 py-3">
-      <span className="inline-flex items-center gap-1">
-        {[0, 0.15, 0.3].map((d) => (
-          <span
-            key={d}
-            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
-            style={{ animationDelay: `${d}s` }}
-          />
-        ))}
-      </span>
-      {sec >= 1 && <span className="text-xs tabular-nums text-muted-foreground">{sec}s</span>}
+    <div className="flex gap-3.5 pl-1 pr-0.5 py-0.5 items-center">
+      <div className="shrink-0 w-[22px] flex justify-center">
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--diary-accent)] opacity-80" />
+      </div>
+      <div className="inline-flex items-center gap-2">
+        <span className="inline-flex items-center gap-1">
+          {[0, 0.15, 0.3].map((d) => (
+            <span
+              key={d}
+              className="h-1.5 w-1.5 rounded-full bg-[var(--diary-accent)] opacity-60 animate-bounce"
+              style={{ animationDelay: `${d}s` }}
+            />
+          ))}
+        </span>
+        {sec >= 1 && <span className="font-sans text-xs tabular-nums text-muted-foreground">{sec}s</span>}
+      </div>
     </div>
   );
 }
 
+// 회상 = '그때의 기억' 타임라인 노드 + 종이 카드. memo — 스트리밍 토큰마다 리렌더되어
+// 흔들리지 않게(부모 text 변경과 무관, s 참조 고정).
+const RecallCard = memo(function RecallCard({ s, last }: { s: RecallSession; last?: boolean }) {
+  return (
+    <div className="flex gap-4">
+      {/* 타임라인 레일 — 속 빈 강조 노드 + 세로 룰 */}
+      <div className="shrink-0 w-3.5 flex flex-col items-center">
+        <span className="w-[11px] h-[11px] rounded-full bg-background border-2 border-[var(--diary-accent)] mt-[18px]" />
+        {!last && <span className="flex-1 w-0.5 bg-border mt-1" />}
+      </div>
+      {/* 기억 카드 — 종이 + 상단 강조 룰 + 부드러운 그림자 */}
+      <div className="relative flex-1 mb-[18px] overflow-hidden rounded-2xl border border-border bg-card px-[18px] pt-4 pb-[18px] shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+        <div className="absolute top-0 inset-x-0 h-[3px] bg-[var(--diary-accent)] opacity-50" />
+        <div className="flex items-center gap-2.5 mb-3">
+          <span className="font-mono text-[11.5px] text-[var(--diary-accent)] bg-[var(--diary-accent-soft)] px-2.5 py-[3px] rounded-full tracking-[0.02em]">
+            {s.date}
+          </span>
+          {s.weather && (
+            <span className="text-[var(--diary-accent)]">
+              <WeatherIcon weather={s.weather} size={15} />
+            </span>
+          )}
+          {s.title && <span className="text-[15px] font-semibold text-foreground">{s.title}</span>}
+        </div>
+        <div className="flex flex-col gap-1">
+          {s.messages.map((m, i) =>
+            m.raw_html ? (
+              <div
+                key={i}
+                className="diary-html text-[15px] leading-[1.7] text-foreground [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2 [&_h3]:font-semibold [&_p]:my-1"
+                dangerouslySetInnerHTML={{ __html: withImageHost(m.raw_html) }}
+              />
+            ) : m.role === "user" ? (
+              <p key={i} className="m-0 text-[15px] leading-[1.7] text-foreground whitespace-pre-wrap">
+                {m.content}
+              </p>
+            ) : (
+              <p
+                key={i}
+                className="m-0 pl-3 border-l-2 border-[var(--diary-accent-soft)] text-[13.5px] leading-[1.65] text-muted-foreground italic whitespace-pre-wrap"
+              >
+                {m.content}
+              </p>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 function AssistantBlock({ msg }: { msg: Message }) {
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
+      {/* AI 응답(동행 노트) */}
+      {msg.text && <Companion>{msg.text}</Companion>}
+      {msg.status === "streaming" && !msg.text && <TypingDots />}
+      {/* 회상 타임라인 — 노트 아래에 '그때의 기억'을 펼침 */}
       {msg.recall && msg.recall.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
-            그때 일기 {msg.recall.length}건
+        <div className="mt-1">
+          <div className="font-sans flex items-center gap-1.5 mb-3.5 text-[12.5px] tracking-[0.04em] text-muted-foreground">
+            <span className="text-[var(--diary-accent)]">
+              <BookmarkIco size={14} />
+            </span>
+            그때의 기억 · {msg.recall.length}
           </div>
-          {msg.recall.map((s) => (
-            <RecallCard key={s.session_id} s={s} />
+          {msg.recall.map((s, i) => (
+            <RecallCard key={s.session_id} s={s} last={i === msg.recall!.length - 1} />
           ))}
         </div>
       )}
-      {msg.text && (
-        <div className="inline-block max-w-[88%] rounded-2xl rounded-tl-md bg-muted/60 dark:bg-muted/40 px-4 py-2.5 text-[15px] leading-relaxed text-foreground whitespace-pre-wrap">
-          {msg.text}
-        </div>
-      )}
-      {msg.status === "streaming" && !msg.text && <TypingDots />}
       {msg.status === "error" && (
-        <div className="text-xs text-red-600 dark:text-red-400">⚠ {msg.error}</div>
+        <div className="font-sans text-xs text-destructive">⚠ {msg.error}</div>
       )}
     </div>
   );
@@ -327,6 +443,132 @@ export default function DiaryPage() {
   const hasFiles = (e: React.DragEvent) =>
     Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
+  // 컴포저(글 쓰는 면) — hero(빈 화면·중앙) / docked(작성 후·하단) 두 변형으로 크기만 분기.
+  // 종이 면: rounded-[18px] + 상단 얇은 강조 룰 + 세리프 입력 + 강조색 포커스 링.
+  const composer = (hero: boolean) => (
+    <form
+      className={hero ? "w-full max-w-[600px] mx-auto" : "shrink-0 w-full max-w-[720px] mx-auto px-4 py-3"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = input;
+        const imgs = pending;
+        setInput("");
+        setPending([]);
+        if (taRef.current) taRef.current.style.height = "auto";
+        void send(q, imgs);
+      }}
+    >
+      {/* 첨부 이미지 미리보기 */}
+      {pending.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {pending.map((src, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt="첨부 미리보기"
+                className="h-16 w-16 object-cover rounded-md border border-border"
+              />
+              <button
+                type="button"
+                onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
+                aria-label="첨부 제거"
+                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none flex items-center justify-center hover:bg-black"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div
+        className={
+          "rounded-[18px] border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] duration-200 focus-within:border-[var(--diary-accent)] focus-within:ring-4 focus-within:ring-[var(--diary-accent-soft)] " +
+          (hero ? "px-5 pt-5 pb-3.5" : "px-[18px] pt-4 pb-3")
+        }
+      >
+        {/* 상단 얇은 강조 룰 */}
+        <div
+          className={"h-px bg-[var(--diary-accent)] opacity-[0.28] " + (hero ? "mb-4" : "mb-3")}
+        />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void addFiles(e.target.files);
+            e.target.value = ""; // 같은 파일 재선택 허용
+          }}
+        />
+        <textarea
+          ref={taRef}
+          rows={hero ? 3 : 2}
+          className={
+            "w-full bg-transparent outline-none resize-none leading-relaxed text-foreground placeholder:text-muted-foreground " +
+            (hero ? "text-lg" : "text-base")
+          }
+          style={{ maxHeight: 200 }}
+          placeholder="오늘 있었던 일, 떠오른 생각…"
+          value={input}
+          disabled={busy}
+          autoFocus
+          onPaste={onPaste}
+          onChange={(e) => setInput(e.target.value)}
+          onInput={(e) => {
+            const ta = e.currentTarget;
+            ta.style.height = "auto";
+            ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <div className="flex items-center mt-2">
+          {/* 사진 첨부 */}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy || pending.length >= MAX_IMAGES}
+            title="사진 첨부"
+            aria-label="사진 첨부"
+            className="p-1 text-muted-foreground hover:text-[var(--diary-accent)] disabled:opacity-30"
+          >
+            <ImageIco size={19} />
+          </button>
+          <span className="flex-1" />
+          {busy ? (
+            <button
+              type="button"
+              onClick={abort}
+              title="중단"
+              aria-label="중단"
+              className="p-1 text-destructive hover:opacity-80"
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              title="기록"
+              aria-label="기록"
+              disabled={!input.trim() && pending.length === 0}
+              className="p-1 text-[var(--diary-accent)] hover:opacity-80 disabled:opacity-30"
+            >
+              <SendIco size={19} />
+            </button>
+          )}
+        </div>
+      </div>
+    </form>
+  );
+
   return (
     <main
       className="relative flex-1 flex flex-col w-full min-h-0"
@@ -353,8 +595,8 @@ export default function DiaryPage() {
       }}
     >
       {dragOver && (
-        <div className="absolute inset-0 z-50 m-2 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-500/10 backdrop-blur-[1px] pointer-events-none">
-          <div className="rounded-xl bg-card px-5 py-3 text-sm font-semibold text-blue-600 dark:text-blue-300 shadow-lg">
+        <div className="absolute inset-0 z-50 m-2 flex items-center justify-center rounded-2xl border-2 border-dashed border-[var(--diary-accent)] bg-[var(--diary-accent-soft)] backdrop-blur-[1px] pointer-events-none">
+          <div className="rounded-xl bg-card px-5 py-3 text-sm font-semibold text-[var(--diary-accent)] shadow-lg">
             여기에 놓으면 사진 첨부
           </div>
         </div>
@@ -375,167 +617,65 @@ export default function DiaryPage() {
       />
 
       {empty ? (
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 pb-24">
-          <h2 className="text-2xl font-semibold text-foreground">오늘은 어땠어?</h2>
-          <p className="text-sm text-muted-foreground">
-            그냥 떠오르는 대로 적어. 예전 일이 궁금하면 물어봐도 돼.
-          </p>
+        // 빈 상태 = 글쓰기 초대. 중앙에 hero 컴포저를 노출(현행은 비어 있던 가운데).
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-7 px-6 pb-16">
+          <div className="text-center">
+            <div className="text-[32px] font-semibold text-foreground tracking-[0.01em]">
+              오늘은 어땠어?
+            </div>
+            <div className="text-base italic text-muted-foreground mt-2.5">
+              그냥 떠오르는 대로 적어. 예전 일이 궁금하면 물어봐도 돼.
+            </div>
+          </div>
+          {composer(true)}
         </div>
       ) : (
-        <div
-          ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto w-full max-w-[820px] mx-auto px-4 py-4 space-y-5"
-        >
-          {messages.map((m) =>
-            m.role === "user" ? (
-              <div key={m.id} data-mid={m.id} className="flex justify-end">
-                <div className="rounded-2xl rounded-tr-md bg-blue-500 text-white dark:bg-blue-600 px-3.5 py-2.5 text-[15px] max-w-[82%] space-y-2 shadow-sm">
-                  {m.images && m.images.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {m.images.map((src, i) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={i}
-                          src={src}
-                          alt="첨부 이미지"
-                          className="max-h-48 rounded-lg border border-white/20"
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {m.text && <div className="whitespace-pre-wrap leading-relaxed">{m.text}</div>}
-                </div>
-              </div>
-            ) : (
-              <div key={m.id} className="flex justify-start">
-                <div className="w-full">
-                  <AssistantBlock msg={m} />
-                </div>
-              </div>
-            )
-          )}
-        </div>
-      )}
-
-      {/* 입력창 — 하단 고정 */}
-      <form
-        className="shrink-0 w-full max-w-[820px] mx-auto px-4 py-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const q = input;
-          const imgs = pending;
-          setInput("");
-          setPending([]);
-          if (taRef.current) taRef.current.style.height = "auto";
-          void send(q, imgs);
-        }}
-      >
-        {/* 첨부 이미지 미리보기 */}
-        {pending.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
-            {pending.map((src, i) => (
-              <div key={i} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="첨부 미리보기" className="h-16 w-16 object-cover rounded-md border border-border" />
-                <button
-                  type="button"
-                  onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
-                  aria-label="첨부 제거"
-                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none flex items-center justify-center hover:bg-black"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+        <>
+          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto w-full">
+            <div className="max-w-[720px] mx-auto px-6 pt-6 pb-2 flex flex-col gap-[18px]">
+              <DateDivider label={todayLabel()} />
+              {messages.map((m) =>
+                m.role === "user" ? (
+                  // 사용자 글 = 페이지의 주인공(민무늬 — 캔버스 위 세리프 본문)
+                  <article key={m.id} data-mid={m.id} className="px-0.5 pt-1 pb-2">
+                    {msgTime(m.id) && (
+                      <div className="font-sans flex items-center gap-2 mb-3 text-[12.5px] tracking-[0.02em] text-muted-foreground">
+                        <span>{msgTime(m.id)}</span>
+                      </div>
+                    )}
+                    {m.text && (
+                      <div
+                        className="whitespace-pre-wrap text-[20px] leading-[1.75] text-foreground"
+                        style={{ letterSpacing: "0.005em" }}
+                      >
+                        {m.text}
+                      </div>
+                    )}
+                    {m.images && m.images.length > 0 && (
+                      <div className="flex flex-wrap gap-3 mt-4">
+                        {m.images.map((src, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={src}
+                            alt="첨부 이미지"
+                            className="w-[180px] max-h-[240px] object-cover rounded-[10px] border border-border"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                ) : (
+                  <div key={m.id}>
+                    <AssistantBlock msg={m} />
+                  </div>
+                )
+              )}
+            </div>
           </div>
-        )}
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-card px-3 py-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30">
-          {/* 이미지 첨부 */}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              void addFiles(e.target.files);
-              e.target.value = ""; // 같은 파일 재선택 허용
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={busy || pending.length >= MAX_IMAGES}
-            title="사진 첨부"
-            aria-label="사진 첨부"
-            className="shrink-0 text-muted-foreground hover:text-blue-500 disabled:opacity-30"
-          >
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="9" cy="9" r="2" />
-              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-            </svg>
-          </button>
-          <textarea
-            ref={taRef}
-            rows={1}
-            className="flex-1 bg-transparent outline-none resize-none text-sm text-foreground placeholder:text-muted-foreground"
-            style={{ maxHeight: 200 }}
-            placeholder="오늘 있었던 일, 떠오른 생각…"
-            value={input}
-            disabled={busy}
-            autoFocus
-            onPaste={onPaste}
-            onChange={(e) => setInput(e.target.value)}
-            onInput={(e) => {
-              const ta = e.currentTarget;
-              ta.style.height = "auto";
-              ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-          {busy ? (
-            <button
-              type="button"
-              onClick={abort}
-              title="중단"
-              aria-label="중단"
-              className="shrink-0 text-red-500 hover:text-red-600"
-            >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              type="submit"
-              title="전송"
-              aria-label="전송"
-              disabled={!input.trim() && pending.length === 0}
-              className="shrink-0 text-muted-foreground hover:text-blue-500 disabled:opacity-30"
-            >
-              <svg
-                width={20}
-                height={20}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="9 10 4 15 9 20" />
-                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </form>
+          {composer(false)}
+        </>
+      )}
     </main>
   );
 }

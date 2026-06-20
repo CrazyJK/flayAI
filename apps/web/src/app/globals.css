@@ -87,21 +87,35 @@ body {
  * 시맨틱 변수만 덮어쓰므로 bg-background/bg-card 등 기존 유틸리티가 그대로 물든다.
  * 헤더는 AppHeader 의 font-sans 가 세리프 상속을 끊어 전 화면 동일하게 유지. */
 .diary-mood {
-  --background: #faf6ec; /* 크림 캔버스 */
-  --card: #fffdf6; /* 종이 느낌 표면 */
-  --muted: #efe7d6;
-  --accent: #f3ecdc;
-  --border: #e6dcc6;
-  --input: #d9cdb2;
+  --background: #eef1f4; /* 슬레이트 캔버스 */
+  --foreground: #1f242b;
+  --card: #fbfcfd; /* 종이 느낌 표면 */
+  --muted: #e1e6ec;
+  --muted-foreground: #5a636e;
+  --accent: #e1e6ec;
+  --border: #cdd6df;
+  --input: #cdd6df;
+  /* 일기 전용 강조색(슬레이트) — 날짜 pill·타임라인 노드·컴포저 포커스·동행 점.
+   * 도구 화면의 Action Blue 와 구분되는 절제된 청회색. 파랑은 일기에서 쓰지 않음. */
+  --diary-accent: #4f6b86;
+  --diary-accent-soft: rgba(79, 107, 134, 0.13);
   font-family: Georgia, "Noto Serif KR", "Nanum Myeongjo", Batang, serif;
 }
 .dark .diary-mood {
-  --background: #0d1117; /* 도구 화면과 동일한 다크 캔버스(난색 차콜에서 변경) */
-  --card: #1e1910;
-  --muted: #282115;
-  --accent: #342b1c;
-  --border: #362d1d;
-  --input: #362d1d;
+  --background: #0d1014;
+  --foreground: #eaeef3;
+  --card: #181d23;
+  --muted: #1f262e;
+  --muted-foreground: #98a3b0;
+  --accent: #1f262e;
+  --border: #2c343d;
+  --input: #2c343d;
+  --diary-accent: #8fb0cf;
+  --diary-accent-soft: rgba(143, 176, 207, 0.14);
+}
+/* 일기 무드 안의 textarea 는 세리프를 상속(브라우저 기본 폰트로 떨어지지 않게) */
+.diary-mood textarea {
+  font-family: inherit;
 }
 
 /*
