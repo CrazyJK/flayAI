@@ -15,6 +15,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000"
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB (config.upload_max_bytes 와 일치)
 const HIST_PAGE = 5; // 이전 일기 한 번에 불러올 세션 수(화면 채울 만큼)
+const PIN_TOP = 44; // 보낸 글 상단 정렬 위치(sticky 날짜 헤더 높이만큼 내려 가리지 않게)
 
 // 회상된 과거 세션(그때 일기 원문 전체)
 type RecallMessage = {
@@ -156,15 +157,19 @@ function WeatherIcon({ weather, size = 15 }: { weather?: string | null; size?: n
   return C ? <C size={size} /> : <span className="font-sans text-xs">{weather}</span>;
 }
 
-// 날짜 구분선 — 양쪽 hairline + 가운데 대문자 라벨
+// 날짜 구분선 — 양쪽 hairline + 가운데 대문자 라벨.
+// sticky: 그 날짜 구간을 스크롤하는 동안 상단에 책갈피처럼 고정(다음 날짜가 밀어올림).
+// 배경(반투명+blur)으로 아래 글이 비치지 않게 마스킹, -mx-6 px-6 로 내부 폭 전체를 덮는다.
 function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-4">
-      <div className="flex-1 h-px bg-border" />
-      <span className="font-sans text-xs uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </span>
-      <div className="flex-1 h-px bg-border" />
+    <div className="sticky top-0 z-10 -mx-6 px-6 py-2 bg-background/90 backdrop-blur-sm">
+      <div className="flex items-center gap-4">
+        <div className="flex-1 h-px bg-border" />
+        <span className="font-sans text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          {label}
+        </span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
     </div>
   );
 }
@@ -399,8 +404,9 @@ export default function DiaryPage() {
     const el = c.querySelector(`[data-mid="${id}"]`) as HTMLElement | null;
     if (!el) return;
     const top = () => el.getBoundingClientRect().top - c.getBoundingClientRect().top;
-    if (top() > 8) c.scrollTop += top() - 8; // 내용이 부족하면 자연 클램프(끝까지 못 올라감)
-    if (top() <= 9 || performance.now() > pinDeadlineRef.current) pendingTopRef.current = null;
+    if (top() > PIN_TOP) c.scrollTop += top() - PIN_TOP; // 내용이 부족하면 자연 클램프(끝까지 못 올라감)
+    if (top() <= PIN_TOP + 1 || performance.now() > pinDeadlineRef.current)
+      pendingTopRef.current = null;
   }, [messages]);
 
   const updateAssistant = useCallback((id: string, patch: (m: Message) => Message) => {
