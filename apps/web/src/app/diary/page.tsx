@@ -458,35 +458,35 @@ export default function DiaryPage() {
         void send(q, imgs);
       }}
     >
-      {/* 첨부 이미지 미리보기 */}
-      {pending.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {pending.map((src, i) => (
-            <div key={i} className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={src}
-                alt="첨부 미리보기"
-                className="h-16 w-16 object-cover rounded-md border border-border"
-              />
-              <button
-                type="button"
-                onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
-                aria-label="첨부 제거"
-                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none flex items-center justify-center hover:bg-black"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
       <div
         className={
           "rounded-[18px] border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] duration-200 focus-within:border-[var(--diary-accent)] focus-within:ring-4 focus-within:ring-[var(--diary-accent-soft)] " +
           (hero ? "px-5 pt-5 pb-3.5" : "px-[18px] pt-4 pb-3")
         }
       >
+        {/* 첨부 이미지 미리보기 — 박스 안, 강조 룰 위에 배치 */}
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {pending.map((src, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt="첨부 미리보기"
+                  className="h-16 w-16 object-cover rounded-md border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label="첨부 제거"
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none flex items-center justify-center hover:bg-black"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {/* 상단 얇은 강조 룰 */}
         <div
           className={"h-px bg-[var(--diary-accent)] opacity-[0.28] " + (hero ? "mb-4" : "mb-3")}
