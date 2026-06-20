@@ -99,7 +99,9 @@ body {
    * 도구 화면의 Action Blue 와 구분되는 절제된 청회색. 파랑은 일기에서 쓰지 않음. */
   --diary-accent: #4f6b86;
   --diary-accent-soft: rgba(79, 107, 134, 0.13);
-  font-family: Georgia, "Noto Serif KR", "Nanum Myeongjo", Batang, serif;
+  /* 일기 전용 글꼴 = 구글폰트 Poor Story(손글씨체, diary/layout.tsx 의 next/font 변수).
+   * 미로드 시 한글 세리프로 폴백. */
+  font-family: var(--font-poor-story), Georgia, "Noto Serif KR", "Nanum Myeongjo", Batang, serif;
 }
 .dark .diary-mood {
   --background: #0d1014;
