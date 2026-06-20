@@ -1,11 +1,20 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import AppHeader from "../_components/AppHeader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://ai.kamoru.jk:8000";
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB (config.upload_max_bytes 와 일치)
+const HIST_PAGE = 5; // 이전 일기 한 번에 불러올 세션 수(화면 채울 만큼)
 
 // 회상된 과거 세션(그때 일기 원문 전체)
 type RecallMessage = {
@@ -50,6 +59,22 @@ function todayLabel(): string {
   const d = new Date();
   const date = d.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
   return `${date} · 오늘`;
+}
+
+// ISO created_at → "오후 9:24" (이전 일기 메시지 시각)
+function timeLabel(created?: string | null): string {
+  if (!created) return "";
+  const d = new Date(created);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+}
+
+// "YYYY-MM-DD" → "2025년 3월 21일" (이전 일기 날짜 구분선)
+function dateLabel(date?: string | null): string {
+  if (!date) return "";
+  const d = new Date(date + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return date;
+  return d.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
 }
 
 /* ---------- 라인 아이콘(stroke 1.6, currentColor) ---------- */
@@ -109,6 +134,12 @@ const SendIco = ({ size }: { size?: number }) => (
   <Ico size={size}>
     <polyline points="9 10 4 15 9 20" />
     <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+  </Ico>
+);
+const ClockIco = ({ size }: { size?: number }) => (
+  <Ico size={size}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
   </Ico>
 );
 
@@ -259,6 +290,45 @@ function AssistantBlock({ msg }: { msg: Message }) {
   );
 }
 
+// 이전 일기 한 메시지 — 사용자 = 세리프 본문(또는 raw_html), 어시스턴트 = 동행 노트
+function PastMessage({ m }: { m: RecallMessage }) {
+  if (m.role !== "user") return <Companion>{m.content}</Companion>;
+  return (
+    <article className="px-0.5 pt-1 pb-2">
+      {timeLabel(m.created_at) && (
+        <div className="font-sans flex items-center gap-2 mb-3 text-[12.5px] tracking-[0.02em] text-muted-foreground">
+          <span>{timeLabel(m.created_at)}</span>
+        </div>
+      )}
+      {m.raw_html ? (
+        <div
+          className="diary-html text-[20px] leading-[1.75] text-foreground [&_img]:max-w-[360px] [&_img]:rounded-[10px] [&_img]:my-2 [&_h3]:font-semibold [&_p]:my-1"
+          dangerouslySetInnerHTML={{ __html: withImageHost(m.raw_html) }}
+        />
+      ) : (
+        <div
+          className="whitespace-pre-wrap text-[20px] leading-[1.75] text-foreground"
+          style={{ letterSpacing: "0.005em" }}
+        >
+          {m.content}
+        </div>
+      )}
+    </article>
+  );
+}
+
+// 이전 일기 한 세션 — 날짜 구분선 + 그날의 글/노트(시간순)
+function PastSession({ s }: { s: RecallSession }) {
+  return (
+    <div className="flex flex-col gap-[18px]">
+      <DateDivider label={dateLabel(s.date)} />
+      {s.messages.map((m, i) => (
+        <PastMessage key={i} m={m} />
+      ))}
+    </div>
+  );
+}
+
 export default function DiaryPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -273,6 +343,15 @@ export default function DiaryPage() {
   const pinDeadlineRef = useRef(0); // 이 시각까지만 상단 정렬 시도(회상 도착 대기)
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // 이전 일기 열람(위로 무한 스크롤) — 과거→최신 순으로 보관
+  const [history, setHistory] = useState<RecallSession[]>([]);
+  const [histOffset, setHistOffset] = useState(0);
+  const [histHasMore, setHistHasMore] = useState(true);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histLoaded, setHistLoaded] = useState(false); // 한 번이라도 불러왔는지
+  const seenSessions = useRef<Set<number>>(new Set()); // 중복 세션 방지
+  const histAdjustRef = useRef<number | null>(null); // prepend 전 scrollHeight(위치 보존)
+  const histToBottomRef = useRef(false); // 첫 로드 후 맨 아래(최신)로
 
   const readAsDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -328,11 +407,70 @@ export default function DiaryPage() {
     setMessages((prev) => prev.map((m) => (m.id === id ? patch(m) : m)));
   }, []);
 
+  // 이전 일기 한 페이지 로드. 첫 호출은 버튼, 이후는 위로 스크롤 시 자동.
+  // 서버는 최신순으로 주므로 페이지 내에서 뒤집어(과거→최신) 기존 위에 prepend.
+  const loadHistory = useCallback(async () => {
+    if (histLoading || !histHasMore) return;
+    const first = !histLoaded;
+    if (!first) {
+      const c = scrollRef.current;
+      if (c) histAdjustRef.current = c.scrollHeight; // 위로 쌓기 전 높이 기억(위치 보존)
+    }
+    setHistLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/diary/history?limit=${HIST_PAGE}&offset=${histOffset}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const items = (Array.isArray(j.items) ? j.items : []) as RecallSession[];
+      if (sessionId != null) seenSessions.current.add(sessionId); // 진행 중 세션 중복 방지
+      const fresh = items.filter((s) => !seenSessions.current.has(s.session_id));
+      fresh.forEach((s) => seenSessions.current.add(s.session_id));
+      const chrono = fresh.slice().reverse(); // 페이지 내 최신순 → 과거순(이 페이지 전체는 기존보다 과거)
+      if (first) histToBottomRef.current = true;
+      if (chrono.length) setHistory((prev) => [...chrono, ...prev]);
+      setHistOffset((o) => o + HIST_PAGE);
+      setHistHasMore(Boolean(j.has_more));
+      setHistLoaded(true);
+    } catch {
+      setHistHasMore(false); // 실패 시 더 시도하지 않음
+    } finally {
+      setHistLoading(false);
+    }
+  }, [histLoading, histHasMore, histLoaded, histOffset, sessionId]);
+
+  // 이전 일기 prepend 후 스크롤 위치 보존 / 첫 로드 후 맨 아래(최신)로
+  useLayoutEffect(() => {
+    const c = scrollRef.current;
+    if (!c) return;
+    if (histToBottomRef.current) {
+      c.scrollTop = c.scrollHeight;
+      histToBottomRef.current = false;
+      histAdjustRef.current = null;
+      return;
+    }
+    if (histAdjustRef.current != null) {
+      c.scrollTop += c.scrollHeight - histAdjustRef.current;
+      histAdjustRef.current = null;
+    }
+  }, [history]);
+
+  // 위로 스크롤 시 더 과거 로드(이미 한 번 불러온 뒤에만 자동)
+  const onThreadScroll = useCallback(() => {
+    const c = scrollRef.current;
+    if (!c || !histLoaded || histLoading || !histHasMore) return;
+    if (c.scrollTop < 80) void loadHistory();
+  }, [histLoaded, histLoading, histHasMore, loadHistory]);
+
   const newConversation = useCallback(() => {
     abortRef.current?.abort();
     setMessages([]);
     setSessionId(null);
     setPending([]);
+    setHistory([]);
+    setHistOffset(0);
+    setHistHasMore(true);
+    setHistLoaded(false);
+    seenSessions.current.clear();
   }, []);
 
   const send = useCallback(
@@ -437,7 +575,8 @@ export default function DiaryPage() {
   );
 
   const abort = useCallback(() => abortRef.current?.abort(), []);
-  const empty = messages.length === 0;
+  // 대화 또는 불러온 이전 일기가 있으면 스레드(스크롤) 뷰
+  const showThread = messages.length > 0 || history.length > 0;
 
   // 화면 위로 이미지(파일) 드래그 → 첨부로 인식
   const hasFiles = (e: React.DragEvent) =>
@@ -604,7 +743,7 @@ export default function DiaryPage() {
       <AppHeader
         active="diary"
         actions={
-          !empty ? (
+          showThread ? (
             <button
               type="button"
               onClick={newConversation}
@@ -616,9 +755,9 @@ export default function DiaryPage() {
         }
       />
 
-      {empty ? (
-        // 빈 상태 = 글쓰기 초대. 중앙에 hero 컴포저를 노출(현행은 비어 있던 가운데).
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-7 px-6 pb-16">
+      {!showThread ? (
+        // 빈 상태 = 글쓰기 초대. 중앙에 hero 컴포저 + '이전 일기 불러오기'.
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-6 pb-16">
           <div className="text-center">
             <div className="text-[32px] font-semibold text-foreground tracking-[0.01em]">
               오늘은 어땠어?
@@ -628,12 +767,45 @@ export default function DiaryPage() {
             </div>
           </div>
           {composer(true)}
+          <button
+            type="button"
+            onClick={() => void loadHistory()}
+            disabled={histLoading || (histLoaded && !histHasMore)}
+            className="font-sans inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-[var(--diary-accent)] disabled:opacity-40"
+          >
+            <ClockIco size={15} />
+            {histLoading
+              ? "불러오는 중…"
+              : histLoaded && !histHasMore
+                ? "이전 일기 없음"
+                : "이전 일기 불러오기"}
+          </button>
         </div>
       ) : (
         <>
-          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto w-full">
+          <div
+            ref={scrollRef}
+            onScroll={onThreadScroll}
+            className="flex-1 min-h-0 overflow-y-auto w-full"
+          >
             <div className="max-w-[720px] mx-auto px-6 pt-6 pb-2 flex flex-col gap-[18px]">
-              <DateDivider label={todayLabel()} />
+              {/* 위로 더 불러오기 상태 표시(맨 위) */}
+              {history.length > 0 && histLoading && (
+                <div className="font-sans text-center text-xs text-muted-foreground py-1">
+                  이전 일기 불러오는 중…
+                </div>
+              )}
+              {history.length > 0 && !histHasMore && !histLoading && (
+                <div className="font-sans text-center text-xs text-muted-foreground opacity-70 py-1">
+                  — 더 이전 일기가 없어요 —
+                </div>
+              )}
+              {/* 이전 일기(과거→최신) */}
+              {history.map((s) => (
+                <PastSession key={s.session_id} s={s} />
+              ))}
+              {/* 오늘(현재 대화) */}
+              {messages.length > 0 && <DateDivider label={todayLabel()} />}
               {messages.map((m) =>
                 m.role === "user" ? (
                   // 사용자 글 = 페이지의 주인공(민무늬 — 캔버스 위 세리프 본문)

@@ -1,7 +1,8 @@
 """일기형 대화 API 라우터.
 
 - POST /api/diary/chat          (SSE) 일상 대화 + 회상. 세션 자동 이어가기/생성.
-- GET  /api/diary/sessions      세션 목록(히스토리)
+- GET  /api/diary/sessions      세션 목록(요약, 히스토리)
+- GET  /api/diary/history       이전 일기 열람(메시지 포함, 페이지네이션 + has_more)
 - GET  /api/diary/sessions/{id} 세션 transcript(회상 카드·열람 공용)
 """
 
@@ -150,6 +151,20 @@ def diary_sessions(limit: int = 50, offset: int = 0) -> dict[str, Any]:
     conn = connect()
     try:
         return {"items": store.list_sessions(conn, limit=limit, offset=offset)}
+    finally:
+        conn.close()
+
+
+@router.get("/api/diary/history")
+def diary_history(limit: int = 5, offset: int = 0) -> dict[str, Any]:
+    """이전 일기 열람 — 메시지 포함 세션 한 페이지(최신순) + has_more.
+
+    프론트는 화면 채울 만큼만(limit) 받고, 위로 스크롤할 때 offset 을 늘려 더 과거를 prepend.
+    """
+    conn = connect()
+    try:
+        items, has_more = store.list_history(conn, limit=limit, offset=offset)
+        return {"items": items, "has_more": has_more}
     finally:
         conn.close()
 
