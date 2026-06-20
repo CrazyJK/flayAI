@@ -85,7 +85,7 @@ export default function FaceSearchPage() {
         <button
           onClick={go}
           disabled={busy || !file}
-          className="ml-auto px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
+          className="ml-auto px-[22px] py-[11px] bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded-full text-sm active:scale-95 transition-transform"
         >
           배우 추정
         </button>
@@ -131,7 +131,7 @@ export default function FaceSearchPage() {
                     href={`${API_BASE}/static/posters/${encodeURIComponent(n.opus)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded border border-border overflow-hidden bg-card block"
+                    className="rounded-[18px] border border-border overflow-hidden bg-card block"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img

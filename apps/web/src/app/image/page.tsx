@@ -20,7 +20,7 @@ type Hit = {
 function PosterCard({ h }: { h: Hit }) {
   const poster = `${API_BASE}/static/posters/${encodeURIComponent(h.opus)}`;
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="rounded-[18px] border border-border bg-card overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={poster}
@@ -136,13 +136,13 @@ export default function ImageSearchPage() {
       <div className="px-4 py-3 border-b border-border space-y-3">
         <div className="flex gap-2 text-sm">
           <button
-            className={`px-3 py-1 rounded ${tab === "text" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+            className={`px-3 py-1 rounded-full ${tab === "text" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             onClick={() => setTab("text")}
           >
             텍스트 → 포스터
           </button>
           <button
-            className={`px-3 py-1 rounded ${tab === "image" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+            className={`px-3 py-1 rounded-full ${tab === "image" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             onClick={() => setTab("image")}
           >
             이미지 → 포스터
@@ -170,12 +170,12 @@ export default function ImageSearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder='e.g. "school uniform on beach", "검은 드레스의 여자"'
-              className="flex-1 px-3 py-2 bg-card border border-border rounded text-sm"
+              className="flex-1 px-3 py-2 bg-card border border-border rounded-full text-sm"
             />
             <button
               type="submit"
               disabled={busy || !query.trim()}
-              className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
+              className="px-[22px] py-[11px] bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded-full text-sm active:scale-95 transition-transform"
             >
               검색
             </button>
@@ -196,7 +196,7 @@ export default function ImageSearchPage() {
             <button
               onClick={searchImage}
               disabled={busy || !file}
-              className="ml-auto px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
+              className="ml-auto px-[22px] py-[11px] bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded-full text-sm active:scale-95 transition-transform"
             >
               유사 포스터 검색
             </button>

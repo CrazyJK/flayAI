@@ -149,19 +149,19 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="배우 canonical_name (예: mikami yua)"
-          className="flex-1 px-3 py-2 bg-card border border-border rounded text-sm"
+          className="flex-1 px-3 py-2 bg-card border border-border rounded-full text-sm"
         />
         <button
           disabled={busy}
           onClick={() => save(false)}
-          className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded text-sm"
+          className="px-[22px] py-[11px] bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground rounded-full text-sm active:scale-95 transition-transform"
         >
           저장
         </button>
         <button
           disabled={busy}
           onClick={() => save(true)}
-          className="px-3 py-2 bg-muted hover:bg-accent rounded text-sm"
+          className="px-4 py-[11px] bg-muted hover:bg-accent border border-border rounded-lg text-sm active:scale-95 transition-transform"
         >
           해제
         </button>
@@ -171,7 +171,7 @@ function ClusterDetail({ id, onLabeled }: { id: number; onLabeled: () => void })
         {d.samples.map((s) => (
           <div
             key={`${s.poster_opus}-${s.face_idx}`}
-            className="relative rounded border border-border overflow-hidden bg-card"
+            className="relative rounded-[18px] border border-border overflow-hidden bg-card"
           >
             {/* 포스터 이미지 — 클릭 시 새 탭 */}
             <a

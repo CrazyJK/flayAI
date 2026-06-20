@@ -615,7 +615,7 @@ function JobButton({
               : "클릭하여 시작"
         }
       >
-        <span className="block whitespace-nowrap font-medium">
+        <span className="block whitespace-nowrap font-semibold">
           {busy === job || isRunning ? (
             <span className="animate-pulse">↻ {label}</span>
           ) : (

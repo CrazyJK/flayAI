@@ -404,14 +404,14 @@ export default function StabilizePage() {
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full px-4 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="w-full px-4 py-2 rounded-full text-sm active:scale-95 transition-transform bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   영상 파일 선택
                 </button>
               )}
 
               <div className="space-y-1.5">
-                <span className="text-sm font-medium">프리셋</span>
+                <span className="text-sm font-semibold">프리셋</span>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS.map((p) => (
                     <button
@@ -433,13 +433,13 @@ export default function StabilizePage() {
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-sm font-medium">안정화 기준</span>
+                <span className="text-sm font-semibold">안정화 기준</span>
                 <div className="flex gap-2">
                   {(["background", "person", "both"] as const).map((mk) => (
                     <button
                       key={mk}
                       onClick={() => setMode(mk)}
-                      className={`px-3 py-1.5 rounded text-sm ${
+                      className={`px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform ${
                         mode === mk ? "bg-primary text-primary-foreground" : "bg-muted"
                       }`}
                     >
@@ -457,13 +457,13 @@ export default function StabilizePage() {
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-sm font-medium">고정 강도</span>
+                <span className="text-sm font-semibold">고정 강도</span>
                 <div className="flex flex-nowrap gap-1.5">
                   {STRENGTHS.map((s) => (
                     <button
                       key={s.key}
                       onClick={() => setStrength(s.key)}
-                      className={`px-2 py-1.5 rounded text-sm whitespace-nowrap ${
+                      className={`px-2 py-1.5 rounded-lg text-sm active:scale-95 transition-transform whitespace-nowrap ${
                         strength === s.key ? "bg-primary text-primary-foreground" : "bg-muted"
                       }`}
                     >
@@ -477,11 +477,11 @@ export default function StabilizePage() {
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-sm font-medium">여백 처리</span>
+                <span className="text-sm font-semibold">여백 처리</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setEdge("blur")}
-                    className={`px-3 py-1.5 rounded text-sm ${
+                    className={`px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform ${
                       edge === "blur" ? "bg-primary text-primary-foreground" : "bg-muted"
                     }`}
                   >
@@ -489,7 +489,7 @@ export default function StabilizePage() {
                   </button>
                   <button
                     onClick={() => setEdge("crop")}
-                    className={`px-3 py-1.5 rounded text-sm ${
+                    className={`px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform ${
                       edge === "crop" ? "bg-primary text-primary-foreground" : "bg-muted"
                     }`}
                   >
@@ -527,7 +527,7 @@ export default function StabilizePage() {
               <button
                 onClick={submit}
                 disabled={!file || submitting || !!running}
-                className="w-full px-4 py-2 rounded text-sm bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground"
+                className="w-full px-4 py-2 rounded-full text-sm active:scale-95 transition-transform bg-primary hover:bg-primary/90 text-primary-foreground disabled:bg-muted disabled:text-muted-foreground"
               >
                 {submitting ? "업로드 중…" : running ? "처리 중…" : "안정화 시작"}
               </button>
@@ -538,7 +538,7 @@ export default function StabilizePage() {
             {status && !done && (
               <section className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-medium">
+                  <h2 className="text-sm font-semibold">
                     <span
                       className={status.status === "failed" ? "text-destructive" : "text-foreground"}
                     >
@@ -639,19 +639,19 @@ export default function StabilizePage() {
                     <>
                       <button
                         onClick={syncToggle}
-                        className="px-3 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                        className="px-3 py-1.5 rounded-full text-sm active:scale-95 transition-transform bg-primary text-primary-foreground hover:bg-primary/90"
                       >
                         {syncPlaying ? "⏸ 동시 정지" : "▶ 동시 재생"}
                       </button>
                       <button
                         onClick={syncRestart}
-                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                        className="px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform bg-muted hover:bg-muted/80"
                       >
                         ↺ 처음부터
                       </button>
                       <button
                         onClick={() => setMuted((m) => !m)}
-                        className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                        className="px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform bg-muted hover:bg-muted/80"
                         title="동시 재생 시 소리 끄기/켜기"
                       >
                         {muted ? "🔇 음소거" : "🔊 소리"}
@@ -665,13 +665,13 @@ export default function StabilizePage() {
                   <div className="ml-auto flex items-center gap-3">
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                      className="px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform bg-muted hover:bg-muted/80"
                     >
                       ＋ 새 영상
                     </button>
                     <button
                       onClick={backToSetup}
-                      className="px-3 py-1.5 rounded text-sm bg-muted hover:bg-muted/80"
+                      className="px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform bg-muted hover:bg-muted/80"
                     >
                       ↩ 다시 설정
                     </button>
@@ -714,7 +714,7 @@ export default function StabilizePage() {
                 </div>
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
-                    <h2 className="text-sm font-medium">
+                    <h2 className="text-sm font-semibold">
                       {personish ? "주인공 지정 & 미리보기" : "미리보기"}
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -730,7 +730,7 @@ export default function StabilizePage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => setPickMode((v) => !v)}
-                        className={`px-3 py-1.5 rounded text-sm ${
+                        className={`px-3 py-1.5 rounded-lg text-sm active:scale-95 transition-transform ${
                           pickMode ? "bg-primary text-primary-foreground" : "bg-muted"
                         }`}
                       >
@@ -739,7 +739,7 @@ export default function StabilizePage() {
                       {subject && (
                         <button
                           onClick={() => setSubject(null)}
-                          className="px-2 py-1.5 rounded text-sm bg-muted hover:bg-muted/80 text-muted-foreground"
+                          className="px-2 py-1.5 rounded-lg text-sm active:scale-95 transition-transform bg-muted hover:bg-muted/80 text-muted-foreground"
                         >
                           지우기
                         </button>
@@ -777,10 +777,10 @@ export default function StabilizePage() {
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                <p className="text-lg font-medium">영상을 여기에 끌어다 놓으세요</p>
+                <p className="text-lg font-semibold">영상을 여기에 끌어다 놓으세요</p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="px-4 py-2 rounded-full text-sm active:scale-95 transition-transform bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   또는 파일 선택
                 </button>
@@ -793,7 +793,7 @@ export default function StabilizePage() {
           <div className="landscape:sticky landscape:top-4">
             <section className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-medium">최근 작업</h2>
+                <h2 className="text-sm font-semibold">최근 작업</h2>
                 {jobs.length > 0 && (
                   <button
                     onClick={removeAllJobs}

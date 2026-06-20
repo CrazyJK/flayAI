@@ -62,7 +62,7 @@ export function useImageDropPaste(onImage: (file: File) => void) {
 export function DropOverlay() {
   return (
     <div className="absolute inset-0 z-50 m-2 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-500/10 backdrop-blur-[1px] pointer-events-none">
-      <div className="rounded-xl bg-card px-5 py-3 text-sm font-medium text-blue-600 dark:text-blue-300 shadow-lg">
+      <div className="rounded-xl bg-card px-5 py-3 text-sm font-semibold text-blue-600 dark:text-blue-300 shadow-lg">
         여기에 놓으면 이미지 첨부
       </div>
     </div>

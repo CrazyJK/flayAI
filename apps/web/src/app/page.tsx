@@ -190,7 +190,7 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
   const detailFull = [scores, reason].filter(Boolean).join(" · ");
   return (
     <div
-      className="relative aspect-[400/269] rounded-md overflow-hidden border border-border cursor-pointer"
+      className="relative aspect-[400/269] rounded-[18px] overflow-hidden border border-border cursor-pointer shadow-[3px_5px_30px_rgba(0,0,0,0.22)]"
       onClick={() => openFlayPopup(hit.opus)}
       title={`팝업으로 열기: ${hit.opus}`}
     >
@@ -327,7 +327,7 @@ function CopyButton({ text }: { text: string }) {
 function UserBubble({ text, onReask }: { text: string; onReask: (t: string) => void }) {
   return (
     <div className="group flex flex-col items-end gap-1 max-w-[80%]">
-      <div className="rounded-lg bg-blue-500/15 dark:bg-blue-600/30 border border-blue-500/40 px-3 py-2 text-sm whitespace-pre-wrap break-words">
+      <div className="rounded-[14px] bg-primary/10 border border-primary/30 px-3 py-2 text-sm whitespace-pre-wrap break-words">
         {text}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -618,10 +618,10 @@ export default function ChatPage() {
       {/* 질의 영역 전체를 감싸는 박스 */}
       <div
         className={
-          "flex flex-col gap-2 rounded-2xl transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 " +
+          "flex flex-col gap-2 rounded-[18px] transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30 " +
           (hero
-            ? "border border-border bg-card px-4 pt-3.5 pb-2 shadow-lg shadow-black/5 dark:shadow-black/40"
-            : "border border-border bg-card px-3 pt-3 pb-1.5 shadow-sm dark:shadow-none")
+            ? "border border-border bg-card px-4 pt-3.5 pb-2"
+            : "border border-border bg-card px-3 pt-3 pb-1.5")
         }
       >
         {/* 상단: 입력 (Enter 전송 / Shift+Enter 줄바꿈, 내용에 따라 높이 자동 확장) */}
@@ -690,7 +690,7 @@ export default function ChatPage() {
                         className={
                           "px-2 py-1 text-xs rounded-md border " +
                           (n === limit
-                            ? "border-blue-500 bg-blue-500/20 text-blue-700 dark:text-blue-200"
+                            ? "border-primary bg-primary/15 text-primary"
                             : "border-border text-foreground hover:bg-accent")
                         }
                       >
@@ -716,7 +716,7 @@ export default function ChatPage() {
                         }
                       }}
                       placeholder="직접 입력"
-                      className="w-20 px-2 py-1 text-xs rounded-md bg-background border border-input outline-none focus:border-blue-500 text-foreground"
+                      className="w-20 px-2 py-1 text-xs rounded-md bg-background border border-input outline-none focus:border-primary text-foreground"
                     />
                     <button
                       type="button"
@@ -771,7 +771,7 @@ export default function ChatPage() {
                         className={
                           "px-2 py-1 text-xs rounded-md text-left border " +
                           (o.value === kind
-                            ? "border-blue-500 bg-blue-500/20 text-blue-700 dark:text-blue-200"
+                            ? "border-primary bg-primary/15 text-primary"
                             : "border-border text-foreground hover:bg-accent")
                         }
                       >
@@ -807,7 +807,7 @@ export default function ChatPage() {
               title="전송"
               aria-label="전송"
               disabled={!input.trim()}
-              className="ml-auto shrink-0 flex items-center justify-center text-muted-foreground hover:text-blue-500 disabled:opacity-30"
+              className="ml-auto shrink-0 flex items-center justify-center text-muted-foreground hover:text-primary disabled:opacity-30"
             >
               {/* 엔터(↵) 모양 — corner-down-left */}
               <svg
