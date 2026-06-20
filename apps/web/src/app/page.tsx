@@ -163,13 +163,11 @@ function KindBadge({ kind }: { kind?: string | null }) {
   return (
     <span
       className={
-        "px-1.5 py-0.5 text-xs rounded font-mono " +
-        (isInstance
-          ? "bg-emerald-500/30 text-emerald-200 border border-emerald-500/50"
-          : "bg-neutral-500/30 text-neutral-200 border border-neutral-500/50")
+        "font-mono text-xs font-semibold tracking-wider " +
+        (isInstance ? "text-emerald-300" : "text-neutral-300")
       }
     >
-      {isInstance ? "INSTANCE" : "ARCHIVE"}
+      {isInstance ? "INST" : "ARCH"}
     </span>
   );
 }
@@ -203,27 +201,27 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
       />
 
       {/* 상단 오버레이: opus, 배지, 스코어 */}
-      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/45 to-transparent px-2 py-2 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-mono text-sm text-amber-300">{hit.opus}</span>
+      <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/45 to-transparent px-3.5 pt-3 pb-[18px] [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* opus — 가장 강조: 크게 + 볼드 + 앰버 */}
+          <span className="font-mono text-base font-semibold tracking-wide text-amber-300">{hit.opus}</span>
           <KindBadge kind={hit.kind} />
+          {/* rank — 칩 배경 제거, 플랫한 ★ */}
           {typeof hit.rank === "number" && hit.rank > 0 && (
-            <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-500/30 text-yellow-100">
-              {"⭐".repeat(hit.rank)}
+            <span className="text-sm tracking-wide text-amber-400" aria-label={`rank ${hit.rank}`}>
+              {"★".repeat(hit.rank)}
             </span>
           )}
           {typeof hit.score === "number" && (
-            <span className="ml-auto font-mono text-xs text-neutral-200">
-              {hit.score.toFixed(3)}
-            </span>
+            <span className="ml-auto font-mono text-xs text-neutral-200">{hit.score.toFixed(3)}</span>
           )}
         </div>
       </div>
 
       {/* 하단 오버레이: 제목, 메타 정보 */}
-      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-2 pt-8 pb-2 [text-shadow:0_1px_2px_rgba(0,0,0,0.95)]">
-        <div className="font-semibold text-base text-white truncate">{title}</div>
-        <div className="mt-0.5 text-sm text-neutral-200 flex flex-wrap gap-x-2 gap-y-0">
+      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-4 pt-[52px] pb-4 [text-shadow:0_1px_2px_rgba(0,0,0,0.95)]">
+        <div className="font-semibold text-lg leading-snug tracking-tight text-white truncate">{title}</div>
+        <div className="mt-2 text-sm text-neutral-200 flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
           {hit.studio && <span>{hit.studio}</span>}
           {hit.year && (
             <span>
@@ -231,12 +229,23 @@ function VideoCard({ hit, query = "" }: { hit: VideoHit; query?: string }) {
               {hit.month ? `-${String(hit.month).padStart(2, "0")}` : ""}
             </span>
           )}
-          {hit.actresses && hit.actresses.length > 0 && <span>👤 {hit.actresses.join(", ")}</span>}
+          {hit.actresses && hit.actresses.length > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-90"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              {hit.actresses.join(", ")}
+            </span>
+          )}
           {typeof hit.play === "number" && hit.play > 0 && (
-            <span title="재생 수">▶︎ {hit.play}</span>
+            <span className="inline-flex items-center gap-1" title="재생 수">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-90"><polygon points="7 4 19 12 7 20"/></svg>
+              {hit.play}
+            </span>
           )}
           {typeof hit.like_count === "number" && hit.like_count > 0 && (
-            <span title="좋아요 수">💛 {hit.like_count}</span>
+            <span className="inline-flex items-center gap-1" title="좋아요 수">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-90"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.49 4.04 3 5.5l7 7Z"/></svg>
+              {hit.like_count}
+            </span>
           )}
         </div>
         {/* 채택 근거: 수치 + 사람이 읽는 이유를 한 줄로(넘치면 …, 호버 시 전체) */}
