@@ -1,0 +1,31 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Status & Kind" subtitle="Semantic states + instance/archive" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--background); font-family: var(--font-sans); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .badge { display: inline-flex; align-items: center; padding: 3px 9px; font-family: var(--font-mono); font-size: 12px; border-radius: var(--radius-sm); }
+  .instance { color: var(--kind-instance); background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.35); }
+  .archive { color: var(--kind-archive); background: rgba(113,113,122,0.15); border: 1px solid rgba(113,113,122,0.35); }
+  .success { color: var(--success); background: rgba(52,199,89,0.15); border: 1px solid rgba(52,199,89,0.35); }
+  .running { color: var(--primary); background: rgba(10,132,255,0.15); border: 1px solid rgba(10,132,255,0.35); }
+  .failed { color: var(--destructive); background: rgba(255,59,48,0.15); border: 1px solid rgba(255,59,48,0.35); }
+  .warning { color: #d97706; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.35); }
+  .opus { font-family: var(--font-mono); font-size: 14px; color: var(--opus-accent); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="badge instance">INSTANCE</span>
+    <span class="badge archive">ARCHIVE</span>
+    <span class="badge success">UP</span>
+    <span class="badge running">running</span>
+    <span class="badge failed">DOWN</span>
+    <span class="badge warning">skipped</span>
+    <span class="opus">ABC-123</span>
+  </div>
+</body>
+</html>

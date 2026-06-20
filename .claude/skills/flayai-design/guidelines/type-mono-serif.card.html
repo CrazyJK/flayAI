@@ -1,0 +1,21 @@
+<!-- @dsCard group="Type" viewport="700x150" name="Mono & Serif" subtitle="Codes/scores (mono) + diary (serif)" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--background); color: var(--foreground); }
+  .row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .tag { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); width: 110px; flex-shrink: 0; }
+  .mono { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .opus { color: var(--opus-accent); }
+  .score { color: var(--success); }
+  .serif { font-family: var(--font-serif); font-size: 18px; }
+</style>
+</head>
+<body>
+  <div class="row"><span class="tag">font-mono</span><span class="mono"><span class="opus">SSIS-001</span> &nbsp; 0.962 &nbsp; <span class="score">의미: 96, 키워드: 00</span></span></div>
+  <div class="row"><span class="tag">font-serif</span><span class="serif">그냥 떠오르는 대로 적어. 예전 일이 궁금하면 물어봐도 돼.</span></div>
+</body>
+</html>

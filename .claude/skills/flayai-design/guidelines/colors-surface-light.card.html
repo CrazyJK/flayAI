@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Light Surfaces" subtitle="White · parchment · pearl + hairlines" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--canvas-parchment); font-family: var(--font-text); color: var(--ink); letter-spacing: -0.011em; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .sw { display: flex; flex-direction: column; gap: 6px; }
+  .chip { width: 90px; height: 56px; border-radius: var(--radius-sm); border: 1px solid var(--hairline); }
+  .name { font-size: 12px; font-weight: 600; }
+  .hex { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--canvas)"></div><span class="name">canvas</span><span class="hex">#ffffff</span></div>
+    <div class="sw"><div class="chip" style="background:var(--canvas-parchment)"></div><span class="name">parchment</span><span class="hex">#f5f5f7</span></div>
+    <div class="sw"><div class="chip" style="background:var(--surface-pearl)"></div><span class="name">pearl</span><span class="hex">#fafafc</span></div>
+    <div class="sw"><div class="chip" style="background:var(--divider-soft)"></div><span class="name">divider-soft</span><span class="hex">#f0f0f0</span></div>
+    <div class="sw"><div class="chip" style="background:var(--hairline)"></div><span class="name">hairline</span><span class="hex">#e0e0e0</span></div>
+  </div>
+</body>
+</html>

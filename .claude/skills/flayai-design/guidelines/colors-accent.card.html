@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x148" name="The Single Accent" subtitle="Action Blue #0066cc — the only interactive color" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--canvas); font-family: var(--font-text); color: var(--ink); letter-spacing: -0.011em; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .sw { display: flex; flex-direction: column; gap: 7px; }
+  .chip { width: 132px; height: 60px; border-radius: var(--radius-sm); border: 1px solid var(--hairline); }
+  .name { font-size: 13px; font-weight: 600; }
+  .hex { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); }
+  .use { font-size: 11px; color: var(--ink-muted-48); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--action-blue)"></div><span class="name">Action Blue</span><span class="hex">#0066cc</span><span class="use">links · pill CTAs (light)</span></div>
+    <div class="sw"><div class="chip" style="background:var(--action-blue-focus)"></div><span class="name">Focus Blue</span><span class="hex">#0071e3</span><span class="use">keyboard focus ring</span></div>
+    <div class="sw"><div class="chip" style="background:var(--sky-link-blue)"></div><span class="name">Sky Link</span><span class="hex">#2997ff</span><span class="use">links / primary on dark</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Radius Grammar" subtitle="8 utility · 18 cards · full pill — strict" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--canvas); font-family: var(--font-text); color: var(--ink); }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+  .item { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .box { width: 76px; height: 60px; background: var(--surface-pearl); border: 1px solid var(--hairline); }
+  .pill { width: 96px; height: 40px; background: var(--action-blue); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
+  .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="border-radius:var(--radius-xs)"></div><span class="lbl">xs · 5</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div><span class="lbl">sm · 8</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div><span class="lbl">md · 11</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div><span class="lbl">lg · 18</span></div>
+    <div class="item"><div class="pill" style="border-radius:var(--radius-pill)">Buy</div><span class="lbl">pill · 9999</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,119 @@
+/* flayAI — Color tokens (Apple.com editorial language, per DESIGN.md)
+ *
+ * One interactive color: Action Blue #0066cc. No second accent. Surfaces are
+ * pure white, signature parchment #f5f5f7, or near-black tiles. Two themes:
+ * light (:root) and dark (.dark); the diary keeps its warm "mood" overrides.
+ * Base values first, then semantic aliases (which is what UI should reference).
+ */
+
+:root {
+  /* ---- Apple.com palette (base, from DESIGN.md) ---- */
+  --action-blue: #0066cc;        /* THE single interactive color (light) */
+  --action-blue-focus: #0071e3;  /* keyboard focus-ring blue */
+  --sky-link-blue: #2997ff;      /* link/primary on DARK surfaces */
+  --on-primary: #ffffff;
+
+  --ink: #1d1d1f;                /* near-black — all headline + body text */
+  --ink-muted-80: #333333;       /* softer body (pearl button text) */
+  --ink-muted-48: #7a7a7a;       /* disabled text, fine-print */
+  --body-on-dark: #ffffff;
+  --body-muted-dark: #cccccc;    /* secondary copy on dark tiles */
+
+  --canvas: #ffffff;             /* dominant light canvas */
+  --canvas-parchment: #f5f5f7;   /* signature Apple off-white (alt tiles, footer) */
+  --surface-pearl: #fafafc;      /* near-white ghost-button fill */
+  --surface-tile-1: #272729;     /* primary near-black tile */
+  --surface-tile-2: #2a2a2c;     /* micro-step lighter */
+  --surface-tile-3: #252527;     /* micro-step darker */
+  --surface-black: #000000;      /* true void — nav bar, video frames */
+  --chip-translucent: #d2d2d7;   /* base of the translucent control chip over photos */
+
+  --hairline: #e0e0e0;           /* 1px card / chip border */
+  --divider-soft: #f0f0f0;       /* soft ring-shadow border on ghost buttons */
+
+  /* Apple system status palette (functional — kept for the tool surfaces) */
+  --apple-blue: #0066cc;
+  --apple-green: #34c759;
+  --apple-red: #ff3b30;
+  --apple-amber: #b45309;        /* diary / warning accent (light) */
+
+  /* ---- Semantic aliases (light) — reference these in UI ---- */
+  --background: #ffffff;         /* white-dominant per Apple.com */
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --muted: #f5f5f7;              /* parchment fill */
+  --muted-foreground: #6e6e73;
+  --accent: #f5f5f7;            /* subtle hover background */
+  --accent-foreground: #1d1d1f;
+  --border: #e0e0e0;            /* hairline */
+  --input: #e0e0e0;
+  --primary: #0066cc;           /* Action Blue */
+  --primary-foreground: #ffffff;
+  --success: #34c759;
+  --destructive: #ff3b30;
+
+  /* ---- Result / status accents (chat cards, badges) ---- */
+  --opus-accent: #b45309;
+  --kind-instance: #059669;
+  --kind-archive: #6b7280;
+}
+
+.dark {
+  /* Dark mode — synthesized from DESIGN.md's near-black tile surfaces.
+   * (Apple ships light-dominant; dark counterparts not surfaced, so we build
+   * a coherent dark from tile-1/2/3 + true black, with Sky-Link primary.) */
+  --action-blue: #2997ff;
+  --on-primary: #ffffff;
+
+  --background: #000000;        /* true void, matches the nav-bar black */
+  --foreground: #ffffff;
+  --card: #272729;              /* surface-tile-1 */
+  --card-foreground: #ffffff;
+  --popover: #2a2a2c;
+  --popover-foreground: #ffffff;
+  --muted: #2a2a2c;             /* surface-tile-2 */
+  --muted-foreground: #cccccc;  /* body-muted-dark */
+  --accent: #2a2a2c;
+  --accent-foreground: #ffffff;
+  --border: #424245;            /* dark hairline */
+  --input: #424245;
+  --primary: #2997ff;           /* Sky Link Blue — Action Blue vanishes on dark */
+  --primary-foreground: #ffffff;
+  --success: #30d158;
+  --destructive: #ff453a;
+
+  --hairline: #424245;
+  --divider-soft: #2a2a2c;
+  --apple-amber: #fbbf24;
+
+  --opus-accent: #fcd34d;       /* amber-300 — opus codes glow on dark posters */
+  --kind-instance: #6ee7b7;     /* emerald-200 on translucent fill */
+  --kind-archive: #d4d4d8;
+}
+
+/* ---- Diary mood — scoped overrides (warm cream + serif).
+ * Applied by wrapping a region in .diary-mood. Only re-tints semantic vars,
+ * so any component using bg-card / border etc. takes on the journal feel. */
+.diary-mood {
+  --background: #faf6ec;        /* cream canvas */
+  --card: #fffdf6;              /* paper surface */
+  --muted: #efe7d6;
+  --accent: #f3ecdc;
+  --border: #e6dcc6;
+  --input: #d9cdb2;
+}
+
+/* Dark + diary: a single-class scope (applied alongside .diary-mood by the
+ * diary surface when the app is in dark mode), so the cream tokens above don't
+ * bleed into dark. Single class — registers cleanly as a theme scope. */
+.diary-mood-dark {
+  --background: #0d1117;        /* same dark canvas as tools */
+  --card: #1e1910;
+  --muted: #282115;
+  --accent: #342b1c;
+  --border: #362d1d;
+  --input: #362d1d;
+}

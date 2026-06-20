@@ -1,0 +1,27 @@
+<!-- @dsCard group="Brand" viewport="700x240" name="Tile Rhythm" subtitle="Edge-to-edge alternation — the color change is the divider" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 0; font-family: var(--font-display); }
+  .tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 26px 16px; text-align: center; }
+  .h { font-size: 26px; font-weight: 600; letter-spacing: var(--tracking-display); }
+  .sub { font-family: var(--font-text); font-size: 14px; font-weight: 400; }
+  .cta { font-family: var(--font-text); font-size: 13px; margin-top: 4px; }
+  .light { background: var(--canvas); color: var(--ink); }
+  .parchment { background: var(--canvas-parchment); color: var(--ink); }
+  .dark { background: var(--surface-tile-1); color: var(--body-on-dark); }
+  .a { color: var(--action-blue); }
+  .a-dark { color: var(--sky-link-blue); }
+  .muted { color: var(--ink-muted-48); }
+  .muted-dark { color: var(--body-muted-dark); }
+</style>
+</head>
+<body>
+  <div class="tile light"><div class="h">채팅으로 검색</div><div class="sub muted">말하듯 입력하면 포스터가 돌아옵니다.</div><div class="cta a">더 알아보기 ›</div></div>
+  <div class="tile dark"><div class="h">로컬에서 안전하게</div><div class="sub muted-dark">전부 내 컴퓨터 안에서.</div><div class="cta a-dark">더 알아보기 ›</div></div>
+  <div class="tile parchment"><div class="h">기억을 다시 꺼내다</div><div class="sub muted">일기가 그때의 나에게 말을 겁니다.</div><div class="cta a">더 알아보기 ›</div></div>
+</body>
+</html>

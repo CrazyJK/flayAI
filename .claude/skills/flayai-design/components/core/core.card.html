@@ -1,0 +1,71 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Core — Button, Badge, Chip, Tabs, Card" subtitle="Apple-style primitives" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; padding: 20px; background: var(--background); font-family: var(--font-sans); }
+  .group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .label { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); width: 100%; margin-bottom: -4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { Button, Badge, Chip, Tabs, Card } = window.FlayAIDesignSystem_105b78;
+  function Demo() {
+    const [tab, setTab] = React.useState("text");
+    return (
+      <div>
+        <div className="group">
+          <span className="label">Button — variants & sizes</span>
+          <Button variant="primary">전송</Button>
+          <Button variant="secondary">검색</Button>
+          <Button variant="ghost">취소</Button>
+          <Button variant="danger">삭제</Button>
+          <Button variant="primary" size="sm">sm</Button>
+          <Button variant="primary" size="lg">lg</Button>
+          <Button variant="primary" disabled>disabled</Button>
+        </div>
+        <div className="group">
+          <span className="label">Badge — tones</span>
+          <Badge tone="instance">INSTANCE</Badge>
+          <Badge tone="archive">ARCHIVE</Badge>
+          <Badge tone="success">UP</Badge>
+          <Badge tone="running">running</Badge>
+          <Badge tone="failed">DOWN</Badge>
+          <Badge tone="warning">skipped</Badge>
+        </div>
+        <div className="group">
+          <span className="label">Chip — suggestion & option</span>
+          <Chip>온천에서 즐기는 영상</Chip>
+          <Chip role="option">10</Chip>
+          <Chip role="option" selected>Instance</Chip>
+        </div>
+        <div className="group">
+          <span className="label">Tabs — segment & text</span>
+          <Tabs variant="segment" value={tab} onChange={setTab}
+            items={[{key:"text",label:"텍스트 → 포스터"},{key:"image",label:"이미지 → 포스터"}]} />
+          <Tabs variant="text" value="chat"
+            items={[{key:"chat",label:"채팅"},{key:"image",label:"이미지"},{key:"face",label:"얼굴"}]} />
+        </div>
+        <div className="group">
+          <span className="label">Card</span>
+          <div style={{width:320}}>
+            <Card title="Qdrant 벡터 DB" badge="5개 컬렉션" available>
+              <div style={{fontSize:14, color:"var(--muted-foreground)"}}>벡터 컬렉션 상태 요약</div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

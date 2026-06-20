@@ -1,0 +1,73 @@
+/* flayAI — Typography tokens (Apple.com editorial scale, per DESIGN.md)
+ *
+ * Two faces from one system stack: SF Pro DISPLAY for headlines (>=19px) and
+ * SF Pro TEXT for body/UI (<20px). Both resolve via -apple-system; non-Apple
+ * platforms fall back to Segoe UI / Noto Sans KR / system-ui. No webfont ships.
+ *
+ * Signatures: negative tracking at display sizes (the "Apple tight" headline),
+ * 17px body (not 16px), and a 300/400/600/700 weight ladder — weight 500 is
+ * deliberately ABSENT. Mono is used for codes/scores; the diary uses a serif.
+ */
+
+:root {
+  /* ---- Families ----
+   * Display = headlines; Text = body/UI. Both are the Apple system stack. */
+  --font-display: -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", "Segoe UI", "Noto Sans KR", system-ui, sans-serif;
+  --font-text: -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", "Segoe UI", "Noto Sans KR", system-ui, sans-serif;
+  --font-sans: var(--font-text);   /* back-compat alias */
+  --font-mono: ui-monospace, "SFMono-Regular", monospace;
+  --font-serif: Georgia, "Noto Serif KR", "Nanum Myeongjo", Batang, serif;
+
+  /* ---- Editorial type ladder (Apple.com, DESIGN.md) ---- */
+  --text-hero: 56px;        /* hero headline */
+  --text-display-lg: 40px;  /* tile headline */
+  --text-display-md: 34px;  /* section head */
+  --text-lead: 28px;        /* tile subcopy */
+  --text-lead-airy: 24px;   /* airy lead (weight 300) */
+  --text-tagline: 21px;     /* sub-tile tagline, sub-nav category */
+  --text-body-lg: 17px;     /* DEFAULT paragraph — 17px, not 16px */
+  --text-caption: 14px;     /* captions, utility button text */
+  --text-fine: 12px;        /* fine-print, nav links */
+  --text-micro: 10px;       /* micro legal */
+
+  /* ---- App type scale (chat, admin, diary) — kept for product surfaces ---- */
+  --text-2xs: 10px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  /* ---- Weights — 300 / 400 / 600 / 700 ladder (no 500) ---- */
+  --weight-light: 300;       /* rare, airy reads (lead-airy, store hero CTA) */
+  --weight-regular: 400;
+  --weight-medium: 600;      /* "medium" maps to 600 — 500 is absent by design */
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Line heights ---- */
+  --leading-hero: 1.07;      /* display sizes are tight */
+  --leading-tight: 1.1;
+  --leading-snug: 1.19;
+  --leading-normal: 1.47;    /* Apple body leading */
+  --leading-relaxed: 1.65;
+  --leading-loose: 2.41;     /* footer / dense link columns */
+
+  /* ---- Tracking ---- */
+  --tracking-hero: -0.005em;   /* 56px hero */
+  --tracking-display: -0.011em;/* 34-40px section/tile heads */
+  --tracking-tight: -0.011em;  /* default tighten (back-compat) */
+  --tracking-body: -0.022em;   /* 17px body — the signature tight body */
+  --tracking-normal: 0;
+
+  /* ---- Semantic text roles ---- */
+  --text-body: var(--text-body-lg);
+  --text-title: var(--text-base);
+  --text-heading: var(--text-display-md);
+  --text-code: var(--text-xs);
+}

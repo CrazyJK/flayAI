@@ -1,0 +1,25 @@
+<!-- @dsCard group="Type" viewport="700x230" name="Body & Caption" subtitle="SF Pro Text — body at 17px, not 16px" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--canvas); font-family: var(--font-text); color: var(--ink); }
+  .row { display: flex; align-items: baseline; gap: 16px; margin-bottom: 12px; }
+  .tag { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); width: 132px; flex-shrink: 0; }
+  .airy { font-size: var(--text-lead-airy); font-weight: 300; line-height: var(--leading-normal); }
+  .body { font-size: var(--text-body-lg); font-weight: 400; line-height: var(--leading-normal); letter-spacing: var(--tracking-body); }
+  .strong { font-size: var(--text-body-lg); font-weight: 600; letter-spacing: var(--tracking-body); }
+  .caption { font-size: var(--text-caption); font-weight: 400; letter-spacing: -0.224px; color: var(--ink-muted-80); }
+  .fine { font-size: var(--text-fine); color: var(--ink-muted-48); }
+</style>
+</head>
+<body>
+  <div class="row"><span class="tag">lead-airy · 24 / 300</span><span class="airy">조용히, 가볍게.</span></div>
+  <div class="row"><span class="tag">body · 17 / 400</span><span class="body">온천에서 즐겁게 노는 영상을 찾아줘.</span></div>
+  <div class="row"><span class="tag">body-strong · 17 / 600</span><span class="strong">의미 일치 96%</span></div>
+  <div class="row"><span class="tag">caption · 14 / 400</span><span class="caption">제작사 · 2026 · 👤 배우 이름</span></div>
+  <div class="row"><span class="tag">fine · 12 / 400</span><span class="fine">키워드 '온천' 일치 · 인기도 반영</span></div>
+</body>
+</html>

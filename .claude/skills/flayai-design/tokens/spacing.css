@@ -1,0 +1,43 @@
+/* flayAI — Spacing & layout tokens
+ * The app is built on Tailwind's 4px base unit. Layout widths come straight
+ * from the real product (chat 900px header, 760px hero, 820px diary column).
+ */
+
+:root {
+  /* ---- 4px spacing scale ---- */
+  --space-0_5: 2px;
+  --space-1: 4px;
+  --space-1_5: 6px;
+  --space-2: 8px;
+  --space-2_5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;   /* xxl */
+  --space-16: 64px;   /* footer / deep card padding */
+  --space-section: 80px; /* full-bleed tile vertical padding */
+
+  /* ---- Apple.com named spacing (DESIGN.md) ---- */
+  --space-md-17: 17px; /* the recurring 17px rhythm unit */
+
+  /* ---- Layout column widths (from the product) ---- */
+  --col-header: 900px;   /* AppHeader + docked composer max width */
+  --col-hero: 760px;     /* centered hero composer */
+  --col-diary: 820px;    /* diary reading column */
+  --col-content: 1440px; /* Apple.com content lock (product grids) */
+  --col-reading: 980px;  /* text-heavy editorial sections */
+
+  /* ---- Control sizing ---- */
+  --control-pill-py: 4px;   /* options pills (개수 / 종류) */
+  --control-pill-px: 10px;
+  --hit-min: 44px;          /* min touch target */
+
+  /* ---- Result grid ---- */
+  --poster-aspect: 400 / 269; /* @kind other */
+  --card-min: 440px;                 /* chat result auto-fill min col */
+  --tile-min: 300px;                 /* admin/db tile auto-fill min col */
+}

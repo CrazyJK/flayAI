@@ -1,0 +1,56 @@
+/* flayAI — Radius, elevation, scrollbar tokens (per DESIGN.md)
+ *
+ * Radius grammar is strict: 8px utility, 18px cards, full pill for actions;
+ * 5px and 11px are rare. Elevation is mostly FLAT — Apple uses exactly ONE
+ * drop-shadow, on product imagery resting on a surface. UI "depth" comes from
+ * surface-color change + backdrop-blur (frost), never card/button shadows.
+ */
+
+:root {
+  /* ---- Corner radii (DESIGN.md scale) ---- */
+  --radius-none: 0;
+  --radius-xs: 5px;      /* rare inline chips */
+  --radius-sm: 8px;      /* dark utility buttons, inline card imagery */
+  --radius-md: 11px;     /* rare — pearl-button capsules */
+  --radius-lg: 18px;     /* utility / store / accessory cards */
+  --radius-xl: 18px;     /* alias → cards stay 18px */
+  --radius-2xl: 18px;    /* alias → composer / message bubbles */
+  --radius-pill: 9999px; /* primary CTA, search input, option chips */
+  --radius-full: 9999px; /* circular controls, avatars, status dots */
+
+  /* ---- Elevation ----
+   * Chrome is flat (rely on hairlines + surface change). The ONE real shadow
+   * is reserved for product imagery; popovers get a quiet float. */
+  --shadow-none: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);   /* quiet float — popovers */
+  --shadow-xl: 0 8px 30px rgba(0, 0, 0, 0.12);   /* popovers / dialogs */
+  --shadow-product: 3px 5px 30px rgba(0, 0, 0, 0.22); /* THE product shadow */
+
+  /* ---- Frosted glass (functional depth — sticky bars / sub-nav) ---- */
+  --frost-blur: saturate(180%) blur(20px); /* @kind other */
+  --frost-light: rgba(245, 245, 247, 0.8);   /* parchment @ 80% */
+  --frost-dark: rgba(0, 0, 0, 0.72);
+
+  /* Poster text-protection gradients render the same in both themes */
+  --poster-scrim-top: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.45) 55%, transparent); /* @kind color */
+  --poster-scrim-bottom: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.65) 45%, transparent); /* @kind color */
+
+  /* ---- Focus ring (Apple focus blue, soft halo) ---- */
+  --ring: 0 0 0 2px rgba(0, 113, 227, 0.4);
+
+  /* ---- Scrollbar (thin, translucent thumb) ---- */
+  --scroll-unit: 4px;
+  --scroll-thumb: rgba(0, 0, 0, 0.3);
+  --scroll-thumb-hover: rgba(0, 0, 0, 0.5);
+}
+
+.dark {
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 30px rgba(0, 0, 0, 0.7);
+  --shadow-product: 3px 5px 30px rgba(0, 0, 0, 0.55);
+  --ring: 0 0 0 2px rgba(41, 151, 255, 0.5);
+  --scroll-thumb: rgba(255, 255, 255, 0.3);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.5);
+}

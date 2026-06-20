@@ -1,0 +1,49 @@
+/* flayAI — Base layer
+ * Body defaults (Apple system font, tight tracking, antialiased) + the thin
+ * translucent scrollbar from the product. Kept minimal: tokens do the work.
+ */
+
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: var(--tracking-tight);
+}
+
+.diary-mood {
+  font-family: var(--font-serif);
+}
+
+/* Scrollbar — thin, translucent thumb (light = dark thumb, dark = light thumb) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+::-webkit-scrollbar {
+  background-color: transparent;
+  width: var(--scroll-unit);
+  height: var(--scroll-unit);
+}
+::-webkit-scrollbar-button:start:decrement,
+::-webkit-scrollbar-button:end:increment {
+  display: none;
+}
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb);
+  border-radius: calc(var(--scroll-unit) / 2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scroll-thumb-hover);
+}
+::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+/* Utility: a few helpers cards/components lean on (optional for consumers). */
+.font-mono { font-family: var(--font-mono); }
+.tabular-nums { font-variant-numeric: tabular-nums; }

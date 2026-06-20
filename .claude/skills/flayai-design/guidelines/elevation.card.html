@@ -1,0 +1,26 @@
+<!-- @dsCard group="Spacing" viewport="700x190" name="Elevation" subtitle="Flat chrome · one product shadow · frosted glass" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 24px; background: var(--canvas-parchment); font-family: var(--font-text); color: var(--ink); }
+  .row { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .item { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .box { width: 120px; height: 70px; background: var(--canvas); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ink-muted-48); }
+  .flat { border: 1px solid var(--hairline); }
+  .product { box-shadow: var(--shadow-product); }
+  .frost { background: var(--frost-light); backdrop-filter: var(--frost-blur); -webkit-backdrop-filter: var(--frost-blur); border: 1px solid rgba(0,0,0,0.06); }
+  .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); text-align: center; }
+  .stripe { position: absolute; inset: 0; background: repeating-linear-gradient(135deg, var(--action-blue) 0 6px, transparent 6px 14px); opacity: 0.25; border-radius: var(--radius-lg); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box flat">card · button</div><span class="lbl">flat<br>hairline only</span></div>
+    <div class="item"><div class="box product">제품 이미지</div><span class="lbl">shadow-product<br>3·5·30 / .22</span></div>
+    <div class="item"><div class="box frost" style="position:relative;overflow:hidden"><div class="stripe"></div><span style="position:relative">sticky bar</span></div><span class="lbl">frosted glass<br>blur(20) sat(180%)</span></div>
+  </div>
+</body>
+</html>

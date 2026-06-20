@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Dark Tile Surfaces" subtitle="Near-black tiles + true void" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--surface-tile-1); font-family: var(--font-text); color: var(--body-on-dark); letter-spacing: -0.011em; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .sw { display: flex; flex-direction: column; gap: 6px; }
+  .chip { width: 100px; height: 56px; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.12); }
+  .name { font-size: 12px; font-weight: 600; }
+  .hex { font-family: var(--font-mono); font-size: 11px; color: var(--body-muted-dark); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--surface-tile-1)"></div><span class="name">tile-1</span><span class="hex">#272729</span></div>
+    <div class="sw"><div class="chip" style="background:var(--surface-tile-2)"></div><span class="name">tile-2</span><span class="hex">#2a2a2c</span></div>
+    <div class="sw"><div class="chip" style="background:var(--surface-tile-3)"></div><span class="name">tile-3</span><span class="hex">#252527</span></div>
+    <div class="sw"><div class="chip" style="background:var(--surface-black)"></div><span class="name">black</span><span class="hex">#000000</span></div>
+    <div class="sw"><div class="chip" style="background:var(--body-muted-dark)"></div><span class="name">body-muted</span><span class="hex">#cccccc</span></div>
+  </div>
+</body>
+</html>

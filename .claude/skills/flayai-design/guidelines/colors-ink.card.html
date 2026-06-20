@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Ink & Text Tones" subtitle="Near-black ink — never pure black on light" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--canvas); font-family: var(--font-text); color: var(--ink); letter-spacing: -0.011em; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .item { display: flex; flex-direction: column; gap: 4px; }
+  .big { font-size: 26px; font-weight: 600; letter-spacing: -0.011em; }
+  .name { font-size: 12px; font-weight: 600; }
+  .hex { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); }
+  .use { font-size: 11px; color: var(--ink-muted-48); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><span class="big" style="color:var(--ink)">Aa 검색</span><span class="name">ink</span><span class="hex">#1d1d1f</span><span class="use">headlines + body</span></div>
+    <div class="item"><span class="big" style="color:var(--ink-muted-80)">Aa 검색</span><span class="name">ink-muted-80</span><span class="hex">#333333</span><span class="use">softer body</span></div>
+    <div class="item"><span class="big" style="color:var(--ink-muted-48)">Aa 검색</span><span class="name">ink-muted-48</span><span class="hex">#7a7a7a</span><span class="use">disabled · fine-print</span></div>
+  </div>
+</body>
+</html>

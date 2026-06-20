@@ -1,0 +1,13 @@
+/* flayAI — Webfonts
+ *
+ * No proprietary webfont is shipped: the Latin UI uses the Apple system stack
+ * (SF Pro on Apple devices, Segoe UI / system-ui elsewhere). Because the product
+ * UI is Korean and the diary uses a serif, we load Noto Sans KR + Noto Serif KR
+ * from Google Fonts so Korean text renders consistently on every platform.
+ *
+ * SUBSTITUTION FLAG: SF Pro / SF Mono cannot be redistributed; on non-Apple
+ * platforms they fall back to Segoe UI / system-ui per the stack above. If you
+ * have SF Pro licensed, add @font-face rules here and they will be picked up.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap");

@@ -1,0 +1,56 @@
+<!-- @dsCard group="Components" viewport="700x420" name="Product — VideoCard, Composer, ToolCallChip, ThemeToggle" subtitle="Signature flayAI surfaces" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; padding: 20px; background: var(--background); font-family: var(--font-sans); }
+  .label { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); margin: 0 0 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .stack { display: flex; flex-direction: column; gap: 6px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { VideoCard, Composer, ToolCallChip, ThemeToggle, Chip } = window.FlayAIDesignSystem_105b78;
+  function Demo() {
+    const [v, setV] = React.useState("온천에서 여러 사람과 즐기는 영상");
+    return (
+      <div>
+        <div className="grid">
+          <div>
+            <p className="label">VideoCard</p>
+            <VideoCard hit={{opus:"SSIS-001", title:"사무실의 즐거운 하루", studio:"S1", year:2026, month:1, kind:"instance", rank:3, score:0.962, play:42, like_count:7, actresses:["배우 A","배우 B"]}} />
+          </div>
+          <div>
+            <p className="label">ThemeToggle &nbsp;·&nbsp; ToolCallChip</p>
+            <div className="stack">
+              <div style={{display:"flex", gap:12, alignItems:"center"}}>
+                <ThemeToggle /> <span style={{fontSize:13, color:"var(--muted-foreground)"}}>시스템 / 라이트 / 다크</span>
+              </div>
+              <div style={{marginTop:8}}>
+                <ToolCallChip name="search_videos" args={{query:"온천", limit:10, kind:"instance"}} />
+                <div style={{height:6}}></div>
+                <ToolCallChip result="12 items" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{marginTop:18}}>
+          <p className="label">Composer (docked)</p>
+          <Composer value={v} onChange={setV}
+            options={<><Chip role="option">10</Chip><Chip role="option" selected>Instance</Chip></>} />
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

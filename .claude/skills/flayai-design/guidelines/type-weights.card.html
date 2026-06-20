@@ -1,0 +1,26 @@
+<!-- @dsCard group="Type" viewport="700x150" name="Weight Ladder" subtitle="300 / 400 / 600 / 700 — weight 500 is absent" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--canvas); font-family: var(--font-display); color: var(--ink); letter-spacing: -0.011em; }
+  .row { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-end; }
+  .item { display: flex; flex-direction: column; gap: 4px; }
+  .big { font-size: 38px; }
+  .tag { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted-48); }
+  .x { display: flex; flex-direction: column; gap: 4px; opacity: 0.4; }
+  .strike { font-size: 38px; text-decoration: line-through; text-decoration-color: var(--action-blue); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><span class="big" style="font-weight:300">Aa 검색</span><span class="tag">light · 300</span></div>
+    <div class="item"><span class="big" style="font-weight:400">Aa 검색</span><span class="tag">regular · 400</span></div>
+    <div class="x"><span class="strike" style="font-weight:500">Aa 검색</span><span class="tag">500 · absent</span></div>
+    <div class="item"><span class="big" style="font-weight:600">Aa 검색</span><span class="tag">semibold · 600</span></div>
+    <div class="item"><span class="big" style="font-weight:700">Aa 검색</span><span class="tag">bold · 700</span></div>
+  </div>
+</body>
+</html>
